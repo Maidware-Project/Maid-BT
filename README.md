@@ -92,6 +92,13 @@ instead of disconnects, anti-flap backoff, instant bluez suspend on drop.
 Prefer `release` over `off`; if plasmashell crashes, check
 `coredumpctl` + journal for the `spa.bluez5: Failure` signature.
 
+electron/chromium apps (spotify, vesktop, discord, browsers) can go
+silent after a switch even though the stream moved fine. their web-audio
+stack opens the output at fixed params and stalls when the bluetooth
+codec/rate renegotiates under it (LDAC 96k ↔ SBC 44.1k/48k) — not our
+routing, the app itself. fix is pause → switch → play; if an app stays
+dead, restart just that app.
+
 ## uninstalling
 
 ```sh
