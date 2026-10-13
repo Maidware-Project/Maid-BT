@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Bluetooth on/off switch that actually sticks + auto audio routing.
 #
 #   on  = rfkill unblock + power on + auto-connect your earbuds
@@ -21,7 +21,6 @@ FALLBACK_SINK=""
 # Fill these via ~/.config/bluetooth-buds.conf (install.sh prompts for them):
 #   BUDS_MAC="..." and FALLBACK_SINK="..."
 [ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
-BUDS_PAT="${BUDS_MAC//:/_}"
 CONNECT_TIMEOUT=20   # seconds to retry bluetoothctl connect
 SINK_WAIT=15         # seconds to wait for bluez sink to appear
 MARKER="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-toggle-manual"
