@@ -42,10 +42,20 @@ echo "$out" | grep -q "not configured" || fail "refusal message missing: $out"
 ok "unconfigured refusal"
 
 echo "== hands-off suppresses auto-grab =="
-rm -rf /tmp/maidbt-t; mkdir -p /tmp/maidbt-t
-printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-t/.config-bluetooth-buds.conf
-mkdir -p /tmp/maidbt-t/.config
-mv /tmp/maidbt-t/.config-bluetooth-buds.conf /tmp/maidbt-t/.config/bluetooth-buds.conf
+rm -rf /tmp/maidbt-t; mkdir -p /tmp/maidbt-t/stubs /tmp/maidbt-t/.config
+cat > /tmp/maidbt-t/stubs/bluetoothctl <<'EOF'
+#!/bin/bash
+# fake adapter: always powered, buds never connected, connects always fail
+case "$*" in
+  *show*) echo "Controller AA:BB:CC:DD:EE:FF test"; echo "	Powered: yes" ;;
+  *info*) echo "Device 11:22:33:44:55:66 (public)"; echo "	Connected: no" ;;
+  *connect*) echo "Failed to connect: not available"; exit 1 ;;
+  *) exit 1 ;;
+esac
+EOF
+chmod +x /tmp/maidbt-t/stubs/bluetoothctl
+printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-t/.config/bluetooth-buds.conf
+export PATH="/tmp/maidbt-t/stubs:$PATH"
 date +%s > /tmp/maidbt-t/bt-hands-off
 export XDG_RUNTIME_DIR=/tmp/maidbt-t
 out=$(HOME=/tmp/maidbt-t timeout 8 bash "$PKGDIR/bin/buds-fallback.sh" 2>&1 || true)
