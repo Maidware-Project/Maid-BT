@@ -22,6 +22,9 @@ what it does and how does it work?
   
 - `bt-intent.service` — tiny LAN HTTP listener so the phone can push
   playback/call intent (MacroDroid/Tasker). See `phone/`.
+- battery boost (opt-in, off by default) — watcher matches A2DP codec
+  to earbuds battery (LDAC/AAC/SBC-XQ/SBC bands). see CHANGELOG, it
+  can crash plasmashell on some systems so test first.
 - Tray widget (`plasmoid/`) + three launcher icons (`desktop/`) +
   optional notification menu (`bt-notify-menu.sh`, superseded by widget).
   
