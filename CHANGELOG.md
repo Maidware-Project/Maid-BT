@@ -1,5 +1,32 @@
 # changelog
 
+## intent + installer hardening
+
+- intent server never logs query strings anymore, so a `?token=` can
+  never land in the journal. new preferred auth: `X-Token` header
+  (query still works for old macros).
+- installer no longer enables bt-intent by default — opt-in prompt,
+  off for non-interactive runs. core switching never touches network.
+- token file created with umask 077 (never 644, even briefly); warns
+  instead of silently failing without python3.
+- kdeconnect moved to optional (best-effort, tolerated if missing).
+- `install.sh --uninstall` actually exists now (was header-only).
+- sink values validated before writing the conf (no code injection
+  through a crafted FALLBACK_SINK).
+- `sed` home rewrite survives `&` in $HOME.
+- systemd units hardened (NoNewPrivileges, ProtectSystem=strict,
+  ProtectHome read-only, PrivateTmp, address families) — verified live,
+  watcher + intent server both healthy after.
+
+## phone integration hardening
+
+- intent server no longer logs query strings, so a legacy `?token=`
+  can never land in the journal. new preferred auth: `X-Token` header
+  (never logged); query auth still accepted for old macros.
+- installer no longer enables `bt-intent.service` by default — opt-in
+  prompt at install, off for non-interactive runs. core switching is
+  fully local and unaffected.
+
 ## battery boost (buds-fallback.sh)
 
 - watcher reads earbuds battery over BlueZ (`Battery Percentage`) and

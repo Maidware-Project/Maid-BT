@@ -7,6 +7,12 @@ Wants=pipewire.service wireplumber.service
 ExecStart=%h/.local/bin/buds-fallback.sh
 Restart=always
 RestartSec=3
+# least privilege: D-Bus + rfkill only, configs read-only, no fs writes
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
 
 [Install]
 WantedBy=default.target
