@@ -6,3 +6,4 @@
 
 BUDS_MAC="AA:BB:CC:DD:EE:FF"
 FALLBACK_SINK=""
+# Opt out of the app pause/resume cycle with: APP_CYCLE=0

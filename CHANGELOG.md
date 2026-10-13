@@ -1,5 +1,15 @@
 # changelog
 
+## radio mode + app pause/resume cycle
+
+- new `radio` action: powers the radio for other devices, grabs nothing,
+  moves no audio, daemon stays hands-off 8h. `on` cancels. widget button
+  + phone-button row included.
+- switches now pause Playing chromium/electron apps over MPRIS and
+  resume only those after the move (their web-audio stalls across BT
+  renegotiation otherwise). opt out with `APP_CYCLE=0`. never pauses on
+  fallback/lock parks — music keeps flowing to speakers.
+
 ## intent + installer hardening
 
 - intent server never logs query strings anymore, so a `?token=` can
