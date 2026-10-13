@@ -95,6 +95,10 @@ PlasmoidItem {
                 text: "Off"
                 onClicked: root.runAction("off")
             }
+            PlasmaComponents.Button {
+                text: "Radio"
+                onClicked: root.runAction("radio")
+            }
         }
     }
 }
