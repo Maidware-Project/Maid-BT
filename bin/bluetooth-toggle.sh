@@ -9,8 +9,6 @@
 #         PC stays hands-off ~20 min (hand buds to the phone; `on` cancels)
 #   radio = power the radio on only: no grab, no audio moves (buds stay
 #         put, e.g. controller/mouse use). daemon stays hands-off 8h.
-#   radio = power the radio on only: no grab, no audio moves (buds stay
-#         put, e.g. controller/mouse use). daemon stays hands-off 8h.
 #
 # Usage: bluetooth-toggle.sh [on|off|release|radio|toggle|status]   (default: toggle)
 # No sudo needed. Wired controllers are unaffected (inputplumber/joycond keep
@@ -206,7 +204,9 @@ do_on() {
   systemctl --user start buds-fallback.service 2>/dev/null || true
 
   if connect_buds; then
+    media_cycle_start
     switch_to_buds || true
+    media_cycle_end
     notify "Bluetooth on" "Connected to earbuds." normal bluetooth
     notify_phone "Earbuds switched to PC"
     mark_manual
@@ -223,7 +223,9 @@ do_release() {
   # no profile bring-up) and no transport teardown (anti-crash).
   # Daemon won't re-grab for HANDS_SECS (hands-off).
   echo "Parking audio on fallback sink ($FALLBACK_SINK)..."
+  media_cycle_start
   park_on_fallback
+  media_cycle_end
   systemctl --user start buds-fallback.service 2>/dev/null || true
   date +%s > "$HANDS" 2>/dev/null || true
   if is_buds_connected; then
@@ -251,6 +253,7 @@ do_radio() {
   fi
   # long hands-off window so the daemon won't grab the buds
   printf '%s %s\n' "$(date +%s)" "28800" > "$HANDS" 2>/dev/null || true
+  systemctl --user start buds-fallback.service 2>/dev/null || true
   echo "Radio ON (buds untouched, daemon hands-off 8h; '$0 on' cancels)."
   notify "Bluetooth on" "Radio on for other devices — buds stay put." normal bluetooth
   notify_phone "PC Bluetooth on (radio only)"
@@ -261,7 +264,9 @@ do_off() {
   # 1. park audio on fallback sink FIRST (moves + suspends bluez) so no stream
   #    is live when the link drops (bluez errors crash plasmashell audio)
   echo "Parking audio on fallback sink ($FALLBACK_SINK)..."
+  media_cycle_start
   park_on_fallback
+  media_cycle_end
   echo "Settling PipeWire..."
   sleep 2
   # 2. now drop the buds link (note: any link teardown can crash plasmashell

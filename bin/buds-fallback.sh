@@ -31,6 +31,8 @@ FAIL_BACKOFF=30       # quiet period after a failed connect (anti-flap)
 FLAP_WINDOW=15        # a connection dying this fast counts as a flap
 FLAP_BACKOFF=120      # quiet period after a flap (anti-flap)
 BATTERY_BOOST=0       # opt-in: match A2DP codec to buds battery (saves power).
+APP_CYCLE=1
+# Opt out of the app pause/resume cycle with APP_CYCLE=0 in the conf.
                       # WARNING: any transport teardown can segfault older
                       # plasmashell (QAudioContext). Leave 0 unless your
                       # desktop survives profile switches (test one first).
@@ -163,6 +165,42 @@ switch_to_buds_nowait() {
   fi
 }
 
+CYCLE_RESUME=""
+
+_mpris_players() { qdbus6 2>/dev/null | grep '^org.mpris.MediaPlayer2\.' | sort -u; }
+_mpris_status() { timeout 3 qdbus6 "$1" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.PlaybackStatus 2>/dev/null; }
+
+media_cycle_start() {
+  # pause Playing players so Chromium/Electron apps reopen clean audio
+  # on the new sink (their web-audio stack stalls across BT renegotiation)
+  [ "${APP_CYCLE:-1}" = "1" ] || return 0
+  CYCLE_RESUME=""
+  local p st
+  while read -r p; do
+    [ -n "$p" ] || continue
+    st=$(_mpris_status "$p")
+    if [ "$st" = "Playing" ]; then
+      timeout 3 qdbus6 "$p" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Pause >/dev/null 2>&1 || true
+      CYCLE_RESUME="$CYCLE_RESUME $p"
+    fi
+  done <<EOF
+$(_mpris_players)
+EOF
+  [ -n "$CYCLE_RESUME" ] && sleep 1
+}
+
+media_cycle_end() {
+  # resume only what we paused (never start paused music)
+  [ "${APP_CYCLE:-1}" = "1" ] || return 0
+  [ -z "${CYCLE_RESUME:-}" ] && return 0
+  sleep 1
+  local p
+  for p in $CYCLE_RESUME; do
+    timeout 3 qdbus6 "$p" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Play >/dev/null 2>&1 || true
+  done
+  CYCLE_RESUME=""
+}
+
 buds_battery() {
   # earbuds battery percent via BlueZ (empty when unknown)
   local hex
@@ -261,7 +299,9 @@ while true; do
     if [ "$prev_connected" = "0" ]; then
       log "buds connected"
       connected_since=$now
+      media_cycle_start
       switch_to_buds_nowait
+      media_cycle_end
       if ! manual_recent; then
         notify "Bluetooth on" "Connected to earbuds." normal bluetooth
         ping_phone "Earbuds switched to PC"
@@ -323,7 +363,9 @@ while true; do
           lost_for=0
           cooldown_until=0
           log "buds connected (via retry)"
+          media_cycle_start
           switch_to_buds_nowait
+          media_cycle_end
           if ! manual_recent; then
             notify "Bluetooth on" "Connected to earbuds." normal bluetooth
             ping_phone "Earbuds switched to PC"

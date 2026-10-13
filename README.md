@@ -97,7 +97,9 @@ silent after a switch even though the stream moved fine. their web-audio
 stack opens the output at fixed params and stalls when the bluetooth
 codec/rate renegotiates under it (LDAC 96k ↔ SBC 44.1k/48k) — not our
 routing, the app itself. fix is pause → switch → play; if an app stays
-dead, restart just that app.
+dead, restart just that app. the scripts do this automatically now
+(pause Playing players across every switch, resume only those after —
+opt out with `APP_CYCLE=0` in the conf).
 
 ## uninstalling
 
