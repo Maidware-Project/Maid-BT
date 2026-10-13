@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Earbuds to PC
+Comment=Connect earbuds and route audio to them
+Exec=/home/visa/.local/bin/bluetooth-toggle.sh on
+Icon=bluetooth
+Terminal=false
+Type=Application
+Categories=Audio;Bluetooth;

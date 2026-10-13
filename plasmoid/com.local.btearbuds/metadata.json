@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-MainScript": "ui/main.qml",
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-NotificationArea": true,
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "visa"
+            }
+        ],
+        "Category": "System Information",
+        "Icon": "bluetooth",
+        "Description": "One-tap earbuds switch: PC / phone / off",
+        "EnabledByDefault": true,
+        "Id": "com.local.btearbuds",
+        "License": "GPL-2.0+",
+        "Name": "BT Earbuds",
+        "Version": "1.0"
+    }
+}

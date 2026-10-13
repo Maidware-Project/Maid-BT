@@ -1,0 +1,12 @@
+[Unit]
+Description=Bluetooth earbuds watcher (auto-connect + fallback sink park)
+After=pipewire.service wireplumber.service bluetooth.service
+Wants=pipewire.service wireplumber.service
+
+[Service]
+ExecStart=%h/.local/bin/buds-fallback.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

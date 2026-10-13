@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Earbuds to Phone
+Comment=Park PC audio, hand earbuds to the phone
+Exec=/home/visa/.local/bin/bluetooth-toggle.sh release
+Icon=audio-headset-bluetooth
+Terminal=false
+Type=Application
+Categories=Audio;Bluetooth;
