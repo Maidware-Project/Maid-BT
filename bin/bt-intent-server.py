@@ -58,13 +58,24 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "bt-intent/1.0"
 
     def log_message(self, fmt, *args):  # journal-friendly single lines
-        print(f"[bt-intent] {self.client_address[0]} {fmt % args}", flush=True)
+        # NEVER log the query string: legacy ?token= auth would otherwise
+        # land in the journal where log readers could reuse it.
+        safe = [a.split("?", 1)[0] if isinstance(a, str) else a for a in args]
+        print(f"[bt-intent] {self.client_address[0]} {fmt % tuple(safe)}", flush=True)
+
+    def _token_ok(self):
+        # preferred: X-Token header (never appears in logs).
+        # legacy: ?token= query (still accepted, never logged).
+        hdr = self.headers.get("X-Token", "")
+        if hdr and TOKEN and hmac.compare_digest(hdr, TOKEN):
+            return True
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        tok = qs.get("token", [""])[0]
+        return bool(TOKEN) and hmac.compare_digest(tok, TOKEN)
 
     def do_GET(self):  # noqa: N802 - http.server naming
         parts = urllib.parse.urlparse(self.path)
-        qs = urllib.parse.parse_qs(parts.query)
-        token = qs.get("token", [""])[0]
-        if not TOKEN or not hmac.compare_digest(token, TOKEN):
+        if not self._token_ok():
             self.send_response(403)
             self.end_headers()
             self.wfile.write(b"forbidden")

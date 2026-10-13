@@ -21,7 +21,8 @@ what it does and how does it work?
   lock: parks on lock, restores on unlock only if buds are connected.
   
 - `bt-intent.service` — tiny LAN HTTP listener so the phone can push
-  playback/call intent (MacroDroid/Tasker). See `phone/`.
+  playback/call intent (MacroDroid/Tasker). See `phone/`. **Off by
+  default at install** (opt-in prompt); core switching is fully local.
 - battery boost (opt-in, off by default) — watcher matches A2DP codec
   to earbuds battery (LDAC/AAC/SBC-XQ/SBC bands). see CHANGELOG, it
   can crash plasmashell on some systems so test first.
@@ -65,9 +66,11 @@ bash install.sh --no-packages  # skip package install
 
 install.sh copies (never symlinks) into `~/.local/bin`, `~/.config/systemd/user`,
 `~/.local/share/{plasma/applications}`, enables `buds-fallback.service` and
-`bt-intent.service`, generates `~/.config/bt-intent.token`, and prompts for
+`bt-intent.service`, generates `~/.config/bt-intent.token` (only used if
+you enable phone integration at the prompt), and prompts for
 `~/.config/bluetooth-buds.conf` (MAC validated, placeholder rejected).
-Existing files are backed up to `*.bak-<timestamp>`.
+Existing files are backed up to `*.bak-<timestamp>`. install.sh downloads
+nothing — every dependency comes from your distro repos.
 
 ten: pair + trust earbuds (`bluetoothctl pair/trust`), open the intent
 TCP port if using phone push (e.g. `sudo firewall-cmd --permanent --add-port=8899/tcp`),
@@ -90,6 +93,12 @@ Prefer `release` over `off`; if plasmashell crashes, check
 `coredumpctl` + journal for the `spa.bluez5: Failure` signature.
 
 ## uninstalling
+
+```sh
+bash install.sh --uninstall   # services off + files out (keeps your config + token)
+```
+
+manual version of the same:
 
 ```sh
 systemctl --user disable --now buds-fallback.service bt-intent.service bt-menu.service
