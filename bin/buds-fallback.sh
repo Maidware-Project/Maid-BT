@@ -30,6 +30,12 @@ RETRY_BACKOFF_AFTER=120 # seconds of continuous loss before backing off retries
 FAIL_BACKOFF=30       # quiet period after a failed connect (anti-flap)
 FLAP_WINDOW=15        # a connection dying this fast counts as a flap
 FLAP_BACKOFF=120      # quiet period after a flap (anti-flap)
+BATTERY_BOOST=0       # opt-in: match A2DP codec to buds battery (saves power).
+                      # WARNING: any transport teardown can segfault older
+                      # plasmashell (QAudioContext). Leave 0 unless your
+                      # desktop survives profile switches (test one first).
+BATTERY_POLL=60       # seconds between battery checks
+BATT_COOLDOWN=180     # min seconds between codec switches (anti-flap)
 POWER_OFF_ON_LOST=0   # 0 = seamless mode: radio stays on, buds reconnect on case-open
 BLOCK_ON_EXTERNAL_OFF=0 # 1 = also rfkill block when KDE tray powers off (sticky off)
 MARKER="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-toggle-manual"
@@ -61,6 +67,8 @@ did_fallback=0
 last_attempt=0
 cooldown_until=0
 connected_since=0
+last_batt_check=0
+last_codec_switch=0
 prev_powered=""
 prev_connected=""
 prev_locked=""
@@ -155,6 +163,27 @@ switch_to_buds_nowait() {
   fi
 }
 
+buds_battery() {
+  # earbuds battery percent via BlueZ (empty when unknown)
+  local hex
+  hex=$(bluetoothctl info "$BUDS_MAC" 2>/dev/null | sed -n 's/.*Battery Percentage: 0x\([0-9a-fA-F]*\).*/\1/p' | head -n 1)
+  [ -n "$hex" ] && printf '%d' "0x$hex" 2>/dev/null || true
+}
+
+codec_for() {
+  # bands by drain (heaviest first): LDAC 75+, AAC 45+, SBC-XQ 15+, SBC below
+  local b=$1
+  if [ "$b" -ge 75 ]; then echo "a2dp-sink"
+  elif [ "$b" -ge 45 ]; then echo "a2dp-sink-aac"
+  elif [ "$b" -ge 15 ]; then echo "a2dp-sink-sbc_xq"
+  else echo "a2dp-sink-sbc"; fi
+}
+
+current_profile() {
+  local card="bluez_card.${BUDS_MAC//:/_}"
+  pactl list cards 2>/dev/null | awk -v c="$card" 'index($0, c) {f=1} f && /Active Profile:/ {sub(/.*Active Profile: /, ""); print; exit}'
+}
+
 try_connect_once() {
   log "auto-connect attempt to $BUDS_MAC"
   if command -v timeout >/dev/null 2>&1; then
@@ -241,6 +270,31 @@ while true; do
     if [ "$did_fallback" = "1" ]; then
       log "buds back, re-armed"
       did_fallback=0
+    fi
+    # battery boost (opt-in): match codec to buds battery, never during calls
+    if [ "$BATTERY_BOOST" = "1" ] && [ $((now - last_batt_check)) -ge "$BATTERY_POLL" ]; then
+      last_batt_check=$now
+      batt=$(buds_battery)
+      if [ -n "$batt" ]; then
+        want=$(codec_for "$batt")
+        cur=$(current_profile)
+        case "$cur" in
+          headset*|handsfree*) : ;;  # call in progress: hands off
+          "$want") : ;;
+          *)
+            if [ $((now - last_codec_switch)) -ge "$BATT_COOLDOWN" ]; then
+              card="bluez_card.${BUDS_MAC//:/_}"
+              if pactl set-card-profile "$card" "$want" 2>/dev/null; then
+                last_codec_switch=$now
+                log "battery ${batt}% -> codec $want"
+                notify "Battery saver" "Earbuds at ${batt}% — codec $want." normal bluetooth
+              else
+                log "codec switch to $want failed"
+              fi
+            fi
+            ;;
+        esac
+      fi
     fi
   else
     # disconnected
