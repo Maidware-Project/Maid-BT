@@ -9,6 +9,8 @@
 #         PC stays hands-off ~20 min (hand buds to the phone; `on` cancels)
 #   radio = power the radio on only: no grab, no audio moves (buds stay
 #         put, e.g. controller/mouse use). daemon stays hands-off 8h.
+#   radio = power the radio on only: no grab, no audio moves (buds stay
+#         put, e.g. controller/mouse use). daemon stays hands-off 8h.
 #
 # Usage: bluetooth-toggle.sh [on|off|release|radio|toggle|status]   (default: toggle)
 # No sudo needed. Wired controllers are unaffected (inputplumber/joycond keep
@@ -20,8 +22,10 @@ ACTION="${1:-toggle}"
 
 BUDS_MAC="AA:BB:CC:DD:EE:FF"
 FALLBACK_SINK=""
+APP_CYCLE=1
 # Fill these via ~/.config/bluetooth-buds.conf (install.sh prompts for them):
 #   BUDS_MAC="..." and FALLBACK_SINK="..."
+# Opt out of the app pause/resume cycle with: APP_CYCLE=0
 [ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
 CONNECT_TIMEOUT=20   # seconds to retry bluetoothctl connect
 SINK_WAIT=15         # seconds to wait for bluez sink to appear
@@ -30,6 +34,41 @@ mark_manual() { touch "$MARKER" 2>/dev/null || true; }
 HANDS="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-hands-off"
 HANDS_SECS=1200  # release-to-phone window (20 min); explicit `on` clears it early
 clear_hands() { rm -f "$HANDS" 2>/dev/null || true; }
+CYCLE_RESUME=""
+
+_mpris_players() { qdbus6 2>/dev/null | grep '^org.mpris.MediaPlayer2\.' | sort -u; }
+_mpris_status() { timeout 3 qdbus6 "$1" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.PlaybackStatus 2>/dev/null; }
+
+media_cycle_start() {
+  # pause Playing players so Chromium/Electron apps reopen clean audio
+  # on the new sink (their web-audio stack stalls across BT renegotiation)
+  [ "${APP_CYCLE:-1}" = "1" ] || return 0
+  CYCLE_RESUME=""
+  local p st
+  while read -r p; do
+    [ -n "$p" ] || continue
+    st=$(_mpris_status "$p")
+    if [ "$st" = "Playing" ]; then
+      timeout 3 qdbus6 "$p" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Pause >/dev/null 2>&1 || true
+      CYCLE_RESUME="$CYCLE_RESUME $p"
+    fi
+  done <<EOF
+$(_mpris_players)
+EOF
+  [ -n "$CYCLE_RESUME" ] && sleep 1
+}
+
+media_cycle_end() {
+  # resume only what we paused (never start paused music)
+  [ "${APP_CYCLE:-1}" = "1" ] || return 0
+  [ -z "${CYCLE_RESUME:-}" ] && return 0
+  sleep 1
+  local p
+  for p in $CYCLE_RESUME; do
+    timeout 3 qdbus6 "$p" /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Play >/dev/null 2>&1 || true
+  done
+  CYCLE_RESUME=""
+}
 
 notify_phone() {
   # best-effort message to the first reachable phone (silent when unpaired)
