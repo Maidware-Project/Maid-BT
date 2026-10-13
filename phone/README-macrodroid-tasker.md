@@ -37,11 +37,19 @@ in the URL, so prefer the header.
 MacroDroid (free fits, 4 macros): trigger `Music/Sound Playing`
 (Playing/Stopped), `Call Active` (Any), `Call Ended`; constrain to
 bluetooth connected to your buds; action `HTTP Request` GET the URLs.
-battery Unrestricted or samsung kills it.
+battery Unrestricted or the OS kills it in the background. aggressive
+battery killers are common, not just samsung: xiaomi/redmi/poco
+(autostart + No restrictions), huawei/honor (manual app launch),
+oneplus/oppo/realme (don't optimize + background activity on),
+vivo/iqoo (autostart + background power). pixels/motorola/nothing are
+usually fine stock. exact menus move every update — dontkillmyapps.com
+has per-brand steps.
 
 Tasker (paid, no ads): same thing with State `BT Connected` + Event
 `UI → Notification` for media, State `Phone → Call` / Event `Phone Idle`
-for calls. needs notification access + unrestricted battery.
+for calls. needs notification access + unrestricted battery (same
+killers list as above: samsung, xiaomi, huawei, oneplus, oppo, vivo —
+exempt the app or it dies in background).
 
 ## notes
 
