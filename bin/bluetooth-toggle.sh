@@ -7,8 +7,10 @@
 #         + move streams off bluez + power off + rfkill block
 #   release = park on fallback, keep link warm (instant switch-back, anti-crash),
 #         PC stays hands-off ~20 min (hand buds to the phone; `on` cancels)
+#   radio = power the radio on only: no grab, no audio moves (buds stay
+#         put, e.g. controller/mouse use). daemon stays hands-off 8h.
 #
-# Usage: bluetooth-toggle.sh [on|off|release|toggle|status]   (default: toggle)
+# Usage: bluetooth-toggle.sh [on|off|release|radio|toggle|status]   (default: toggle)
 # No sudo needed. Wired controllers are unaffected (inputplumber/joycond keep
 # running — only the radio follows this switch).
 
@@ -196,6 +198,26 @@ do_release() {
   mark_manual
 }
 
+do_radio() {
+  # radio only: power on for other devices, touch nothing else.
+  # daemon stays hands-off 8h so it won't grab the buds.
+  $RFKILL unblock bluetooth 2>&1
+  sleep 1
+  bluetoothctl power on 2>&1 | tail -n 1
+  if ! is_powered; then
+    echo "Radio ON requested, but adapter not powered."
+    notify "Bluetooth on?" "Unblocked, but adapter won't power." critical dialog-error
+    mark_manual
+    return 1
+  fi
+  # long hands-off window so the daemon won't grab the buds
+  printf '%s %s\n' "$(date +%s)" "28800" > "$HANDS" 2>/dev/null || true
+  echo "Radio ON (buds untouched, daemon hands-off 8h; '$0 on' cancels)."
+  notify "Bluetooth on" "Radio on for other devices — buds stay put." normal bluetooth
+  notify_phone "PC Bluetooth on (radio only)"
+  mark_manual
+}
+
 do_off() {
   # 1. park audio on fallback sink FIRST (moves + suspends bluez) so no stream
   #    is live when the link drops (bluez errors crash plasmashell audio)
@@ -232,6 +254,7 @@ do_off() {
 case "$ACTION" in
   on) do_on ;;
   off) do_off ;;
+  radio) do_radio ;;
   release) do_release ;;
   status)
     if is_blocked; then echo "Bluetooth: OFF (rfkill blocked)";

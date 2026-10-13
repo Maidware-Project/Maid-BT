@@ -79,7 +79,7 @@ Add Widgets → BT Earbuds (tray), log out/in.
 ## usage 
 
 ```sh
-bluetooth-toggle.sh on|off|release|toggle|status|porcelain
+bluetooth-toggle.sh on|off|release|radio|toggle|status|porcelain
 buds-on.sh / buds-off.sh / buds-release.sh   # wrappers
 ```
 
