@@ -1,0 +1,12 @@
+[Unit]
+Description=Bluetooth Plasma notification menu (action buttons)
+After=buds-fallback.service graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/bt-notify-menu.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
