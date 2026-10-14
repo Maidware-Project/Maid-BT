@@ -72,6 +72,20 @@ class DeviceMonitor:
             pass
 
     @staticmethod
+    def power_cycle(wait_s=5):
+        """Adapter off/on (no sudo). Clears wedged transports/SEP state."""
+        import time
+        try:
+            subprocess.run(["bluetoothctl", "power", "off"],
+                           capture_output=True, timeout=15)
+            time.sleep(wait_s)
+            subprocess.run(["bluetoothctl", "power", "on"],
+                           capture_output=True, timeout=15)
+            return True
+        except (subprocess.SubprocessError, FileNotFoundError):
+            return False
+
+    @staticmethod
     def scan_audio_devices(timeout=8):
         """Return [(mac, name)] of BT devices exposing Audio Sink."""
         out = []

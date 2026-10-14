@@ -31,5 +31,14 @@
   },
   "laptop": {
     "mode": "auto"
+  },
+  "fallback_grab": {
+    "enabled": false
+  },
+  "route_comms": {
+    "enabled": true
+  },
+  "bt_fallback": {
+    "enabled": false
   }
 }

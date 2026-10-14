@@ -53,6 +53,83 @@ grep -q "session.suspend-timeout-seconds" \
 grep -q "bluez_output" \
   "$PKGDIR/wireplumber/51-bt-no-suspend.conf" || fail "bluez match missing"
 ok "watcher extras"
+grep -q "fallback_grab" "$PKGDIR/watcher/config.example.json" || fail "grab config missing"
+grep -q "phones_up" "$PKGDIR/watcher/maid-watcher" || fail "grab logic missing"
+ok "fallback grab present"
+/usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF2' || fail "router unit failed"
+import sys
+sys.path.insert(0, sys.argv[1])
+from maid_core import audio
+moved = []
+def fake(args):
+    if args == ["get-default-sink"]:
+        return "bluez_output.XX.1\n"
+    if args == ["list", "sinks"]:
+        return "Sink #44\n\tName: alsa_output.usb-dac.analog-stereo\nSink #61\n\tName: bluez_output.XX.1\n"
+    if args == ["list", "sink-inputs"]:
+        return ("Sink Input #10\n\tSink: 44\n\tapplication.name = \"Vesktop\"\n"
+                "Sink Input #11\n\tSink: 61\n\tapplication.name = \"Firefox\"\n")
+    if args[:1] == ["move-sink-input"]:
+        moved.append(tuple(args))
+        return ""
+    return ""
+audio._pactl = fake
+assert audio.route_comms_to_default() == 1, "should move 1 stranded stream"
+assert moved == [("move-sink-input", "10", "bluez_output.XX.1")], moved
+print("router unit passed")
+PYEOF2
+ok "comms router unit"
+mkdir -p /tmp/btstub
+printf '#!/bin/bash\necho "2: bnep0: <UP> mtu 1500"\necho "    inet 192.168.44.1/24 scope global bnep0"\n' > /tmp/btstub/ip
+chmod +x /tmp/btstub/ip
+PATH=/tmp/btstub:/usr/bin:/bin /usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF2' || fail "bnep detect failed"
+import os
+import sys
+import types
+from unittest.mock import MagicMock
+sys.path.insert(0, sys.argv[1])
+for m in ["dbus", "dbus.mainloop", "dbus.mainloop.glib", "gi", "gi.repository"]:
+    sys.modules[m] = MagicMock()
+g = {"__name__": "bt-test", "__file__": os.path.join(sys.argv[1], "maid-watcher")}
+exec(compile(open(os.path.join(sys.argv[1], "maid-watcher")).read(), "maid-watcher", "exec"), g)
+assert g["Daemon"]._bnep_up() is True, "bnep with inet not detected"
+print("bnep detect passed")
+PYEOF2
+PATH=/usr/bin:/bin /usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF3' || fail "bnep absent misdetected"
+import os
+import sys
+import types
+from unittest.mock import MagicMock
+sys.path.insert(0, sys.argv[1])
+for m in ["dbus", "dbus.mainloop", "dbus.mainloop.glib", "gi", "gi.repository"]:
+    sys.modules[m] = MagicMock()
+g = {"__name__": "bt-test", "__file__": os.path.join(sys.argv[1], "maid-watcher")}
+exec(compile(open(os.path.join(sys.argv[1], "maid-watcher")).read(), "maid-watcher", "exec"), g)
+assert g["Daemon"]._bnep_up() is False, "no bnep must be False"
+print("bnep absent passed")
+PYEOF3
+rm -rf /tmp/btstub
+ok "bluetooth fallback link detect"
+mkdir -p /tmp/micstub
+cat > /tmp/micstub/pw-dump <<'STUBEOF'
+#!/bin/bash
+cat <<'JSONEOF'
+[{"id": 7, "type": "PipeWire:Interface:Node", "info": {"state": "running", "props": {"media.class": "Stream/Input/Audio", "application.name": "Vesktop", "node.name": "chromium_capture"}}},
+{"id": 9, "type": "PipeWire:Interface:Node", "info": {"state": "suspended", "props": {"media.class": "Stream/Input/Audio", "application.name": "Firefox", "node.name": "x"}}}
+]
+JSONEOF
+STUBEOF
+chmod +x /tmp/micstub/pw-dump
+PATH=/tmp/micstub:/usr/bin:/bin /usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF2' || fail "mic holder detect failed"
+import sys
+sys.path.insert(0, sys.argv[1])
+from maid_core import audio
+holders = audio.mic_holders()
+assert holders == [("Vesktop", "chromium_capture")], holders
+print("mic holder detect passed")
+PYEOF2
+ok "mic holder detect"
+rm -rf /tmp/micstub
 
 echo "== degraded mode (missing/outdated deps) =="
 mkdir -p /tmp/maidbt-emptybin

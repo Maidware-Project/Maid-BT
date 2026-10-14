@@ -1,5 +1,35 @@
 # changelog
 
+## Linux Mint support
+
+- PulseAudio fallbacks across the audio layer (card lookup, profiles,
+  streams, mute, activity detect) for Mint / older stacks without
+  PipeWire tools. Nemo file-manager action for Maidshare on Cinnamon.
+- older BlueZ tolerated: missing battery/HFP-wideband degrades
+  silently, SBC always available as the mandatory codec.
+
+## wifi-to-bluetooth phone fallback
+
+- opt-in `bt_fallback`: when no paired phone is reachable over wifi,
+  the watcher offers the Bluetooth-tethering path (Retry /
+  Bluetooth-instead actions) and, once a bnep link appears, refreshes
+  KDE Connect so calls, intents and sharing resume over Bluetooth.
+  needs KDE Connect to know the phone is gone; never grabs blindly.
+
+## chat routing fix
+
+- Discord/Vesktop playback stranded off the default sink gets moved
+  back automatically (on connect + every cycle). microphone routing is
+  never touched. `route_comms.enabled` (default on) opts out.
+
+## phone-down fallback
+
+- opt-in `fallback_grab`: when no paired phone is reachable and a
+  managed device sits disconnected, the watcher grabs it back instead
+  of waiting for a manual switch. off by default; needs KDE Connect
+  to know the phone is actually gone (no kdeconnect = never grabs
+  blindly).
+
 ## systemd-native watcher + actionable notifications
 
 - Maid Watcher installs as a supervised systemd user unit
