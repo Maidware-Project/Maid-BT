@@ -8,7 +8,8 @@
 # Phone side: KDE Connect run commands (PC only / Phone only / BT Off).
 set -u
 
-_here="$(cd "$(dirname "$0")" && pwd)"
+_here="${0%/*}"
+case "$_here" in "$0") _here="." ;; esac
 BIN="$_here/bluetooth-toggle.sh"
 [ -x "$BIN" ] || BIN="$HOME/.local/bin/bluetooth-toggle.sh"
 [ -x "$BIN" ] || BIN="/usr/bin/bluetooth-toggle.sh"

@@ -84,7 +84,8 @@ fi
 
 # source files live next to the script in a checkout, or under the
 # shared data dir once installed (~/.local/share or /usr/share).
-_here="$(cd "$(dirname "$0")" && pwd)"
+_here="${0%/*}"
+case "$_here" in "$0") _here="." ;; esac
 for _base in "$_here/.." "$HOME/.local/share/maid-bt" "/usr/share/maid-bt"; do
   if [ -f "$_base/watcher/maid-watcher.desktop" ]; then
     SRCBASE="$_base"; break
