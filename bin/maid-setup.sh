@@ -78,6 +78,26 @@ EOF
   fi
 fi
 
+# source files live next to the script in a checkout, or under the
+# shared data dir once installed (~/.local/share or /usr/share).
+_here="$(cd "$(dirname "$0")" && pwd)"
+for _base in "$_here/.." "$HOME/.local/share/maid-bt" "/usr/share/maid-bt"; do
+  if [ -f "$_base/watcher/maid-watcher.desktop" ]; then
+    SRCBASE="$_base"; break
+  elif [ -f "$_base/maid-watcher.desktop" ]; then
+    SRCBASE="$_base"; FLATBASE=1; break
+  fi
+done
+: "${SRCBASE:=$_here/..}"
+# repo layout keeps watcher/ + wireplumber/ apart; installed copies share one dir
+if [ "${FLATBASE:-0}" = "1" ]; then
+  WDESK="$SRCBASE/maid-watcher.desktop"
+  WCONF_SRC="$SRCBASE/51-bt-no-suspend.conf"
+else
+  WDESK="$SRCBASE/watcher/maid-watcher.desktop"
+  WCONF_SRC="$SRCBASE/wireplumber/51-bt-no-suspend.conf"
+fi
+
 # ---- 3. opt-ins ----
 ask "enable Maid Watcher autostart (calls, battery, reconnects)? [y/N]:"
 case "$REPLY" in [Yy]*)
@@ -87,7 +107,7 @@ case "$REPLY" in [Yy]*)
   else
     mkdir -p "$HOME/.config/autostart"
     sed -e "s|/home/visa|${HOME//&/\\&}|g" \
-      "$(cd "$(dirname "$0")/../watcher" && pwd)/maid-watcher.desktop" \
+      "$WDESK" \
       > "$HOME/.config/autostart/maid-watcher.desktop" 2>/dev/null \
       && say "watcher on (autostart)" || say "could not write autostart entry"
   fi ;;
@@ -96,7 +116,7 @@ esac
 ask "keep BT audio warm (no 1s late start, more earbud drain)? [y/N]:"
 case "$REPLY" in [Yy]*)
   mkdir -p "$HOME/.config/wireplumber/wireplumber.conf.d"
-  cp -a "$(cd "$(dirname "$0")/../wireplumber" && pwd)/51-bt-no-suspend.conf" \
+  cp -a "$WCONF_SRC" \
     "$HOME/.config/wireplumber/wireplumber.conf.d/" 2>/dev/null \
     && say "warm audio on — restart wireplumber to apply" || say "copy failed" ;;
 esac

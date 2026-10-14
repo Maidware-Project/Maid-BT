@@ -2,19 +2,38 @@
 # Universal installer: Arch (pacman), Debian/Ubuntu (apt), Fedora (dnf),
 # openSUSE (zypper). Copies files (no symlinks — survives folder moves).
 # Usage: ./install.sh [--check] [--no-packages] [--uninstall [--purge]]
+#          [--prefix=DIR] [--no-config]
+# --prefix installs program files elsewhere (packaging); user config and
+# services still target $HOME unless --no-config skips them entirely.
 set -u
 PKGDIR="$(cd "$(dirname "$0")" && pwd)"
 BACKUP_TS="$(date +%Y%m%d-%H%M%S)"
-CHECK=0; NO_PKGS=0; UNINST=0; PURGE=0
+CHECK=0; NO_PKGS=0; UNINST=0; PURGE=0; NOCONFIG=0; PREFIX=""
 for a in "$@"; do
   case "$a" in
     --check) CHECK=1 ;;
     --no-packages) NO_PKGS=1 ;;
     --uninstall) UNINST=1 ;;
     --purge) PURGE=1 ;;
-    *) echo "unknown option: $a (see: --check --no-packages --uninstall [--purge])" >&2; exit 2 ;;
+    --no-config) NOCONFIG=1 ;;
+    --prefix=*) PREFIX="${a#--prefix=}" ;;
+    *) echo "unknown option: $a (see header)" >&2; exit 2 ;;
   esac
 done
+if [ -z "$PREFIX" ]; then PREFIX="$HOME/.local"; fi
+if [ "$PREFIX" = "$HOME/.local" ]; then
+  USERMODE=1
+  BINDIR="$HOME/.local/bin"
+  SYSDDIR="$HOME/.config/systemd/user"
+  SHAREDIR="$HOME/.local/share"
+else
+  USERMODE=0
+  BINDIR="${DESTDIR:-}$PREFIX/bin"
+  SYSDDIR="${DESTDIR:-}$PREFIX/lib/systemd/user"
+  SHAREDIR="${DESTDIR:-}$PREFIX/share"
+fi
+# system installs never touch per-user state, even without --no-config
+if [ "$USERMODE" = "0" ]; then NOCONFIG=1; fi
 
 if [ "$UNINST" = "1" ]; then
   systemctl --user disable --now buds-fallback.service bt-intent.service maid-watcher.service 2>/dev/null || true
@@ -126,29 +145,38 @@ copy_one() {
     say "backed up $dest"
   fi
   if [ "$rewrite" = "1" ]; then
+    # user install: fix the /home/visa Exec placeholder to this $HOME.
     # escape & (sed replacement metachar) in $HOME
     sed -e "s|/home/visa|${HOME//&/\\&}|g" "$src" > "$dest"
+  elif [ "$rewrite" = "2" ]; then
+    # system package: bare command names, resolved via PATH.
+    sed -e "s|/home/visa/.local/bin/||g" "$src" > "$dest"
   else
     cp -a "$src" "$dest"
   fi
   echo "installed $dest"
 }
 
+# rewrite mode: 1 = user home fixup, 2 = system bare names
+if [ "$USERMODE" = "1" ]; then REWRITE=1; else REWRITE=2; fi
+
 for f in "$PKGDIR"/bin/*; do
   [ -f "$f" ] || continue
-  copy_one "$f" "$HOME/.local/bin/$(basename "$f")"
+  copy_one "$f" "$BINDIR/$(basename "$f")"
 done
-[ "$CHECK" = "0" ] && chmod +x "$HOME"/.local/bin/bluetooth-toggle.sh "$HOME"/.local/bin/buds-*.sh "$HOME"/.local/bin/bt-*.sh "$HOME"/.local/bin/bt-*.py 2>/dev/null || true
+[ "$CHECK" = "0" ] && chmod +x "$BINDIR"/bluetooth-toggle.sh "$BINDIR"/buds-*.sh "$BINDIR"/bt-*.sh "$BINDIR"/bt-*.py 2>/dev/null || true
 
-# ---- Maid Watcher (optional daemon: calls, 3-device priority, battery) ----
-copy_one "$PKGDIR/watcher/maid-watcher" "$HOME/.local/bin/maid-watcher"
+# ---- Maid Watcher (optional daemon: calls, 2-device priority, battery) ----
+copy_one "$PKGDIR/watcher/maid-watcher" "$BINDIR/maid-watcher"
 for f in "$PKGDIR"/watcher/maid_core/*.py; do
   [ -f "$f" ] || continue
-  copy_one "$f" "$HOME/.local/bin/maid_core/$(basename "$f")"
+  copy_one "$f" "$BINDIR/maid_core/$(basename "$f")"
 done
-[ "$CHECK" = "0" ] && chmod +x "$HOME/.local/bin/maid-watcher" 2>/dev/null || true
+[ "$CHECK" = "0" ] && chmod +x "$BINDIR/maid-watcher" 2>/dev/null || true
 if [ "$CHECK" = "1" ]; then
   echo "CONFIG $HOME/.config/maid-watcher/config.json (example copy on real run)"
+elif [ "$NOCONFIG" = "1" ]; then
+  say "skipped watcher config (--no-config)"
 elif [ ! -f "$HOME/.config/maid-watcher/config.json" ]; then
   mkdir -p "$HOME/.config/maid-watcher"
   cp -a "$PKGDIR/watcher/config.example.json" "$HOME/.config/maid-watcher/config.json"
@@ -159,19 +187,25 @@ fi
 
 for f in "$PKGDIR"/systemd/*.service; do
   [ -f "$f" ] || continue
-  copy_one "$f" "$HOME/.config/systemd/user/$(basename "$f")"
+  copy_one "$f" "$SYSDDIR/$(basename "$f")"
 done
+# sources maid-setup.sh needs later (repo layout absent once installed)
+copy_one "$PKGDIR/watcher/maid-watcher.desktop" "$SHAREDIR/maid-bt/maid-watcher.desktop"
+copy_one "$PKGDIR/wireplumber/51-bt-no-suspend.conf" "$SHAREDIR/maid-bt/51-bt-no-suspend.conf"
+copy_one "$PKGDIR/watcher/config.example.json" "$SHAREDIR/maid-bt/config.example.json"
 
 copy_one "$PKGDIR/plasmoid/com.local.btearbuds/metadata.json" \
-  "$HOME/.local/share/plasma/plasmoids/com.local.btearbuds/metadata.json"
+  "$SHAREDIR/plasma/plasmoids/com.local.btearbuds/metadata.json"
 copy_one "$PKGDIR/plasmoid/com.local.btearbuds/contents/ui/main.qml" \
-  "$HOME/.local/share/plasma/plasmoids/com.local.btearbuds/contents/ui/main.qml" 1
+  "$SHAREDIR/plasma/plasmoids/com.local.btearbuds/contents/ui/main.qml" $REWRITE
 
 for f in "$PKGDIR"/desktop/*.desktop; do
   [ -f "$f" ] || continue
-  copy_one "$f" "$HOME/.local/share/applications/$(basename "$f")" 1
+  copy_one "$f" "$SHAREDIR/applications/$(basename "$f")" $REWRITE
 done
-copy_one "$PKGDIR/bluetooth-buds.conf.example" "$HOME/.config/bluetooth-buds.conf.example"
+if [ "$NOCONFIG" = "0" ]; then
+  copy_one "$PKGDIR/bluetooth-buds.conf.example" "$HOME/.config/bluetooth-buds.conf.example"
+fi
 
 # ---- per-machine earbuds config (interactive, skippable) ----
 CONF="$HOME/.config/bluetooth-buds.conf"
@@ -179,7 +213,7 @@ if [ "$CHECK" = "1" ]; then
   echo "CONFIG $CONF (interactive prompt on real run)"
 elif [ -f "$CONF" ]; then
   say "$CONF exists — kept"
-elif [ ! -t 0 ]; then
+elif [ "$NOCONFIG" = "1" ] || [ ! -t 0 ]; then
   say "non-interactive — skipped $CONF (copy the .example later)"
 else
   say "paired devices:"; bluetoothctl devices 2>/dev/null || true
@@ -203,6 +237,8 @@ fi
 # ---- intent token ----
 if [ "$CHECK" = "1" ]; then
   echo "TOKEN ~/.config/bt-intent.token"
+elif [ "$NOCONFIG" = "1" ]; then
+  say "skipped token (--no-config)"
 elif [ ! -f "$HOME/.config/bt-intent.token" ]; then
   if command -v python3 >/dev/null 2>&1; then
     # umask first: token must never exist world-readable, even briefly
@@ -214,6 +250,11 @@ elif [ ! -f "$HOME/.config/bt-intent.token" ]; then
 fi
 
 if [ "$CHECK" = "1" ]; then say "(check only, nothing changed)"; exit 0; fi
+
+if [ "$NOCONFIG" = "1" ] || [ "$USERMODE" = "0" ]; then
+  say "program files installed; user setup skipped (pass no --no-config with default prefix for the interactive setup)"
+  exit 0
+fi
 
 systemctl --user daemon-reload 2>/dev/null || true
 # OpenRC/runit/etc are not supported: services need systemd user units.
