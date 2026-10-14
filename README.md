@@ -128,7 +128,8 @@ for you (zram); Arch/Debian users should turn it on.
 ## uninstalling
 
 ```sh
-bash install.sh --uninstall   # removes everything, keeps your settings
+bash install.sh --uninstall            # everything out, asks about settings
+bash install.sh --uninstall --purge    # everything out including settings, no questions
 ```
 
 or by hand: stop the background services, delete the installed files
