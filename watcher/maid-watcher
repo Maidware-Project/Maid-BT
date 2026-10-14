@@ -10,6 +10,8 @@ Usage:
   maid-watcher status   show managed devices, connection, battery
   maid-watcher scan     list nearby BT audio devices for config
   maid-watcher bugreport [--full]  diagnostics bundle for bug reports
+  maid-watcher route-mic [SOURCE]  move chat-app mics to SOURCE
+                        (default: default source) to free the BT mic
 """
 import json
 import os
@@ -51,6 +53,14 @@ class Daemon:
         for mac in self.devices:
             self.monitor.watch(mac)
         self.retry = {}  # mac -> [fails, next_try]
+        self._last_op = {}  # (mac, kind) -> last BT op timestamp
+        self._wedged = {}  # mac -> consecutive failed enforces
+        rc = dict(self.cfg.get("reconnect", {}))
+        if getattr(self, "laptop", False):
+            rc["initial_delay_s"] = max(rc.get("initial_delay_s", 5), 10)
+            rc["max_delay_s"] = max(rc.get("max_delay_s", 120), 300)
+            rc["give_up_after"] = min(rc.get("give_up_after", 10), 6)
+        self.rc = rc
         self.call_muted = []
         self.call_paused = []
         self.call_timer = None
@@ -72,6 +82,7 @@ class Daemon:
             self.retry.pop(mac, None)
             if dev.get("prefer_profile") == "a2dp":
                 GLib.timeout_add_seconds(2, self._enforce_a2dp, mac)
+            GLib.timeout_add_seconds(4, self._route_after_connect)
         else:
             notify.audit(f"disconnected: {name}")
             notify.send("Earbuds disconnected", name)
@@ -80,15 +91,55 @@ class Daemon:
                 self.retry[mac] = [0, time.time() + delay]
                 GLib.timeout_add_seconds(delay + 1, self._maybe_reconnect, mac)
 
+    def _bt_op_allowed(self, mac, kind):
+        # One BT operation per device per cooldown window. Slow is
+        # smooth: hammering BlueZ/PipeWire wedges transports.
+        import time
+        key = (mac, kind)
+        now = time.time()
+        cooldown = self.rc.get("op_cooldown_s", 10)
+        if now - self._last_op.get(key, 0) < cooldown:
+            return False
+        self._last_op[key] = now
+        return True
+
     def _enforce_a2dp(self, mac, attempt=0):
         # Card appears in PipeWire slightly after the BlueZ connect;
         # retry a few times instead of assuming one shot lands.
         if self.monitor.is_connected(mac):
+            if not self._bt_op_allowed(mac, "profile"):
+                GLib.timeout_add_seconds(self.rc.get("op_cooldown_s", 10),
+                                         self._enforce_a2dp, mac, attempt)
+                return False
             if audio.set_profile_a2dp(mac):
+                self._wedged.pop(mac, None)
                 return False
             if attempt < 2:
                 GLib.timeout_add_seconds(3, self._enforce_a2dp, mac,
                                          attempt + 1)
+            else:
+                holders = audio.bt_mic_holders(mac)
+                if holders:
+                    who = ", ".join(a if a != "?" else n
+                                    for a, n in holders)
+                    notify.audit(f"a2dp blocked, bt mic held by: {who}")
+                    notify.send("Can't switch to high quality",
+                                f"Microphone in use by {who} — "
+                                "leave the call (or quit it) and I will retry.")
+                else:
+                    notify.audit("a2dp switch failed with mic free "
+                                 "(transport wedged?)")
+                    fails = self._wedged.get(mac, 0) + 1
+                    self._wedged[mac] = fails
+                    if fails >= 3 and self.cfg.get("recover", {}).get(
+                            "adapter_cycle", True):
+                        self._wedged[mac] = 0
+                        notify.audit("overload recovery: cycling BT adapter")
+                        notify.send("Audio link stuck",
+                                    "Cycling the Bluetooth adapter once "
+                                    "to clear it.")
+                        from maid_core.bluez import DeviceMonitor as _DM
+                        _DM.power_cycle()
         return False
 
     def _maybe_reconnect(self, mac):
@@ -107,6 +158,10 @@ class Daemon:
             return False
         fails, _ = self.retry[mac]
         rc = self.rc
+        if not self._bt_op_allowed(mac, "connect"):
+            GLib.timeout_add_seconds(rc.get("op_cooldown_s", 10),
+                                     self._maybe_reconnect, mac)
+            return False
         if fails >= rc["give_up_after"]:
             # Safety valve, not abandonment: stop hammering BlueZ (and the
             # phone that may be holding the link) and tell the user to
@@ -170,7 +225,123 @@ class Daemon:
     # -- periodic ---------------------------------------------------------
     def tick(self):
         self.battery.poll(list(self.devices.values()))
+        self.fallback_grab()
+        self.route_comms()
+        self.bt_fallback_watch()
         return True
+
+    def bt_fallback_watch(self):
+        # WiFi dead → Bluetooth instead (opt-in). When no phone is
+        # reachable, offer the Bluetooth-tethering path once; when a
+        # bnep link appears, refresh KDE Connect so everything resumes.
+        if not self.cfg.get("bt_fallback", {}).get("enabled", False):
+            return
+        if self.phones_up():
+            self._phone_down_ticks = 0
+            self._bt_offered = False
+            return
+        self._phone_down_ticks = getattr(self, "_phone_down_ticks", 0) + 1
+        if self._phone_down_ticks == 2 and not getattr(self, "_bt_offered",
+                                                        False):
+            self._bt_offered = True
+
+            def _retry(_key):
+                self._phone_down_ticks = 0
+                self._bt_offered = False
+
+            def _bt_how(_key):
+                notify.send(
+                    "Bluetooth instead",
+                    "On the phone: pair Bluetooth with this PC, then turn "
+                    "on Bluetooth tethering. I will pick it up from there.",
+                    actions=[("retry", "Check again")],
+                    on_action=_retry,
+                    session_bus=self.session_bus)
+
+            notify.send("Phone unreachable on WiFi",
+                        "Calls, intents and sharing are paused.",
+                        actions=[("retry", "Retry now"),
+                                 ("bt", "Bluetooth instead")],
+                        on_action=lambda k: _retry(k) if k == "retry"
+                        else _bt_how(k),
+                        session_bus=self.session_bus)
+            notify.audit("phone unreachable on wifi, offered bluetooth path")
+            return
+        if self._phone_down_ticks >= 2 and self._bnep_up():
+            import subprocess
+            try:
+                subprocess.run(["kdeconnect-cli", "--refresh"],
+                               capture_output=True, timeout=30)
+            except (subprocess.SubprocessError, FileNotFoundError):
+                pass
+            if self.phones_up():
+                notify.send("Bluetooth link up",
+                            "Phone reachable again — resuming.")
+                notify.audit("phone back via bluetooth link")
+                self._phone_down_ticks = 0
+                self._bt_offered = False
+
+    @staticmethod
+    def _bnep_up():
+        import subprocess
+        try:
+            p = subprocess.run(["ip", "-o", "addr", "show"],
+                               capture_output=True, text=True, timeout=10)
+        except (subprocess.SubprocessError, FileNotFoundError):
+            return False
+        return any("bnep" in line and "inet " in line
+                   for line in (p.stdout or "").splitlines())
+
+    def _route_after_connect(self):
+        self.route_comms()
+        return False
+
+    def route_comms(self):
+        # Playback-only aligner: Discord/Vesktop streams stranded on a
+        # non-default sink get moved to the default. Mic routing is
+        # never touched. Runs on tick + on connect.
+        if not self.cfg.get("route_comms", {}).get("enabled", True):
+            return
+        try:
+            moved = audio.route_comms_to_default()
+        except Exception:
+            return
+        if moved:
+            notify.audit(f"routed {moved} chat stream(s) to default sink")
+
+    def phones_up(self):
+        """True if any paired KDE Connect phone is reachable."""
+        import subprocess
+        try:
+            p = subprocess.run(["kdeconnect-cli", "-l"],
+                               capture_output=True, text=True, timeout=15)
+        except (subprocess.SubprocessError, FileNotFoundError):
+            return True  # can't tell: assume up, never grab blindly
+        for line in p.stdout.splitlines():
+            if "reachable" in line.lower():
+                return True
+        return False
+
+    def fallback_grab(self):
+        # Phone-down fallback (opt-in): if no phone is reachable and a
+        # managed device sits disconnected, its link is probably free —
+        # grab it instead of waiting for a manual switch.
+        if not self.cfg.get("fallback_grab", {}).get("enabled", False):
+            return
+        if self.phones_up():
+            return
+        for mac, dev in self.devices.items():
+            if dev.get("auto_reconnect", True) \
+                    and not self.monitor.is_connected(mac) \
+                    and mac not in self.retry:
+                notify.audit(f"fallback grab (no phone up): "
+                             f"{dev.get('name', mac)}")
+                notify.send("Phone away",
+                            f"Grabbing {dev.get('name', mac)} back")
+                delay = self.rc["initial_delay_s"]
+                self.retry[mac] = [0, time.time() + delay]
+                GLib.timeout_add_seconds(delay + 1, self._maybe_reconnect,
+                                         mac)
 
     def run(self):
         poll_s = max(30, self.cfg["battery"]["poll_s"])
@@ -204,6 +375,9 @@ def cmd_status(cfg):
         print(f"{dev.get('name', mac)} [{mac}]")
         print(f"  connected: {mon.is_connected(mac)}")
         print(f"  profile:   {audio.active_profile(mac)}")
+        holders = audio.mic_holders()
+        print(f"  mic held by: "
+              f"{', '.join(a if a != '?' else n for a, n in holders) or 'nobody'}")
         print(f"  battery:   {mon.battery_percent(mac)}%")
     if not cfg["devices"]:
         print("no devices configured — copy config.example.json to "
@@ -256,6 +430,9 @@ def cmd_bugreport(cfg, full=False):
               f"connected={mon.is_connected(mac)} "
               f"profile={audio.active_profile(mac)} "
               f"battery={mon.battery_percent(mac)}%")
+    held = [(a if a != "?" else n) for a, n in audio.mic_holders()]
+    print("mic held open by: " + (", ".join(held)
+          or "nobody (A2DP free to engage)"))
     print("--- journal maid-watcher (last 15) ---")
     print(_sh("journalctl", "--user", "-u", "maid-watcher", "-n", "15",
               "--no-pager", "-o", "cat"))
@@ -277,6 +454,15 @@ def main():
         cmd_scan()
     elif sys.argv[1] == "bugreport":
         cmd_bugreport(cfg, full="--full" in sys.argv)
+    elif sys.argv[1] == "route-mic":
+        from maid_core.audio import COMMS_PATTERNS
+        target = sys.argv[2] if len(sys.argv) > 2 else (
+            audio.default_source_name())
+        if not target:
+            print("no default source found")
+        else:
+            print(f"moved {audio.move_recording_to_source(COMMS_PATTERNS, target)} "
+                  f"mic stream(s) to {target}")
     else:
         print(__doc__)
 

@@ -4,11 +4,16 @@ import os
 
 DEFAULTS = {
     "devices": [],
-    "reconnect": {"initial_delay_s": 5, "max_delay_s": 120, "give_up_after": 10},
+    "reconnect": {"initial_delay_s": 5, "max_delay_s": 120, "give_up_after": 10,
+                  "op_cooldown_s": 10},
+    "recover": {"adapter_cycle": True},
     "calls": {"enabled": True, "pause_media": True, "mute_discord": True,
               "max_call_mode_s": 300},
     "battery": {"warn_percent": 25, "critical_percent": 12, "poll_s": 120},
     "saver": {"enabled": False, "idle_minutes": 30},
+    "fallback_grab": {"enabled": False},
+    "bt_fallback": {"enabled": False},
+    "route_comms": {"enabled": True},
     "laptop": {"mode": "auto"},
 }
 

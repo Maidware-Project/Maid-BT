@@ -111,6 +111,22 @@ that automatically; if one app stays dead, restart just that app
 - switch gap: reconnecting + rerouting takes a few seconds by nature.
   that's physics, not a bug.
 
+## Linux Mint (incl. older releases)
+
+Mint is Ubuntu underneath, so the `apt` installer path handles it
+(Cinnamon, MATE, Xfce). What differs from the reference setup:
+
+- **PulseAudio, not PipeWire** on most Mint installs: every audio
+  helper tries PipeWire first, then the same operation over `pactl`
+  (profiles with underscore names, stream moves, mute). Nothing to
+  configure — it degrades automatically.
+- **Older BlueZ** (5.53 on Mint 20.x): battery reporting may be absent
+  (shown as unknown, never crashes), HFP wideband needs 5.65+ and
+  falls back to CVSD silently, A2DP SBC always works (mandatory
+  codec). LDAC/aptX need their codec libs installed or you get SBC.
+- **Nemo** (Cinnamon) gets a MaidShare right-click action; Dolphin
+  keeps its servicemenu. Both install side by side harmlessly.
+
 ## RAM budget (measured live)
 
 | piece | idle memory | notes |
