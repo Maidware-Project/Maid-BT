@@ -40,7 +40,9 @@ what it does and how does it work?
   reconnects with backoff, and **battery** low/critical notifications over
   BlueZ. Runs from XDG autostart, so it works with any init system.
   Combines safely with the warm-link flow: it only acts on real
-  disconnects and never tears down a warm link itself.
+  disconnects and never tears down a warm link itself. Detects laptops
+  (DMI chassis) and backs the radio off automatically; override with
+  `laptop.mode` (`auto`/`on`/`off`) in its config.
 
 - KDE Connect pings to the phone on every switch (needs `kdeconnect-cli`
   + paired phone; silently skipped otherwise).
