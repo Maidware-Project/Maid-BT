@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Maid Watcher
+Comment=Bluetooth earbuds connection/call/battery manager (Maid BT component)
+Exec=/home/visa/.local/bin/maid-watcher run
+Icon=audio-headphones
+Keywords=bluetooth;earbuds;headset;maid;
+Terminal=false
+Type=Application
+Categories=Utility;Audio;
+X-GNOME-Autostart-enabled=true

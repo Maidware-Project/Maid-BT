@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""maid-watcher — earbuds manager daemon for KDE Plasma (BlueZ + PipeWire).
+
+XDG-autostart friendly, no systemd/OpenRC dependency. Uses only APIs that
+are stable across Plasma versions (BlueZ D-Bus, MPRIS, freedesktop
+notifications, KDE Connect telephony signal).
+
+Usage:
+  maid-watcher run      start daemon
+  maid-watcher status   show managed devices, connection, battery
+  maid-watcher scan     list nearby BT audio devices for config
+"""
+import json
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import dbus
+from dbus.mainloop.glib import DBusGMainLoop
+from gi.repository import GLib
+
+from maid_core import config as config_mod
+from maid_core import notify
+from maid_core.bluez import DeviceMonitor
+from maid_core import audio
+from maid_core import media
+from maid_core.calls import CallWatcher
+
+DISCORD_PATTERNS = ("discord", "vesktop", "webcord", "vencord")
+
+
+class Daemon:
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.devices = {d["mac"]: d for d in cfg["devices"]}
+        self.session_bus = dbus.SessionBus()
+        self.system_bus = dbus.SystemBus()
+        self.monitor = DeviceMonitor(self.system_bus, self.on_conn_change)
+        for mac in self.devices:
+            self.monitor.watch(mac)
+        self.retry = {}  # mac -> [fails, next_try]
+        self.call_muted = []
+        self.call_paused = []
+        self.call_timer = None
+        if cfg["calls"]["enabled"]:
+            self.watcher = CallWatcher(self.session_bus,
+                                       self.on_call_start, self.on_call_end)
+        else:
+            self.watcher = None
+        from maid_core.battery import BatteryWatch
+        self.battery = BatteryWatch(cfg, self.monitor)
+
+    # -- connection management -----------------------------------------
+    def on_conn_change(self, mac, connected):
+        dev = self.devices.get(mac, {})
+        name = dev.get("name", mac)
+        if connected:
+            notify.send("Earbuds connected", name)
+            self.retry.pop(mac, None)
+            if dev.get("prefer_profile") == "a2dp":
+                GLib.timeout_add_seconds(2, self._enforce_a2dp, mac)
+        else:
+            notify.send("Earbuds disconnected", name)
+            if dev.get("auto_reconnect", True):
+                delay = self.cfg["reconnect"]["initial_delay_s"]
+                self.retry[mac] = [0, time.time() + delay]
+                GLib.timeout_add_seconds(delay + 1, self._maybe_reconnect, mac)
+
+    def _enforce_a2dp(self, mac):
+        if self.monitor.is_connected(mac):
+            audio.set_profile_a2dp(mac)
+        return False
+
+    def _maybe_reconnect(self, mac):
+        if mac not in self.retry or self.monitor.is_connected(mac):
+            self.retry.pop(mac, None)
+            return False
+        fails, _ = self.retry[mac]
+        rc = self.cfg["reconnect"]
+        if fails >= rc["give_up_after"]:
+            notify.send("Giving up reconnect",
+                        f"{self.devices.get(mac, {}).get('name', mac)} — "
+                        "reconnect manually", "critical")
+            self.retry.pop(mac, None)
+            return False
+        self.monitor.connect(mac)
+        delay = min(rc["initial_delay_s"] * (2 ** (fails + 1)),
+                    rc["max_delay_s"])
+        self.retry[mac] = [fails + 1, time.time() + delay]
+        GLib.timeout_add_seconds(delay, self._maybe_reconnect, mac)
+        return False
+
+    # -- call mode --------------------------------------------------------
+    def on_call_start(self, info):
+        notify.send("Incoming call", info)
+        if self.cfg["calls"]["pause_media"]:
+            self.call_paused = media.pause_all(self.session_bus)
+        if self.cfg["calls"]["mute_discord"]:
+            self.call_muted = audio.find_app_streams(DISCORD_PATTERNS)
+            for node in self.call_muted:
+                audio.set_mute(node, True)
+        max_s = self.cfg["calls"]["max_call_mode_s"]
+        if self.call_timer:
+            GLib.source_remove(self.call_timer)
+        self.call_timer = GLib.timeout_add_seconds(
+            max_s, self._call_safety_timeout)
+
+    def _call_safety_timeout(self):
+        self.call_timer = None
+        self.on_call_end("safety timeout")
+        return False
+
+    def on_call_end(self, reason):
+        if self.call_timer:
+            GLib.source_remove(self.call_timer)
+            self.call_timer = None
+        for node in self.call_muted:
+            audio.set_mute(node, False)
+        self.call_muted = []
+        media.resume(self.session_bus, self.call_paused)
+        self.call_paused = []
+        notify.send("Call ended", reason)
+
+    # -- periodic ---------------------------------------------------------
+    def tick(self):
+        self.battery.poll(list(self.devices.values()))
+        return True
+
+    def run(self):
+        poll_s = max(30, self.cfg["battery"]["poll_s"])
+        GLib.timeout_add_seconds(poll_s, self.tick)
+        # initial: enforce profile on already-connected devices
+        for mac, dev in self.devices.items():
+            if self.monitor.is_connected(mac) \
+                    and dev.get("prefer_profile") == "a2dp":
+                self._enforce_a2dp(mac)
+        notify.send("Maid Watcher started",
+                    f"watching {len(self.devices)} device(s)")
+        GLib.MainLoop().run()
+
+
+def cmd_status(cfg):
+    bus = dbus.SystemBus()
+    mon = DeviceMonitor(bus, lambda *a: None)
+    for dev in cfg["devices"]:
+        mac = dev["mac"]
+        mon.watch(mac)
+        print(f"{dev.get('name', mac)} [{mac}]")
+        print(f"  connected: {mon.is_connected(mac)}")
+        print(f"  battery:   {mon.battery_percent(mac)}%")
+    if not cfg["devices"]:
+        print("no devices configured — copy config.example.json to "
+              "~/.config/maid-watcher/config.json")
+
+
+def cmd_scan():
+    print("Scanning (make devices discoverable)...")
+    for mac, name in DeviceMonitor.scan_audio_devices():
+        print(f"  {mac}  {name}")
+
+
+def main():
+    DBusGMainLoop(set_as_default=True)
+    cfg = config_mod.load()
+    if len(sys.argv) < 2 or sys.argv[1] == "run":
+        Daemon(cfg).run()
+    elif sys.argv[1] == "status":
+        cmd_status(cfg)
+    elif sys.argv[1] == "scan":
+        cmd_scan()
+    else:
+        print(__doc__)
+
+
+if __name__ == "__main__":
+    main()

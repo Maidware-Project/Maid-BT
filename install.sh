@@ -20,13 +20,16 @@ if [ "$UNINST" = "1" ]; then
   rm -f "$HOME"/.local/bin/bluetooth-toggle.sh "$HOME"/.local/bin/buds-fallback.sh \
     "$HOME"/.local/bin/buds-on.sh "$HOME"/.local/bin/buds-off.sh "$HOME"/.local/bin/buds-release.sh \
     "$HOME"/.local/bin/bt-intent-server.py "$HOME"/.local/bin/bt-notify-menu.sh
+  rm -f "$HOME"/.local/bin/maid-watcher
+  rm -rf "$HOME"/.local/bin/maid_core
+  rm -f "$HOME"/.config/autostart/maid-watcher.desktop
   rm -f "$HOME"/.config/systemd/user/buds-fallback.service "$HOME"/.config/systemd/user/bt-intent.service \
     "$HOME"/.config/systemd/user/bt-menu.service
   rm -rf "$HOME/.local/share/plasma/plasmoids/com.local.btearbuds"
   rm -f "$HOME"/.local/share/applications/bt-earbuds-pc.desktop \
     "$HOME"/.local/share/applications/bt-earbuds-phone.desktop "$HOME"/.local/share/applications/bt-off.desktop \
     "$HOME"/.local/share/applications/bt-on.desktop
-  say "uninstalled (kept: ~/.config/bluetooth-buds.conf ~/.config/bt-intent.token)"
+  echo "==> uninstalled (kept: ~/.config/bluetooth-buds.conf ~/.config/bt-intent.token ~/.config/maid-watcher/)"
   exit 0
 fi
 
@@ -68,6 +71,18 @@ elif [ "$NO_PKGS" = "0" ]; then
     say "installing: ${REQ[*]}"
     install_pkgs "$PM" "${REQ[@]}" || warn "package install had errors — continuing (see README requirements)"
   fi
+  # Maid Watcher (optional component) needs python dbus/gi bindings.
+  case "$PM" in
+    pacman) WATCHREQ=(python-dbus python-gobject) ;;
+    apt) WATCHREQ=(python3-dbus python3-gi) ;;
+    dnf) WATCHREQ=(python3-dbus python3-gobject) ;;
+    zypper) WATCHREQ=(python3-dbus python3-gobject) ;;
+    *) WATCHREQ=() ;;
+  esac
+  if [ "${#WATCHREQ[@]}" -gt 0 ] && [ "$CHECK" = "0" ] && [ "$NO_PKGS" = "0" ]; then
+    say "trying optional (Maid Watcher): ${WATCHREQ[*]}"
+    install_pkgs "$PM" "${WATCHREQ[@]}" >/dev/null 2>&1 || say "optional Maid Watcher deps skipped"
+  fi
   # kdeconnect is optional (phone pings only): try it, tolerate absence.
   case "$PM" in
     pacman) OPT=(kdeconnect) ;;
@@ -106,6 +121,23 @@ for f in "$PKGDIR"/bin/*; do
   copy_one "$f" "$HOME/.local/bin/$(basename "$f")"
 done
 [ "$CHECK" = "0" ] && chmod +x "$HOME"/.local/bin/bluetooth-toggle.sh "$HOME"/.local/bin/buds-*.sh "$HOME"/.local/bin/bt-*.sh "$HOME"/.local/bin/bt-*.py 2>/dev/null || true
+
+# ---- Maid Watcher (optional daemon: calls, 3-device priority, battery) ----
+copy_one "$PKGDIR/watcher/maid-watcher" "$HOME/.local/bin/maid-watcher"
+for f in "$PKGDIR"/watcher/maid_core/*.py; do
+  [ -f "$f" ] || continue
+  copy_one "$f" "$HOME/.local/bin/maid_core/$(basename "$f")"
+done
+[ "$CHECK" = "0" ] && chmod +x "$HOME/.local/bin/maid-watcher" 2>/dev/null || true
+if [ "$CHECK" = "1" ]; then
+  echo "CONFIG $HOME/.config/maid-watcher/config.json (example copy on real run)"
+elif [ ! -f "$HOME/.config/maid-watcher/config.json" ]; then
+  mkdir -p "$HOME/.config/maid-watcher"
+  cp -a "$PKGDIR/watcher/config.example.json" "$HOME/.config/maid-watcher/config.json"
+  say "wrote $HOME/.config/maid-watcher/config.json (edit your MACs)"
+else
+  say "$HOME/.config/maid-watcher/config.json exists — kept"
+fi
 
 for f in "$PKGDIR"/systemd/*.service; do
   [ -f "$f" ] || continue
@@ -190,6 +222,23 @@ if [ "$PHONE_ON" = "1" ]; then
     || warn "could not enable bt-intent.service"
 else
   say "phone integration off (enable anytime: systemctl --user enable --now bt-intent.service)"
+fi
+# Maid Watcher autostart is opt-in: it overlaps buds-fallback (reconnects +
+# A2DP enforcement). Safe to combine, but ask first.
+WATCH_ON=0
+if [ "$CHECK" = "1" ]; then
+  echo "AUTOSTART ~/.config/autostart/maid-watcher.desktop (opt-in prompt on real run)"
+elif [ -t 0 ]; then
+  printf 'Enable Maid Watcher autostart (calls, battery, 3-device priority)? [y/N]: '
+  read -r _wans
+  case "$_wans" in [Yy]*) WATCH_ON=1 ;; esac
+else
+  say "Maid Watcher autostart skipped (non-interactive; copy watcher/maid-watcher.desktop to ~/.config/autostart/ to enable)"
+fi
+if [ "$WATCH_ON" = "1" ]; then
+  copy_one "$PKGDIR/watcher/maid-watcher.desktop" "$HOME/.config/autostart/maid-watcher.desktop" 1
+else
+  say "Maid Watcher autostart off (daemon still installed as maid-watcher; run it manually or copy the desktop file to autostart)"
 fi
 command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 
