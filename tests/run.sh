@@ -39,6 +39,7 @@ assert laptop_mode({}) is False
 print("watcher unit checks passed")
 EOF
 [ -f "$PKGDIR/watcher/maid-watcher.desktop" ] || fail "watcher desktop missing"
+[ -f "$PKGDIR/watcher/maid-watcher.service" ] || fail "watcher unit missing"
 [ -f "$PKGDIR/wireplumber/51-bt-no-suspend.conf" ] || fail "no-suspend conf missing"
 grep -q "session.suspend-timeout-seconds" \
   "$PKGDIR/wireplumber/51-bt-no-suspend.conf" || fail "suspend knob missing"
