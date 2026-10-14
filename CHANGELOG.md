@@ -4,7 +4,7 @@
 
 - PulseAudio fallbacks across the audio layer (card lookup, profiles,
   streams, mute, activity detect) for Mint / older stacks without
-  PipeWire tools. Nemo file-manager action for Maidshare on Cinnamon.
+  PipeWire tools.
 - older BlueZ tolerated: missing battery/HFP-wideband degrades
   silently, SBC always available as the mandatory codec.
 
