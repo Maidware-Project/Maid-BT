@@ -29,6 +29,23 @@ def chassis_type():
         return None
 
 
+def short_name(dev):
+    """Short display name: explicit `short` field, else brand + number.
+
+    "Acme Buds 5" -> "Acme 5". Used in notifications.
+    """
+    if dev.get("short"):
+        return dev["short"]
+    import re
+    name = dev.get("name", dev.get("mac", "?"))
+    words = name.split()
+    if not words:
+        return name
+    brand = words[0].capitalize()
+    nums = re.findall(r"\d+", name)
+    return f"{brand} {nums[-1]}" if nums else brand
+
+
 def laptop_mode(cfg):
     """True when radio-gentle laptop behavior applies."""
     mode = cfg.get("laptop", {}).get("mode", "auto")

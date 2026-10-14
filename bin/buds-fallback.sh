@@ -35,6 +35,7 @@ AUDIO_PRIORITY=1
 # Opt out of the app pause/resume cycle with: APP_CYCLE=0
 # Opt out of auto-connecting other paired headsets with: AUDIO_PRIORITY=0
 [ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
+command -v validate_conf >/dev/null 2>&1 && validate_conf
 # Refuse to run unconfigured (placeholder MAC) instead of retry-spamming.
 if [ "${BUDS_MAC:-}" = "AA:BB:CC:DD:EE:FF" ] || [ -z "${BUDS_MAC:-}" ]; then
   echo "[buds-fallback] BUDS_MAC not configured - copy bluetooth-buds.conf.example to" >&2

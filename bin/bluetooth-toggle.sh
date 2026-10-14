@@ -41,6 +41,7 @@ APP_CYCLE=1
 #   BUDS_MAC="..." and FALLBACK_SINK="..."
 # Opt out of the app pause/resume cycle with: APP_CYCLE=0
 [ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
+command -v validate_conf >/dev/null 2>&1 && validate_conf
 CONNECT_TIMEOUT=20   # seconds to retry bluetoothctl connect
 SINK_WAIT=15         # seconds to wait for bluez sink to appear
 MARKER="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-toggle-manual"

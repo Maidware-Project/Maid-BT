@@ -19,6 +19,7 @@ IDFILE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-menu-id"
 BUDS_MAC="AA:BB:CC:DD:EE:FF"
 # Fill via ~/.config/bluetooth-buds.conf (install.sh prompts for it)
 [ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
+command -v validate_conf >/dev/null 2>&1 && validate_conf
 NOTIF_ID=0
 [ -f "$IDFILE" ] && NOTIF_ID="$(cat "$IDFILE" 2>/dev/null || echo 0)"
 

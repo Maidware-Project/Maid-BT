@@ -358,8 +358,9 @@ class Daemon:
                 self.retry[mac] = [0, time.time() + delay]
                 GLib.timeout_add_seconds(delay + 1, self._maybe_reconnect,
                                          mac)
-        notify.send("Maid Watcher started",
-                    f"watching {len(self.devices)} device(s)")
+        names = ", ".join(config_mod.short_name(d)
+                        for d in self.devices.values()) or "no devices"
+        notify.send("Maid Watcher started", f"watching: {names}")
         GLib.MainLoop().run()
 
 
