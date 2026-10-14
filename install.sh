@@ -238,6 +238,9 @@ fi
 if [ "$WATCH_ON" = "1" ]; then
   if [ "$SKIP_SERVICES" != "1" ]; then
     # systemd-native: supervised unit, journal logging, restart on failure.
+    # The unit owns autostart: remove the desktop file so two daemons
+    # can never run (double RAM, duplicate reconnects/mutes).
+    rm -f "$HOME/.config/autostart/maid-watcher.desktop"
     copy_one "$PKGDIR/watcher/maid-watcher.service" "$HOME/.config/systemd/user/maid-watcher.service"
     systemctl --user daemon-reload 2>/dev/null || true
     systemctl --user enable --now maid-watcher.service 2>/dev/null \

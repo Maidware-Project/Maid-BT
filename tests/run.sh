@@ -40,6 +40,8 @@ print("watcher unit checks passed")
 EOF
 [ -f "$PKGDIR/watcher/maid-watcher.desktop" ] || fail "watcher desktop missing"
 [ -f "$PKGDIR/watcher/maid-watcher.service" ] || fail "watcher unit missing"
+grep -q "MemoryMax" "$PKGDIR/watcher/maid-watcher.service" || fail "watcher unit has no RAM cap"
+grep -q 'rm -f "$HOME/.config/autostart/maid-watcher.desktop"' "$PKGDIR/install.sh" || fail "installer allows double daemon"
 [ -f "$PKGDIR/wireplumber/51-bt-no-suspend.conf" ] || fail "no-suspend conf missing"
 grep -q "session.suspend-timeout-seconds" \
   "$PKGDIR/wireplumber/51-bt-no-suspend.conf" || fail "suspend knob missing"
