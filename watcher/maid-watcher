@@ -109,9 +109,18 @@ class Daemon:
             # phone that may be holding the link) and tell the user to
             # reconnect manually. Any new disconnect event restarts the
             # cycle. Tune via reconnect.give_up_after / max_delay_s.
+            name = self.devices.get(mac, {}).get("name", mac)
+
+            def _retry_now(_key, _mac=mac):
+                self.retry[_mac] = [0, time.time()]
+                GLib.timeout_add_seconds(1, self._maybe_reconnect, _mac)
+
             notify.send("Giving up reconnect",
-                        f"{self.devices.get(mac, {}).get('name', mac)} — "
-                        "reconnect manually", "critical")
+                        f"{name} — tap to retry, or reconnect manually",
+                        "critical",
+                        actions=[("retry", "Reconnect now")],
+                        on_action=_retry_now,
+                        session_bus=self.session_bus)
             self.retry.pop(mac, None)
             return False
         self.monitor.connect(mac)

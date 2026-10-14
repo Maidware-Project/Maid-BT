@@ -1,0 +1,23 @@
+[Unit]
+Description=Maid Watcher — Bluetooth earbuds connection/call/battery manager
+After=bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/maid-watcher run
+Restart=on-failure
+RestartSec=10
+# Hardened like the Maid BT units; daemon only needs BT + audio + netlink.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_BLUETOOTH AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+
+[Install]
+WantedBy=default.target
