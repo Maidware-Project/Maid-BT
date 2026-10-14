@@ -145,7 +145,7 @@ copy_one() {
     say "backed up $dest"
   fi
   if [ "$rewrite" = "1" ]; then
-    # user install: fix the /home/EXAMPLEUSER/ Exec placeholder to this $HOME.
+    # user install: fix the Exec placeholder to this $HOME.
     # escape & (sed replacement metachar) in $HOME
     sed -e "s|/home/EXAMPLEUSER/|${HOME//&/\\&}|g" "$src" > "$dest"
   elif [ "$rewrite" = "2" ]; then
