@@ -1,0 +1,32 @@
+{
+  "_comment": "Maid Watcher config (Maid BT component). Up to 3 BT audio devices in priority order.",
+  "devices": [
+    {
+      "mac": "AA:BB:CC:DD:EE:FF",
+      "name": "Your Earbuds",
+      "priority": 1,
+      "auto_reconnect": true,
+      "prefer_profile": "a2dp"
+    }
+  ],
+  "reconnect": {
+    "initial_delay_s": 5,
+    "max_delay_s": 120,
+    "give_up_after": 10
+  },
+  "calls": {
+    "enabled": true,
+    "pause_media": true,
+    "mute_discord": true,
+    "max_call_mode_s": 300
+  },
+  "battery": {
+    "warn_percent": 25,
+    "critical_percent": 12,
+    "poll_s": 120
+  },
+  "saver": {
+    "enabled": false,
+    "idle_minutes": 30
+  }
+}
