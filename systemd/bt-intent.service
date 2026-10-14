@@ -1,18 +1,10 @@
-[Unit]
-Description=Bluetooth intent HTTP listener (phone -> PC)
-After=network-online.target
-Wants=network-online.target
-
 [Service]
 ExecStart=/usr/bin/python3 %h/.local/bin/bt-intent-server.py
 Restart=always
 RestartSec=3
-# least privilege: LAN TCP + D-Bus only, configs read-only, no fs writes
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
+ReadWritePaths=/run/user/%U
 PrivateTmp=true
 RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
-
-[Install]
-WantedBy=default.target

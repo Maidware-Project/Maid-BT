@@ -1,18 +1,10 @@
-[Unit]
-Description=Bluetooth Plasma notification menu (action buttons)
-After=buds-fallback.service graphical-session.target
-PartOf=graphical-session.target
-
 [Service]
 ExecStart=%h/.local/bin/bt-notify-menu.sh
 Restart=always
 RestartSec=3
-# least privilege: D-Bus only, configs read-only, no fs writes
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
+ReadWritePaths=/run/user/%U
 PrivateTmp=true
 RestrictAddressFamilies=AF_UNIX AF_NETLINK
-
-[Install]
-WantedBy=default.target
