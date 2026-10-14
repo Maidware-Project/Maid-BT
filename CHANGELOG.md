@@ -1,12 +1,13 @@
 # changelog
 
-## any-headset auto-switch
+## any headset grabs audio
 
-- watcher routes audio to ANY newly connected bluetooth headset, not
-  just yours — no manual switching. yours still win on appearance,
-  hands-off silences it, vanished defaults park on fallback, and the
-  buds-loss timer pauses while a foreign headset owns the audio so
-  fallback never steals it mid-listen.
+- any newly connected bluetooth headset takes the audio, not just
+  yours — no manual switching. yours connect first, other paired
+  headsets get priority connects when yours are down (radio on,
+  hands-off off). yours still win when they show up, hands-off silences
+  all of it, yanked devices park on fallback, and the buds timer pauses
+  while a foreign headset owns it so fallback never steals mid-listen.
 
 ## radio mode + app pause/resume cycle
 

@@ -13,8 +13,12 @@ set -u
 
 BUDS_MAC="AA:BB:CC:DD:EE:FF"
 FALLBACK_SINK=""
+APP_CYCLE=1
+AUDIO_PRIORITY=1
 # Fill these via ~/.config/bluetooth-buds.conf (install.sh prompts for them):
 #   BUDS_MAC="..." and FALLBACK_SINK="..."
+# Opt out of the app pause/resume cycle with: APP_CYCLE=0
+# Opt out of auto-connecting other paired headsets with: AUDIO_PRIORITY=0
 [ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
 # Refuse to run unconfigured (placeholder MAC) instead of retry-spamming.
 if [ "${BUDS_MAC:-}" = "AA:BB:CC:DD:EE:FF" ] || [ -z "${BUDS_MAC:-}" ]; then
@@ -30,8 +34,8 @@ RETRY_BACKOFF_AFTER=120 # seconds of continuous loss before backing off retries
 FAIL_BACKOFF=30       # quiet period after a failed connect (anti-flap)
 FLAP_WINDOW=15        # a connection dying this fast counts as a flap
 FLAP_BACKOFF=120      # quiet period after a flap (anti-flap)
+AUDIO_REFRESH=120     # seconds between paired-device rescans
 BATTERY_BOOST=0       # opt-in: match A2DP codec to buds battery (saves power).
-APP_CYCLE=1
 # Opt out of the app pause/resume cycle with APP_CYCLE=0 in the conf.
                       # WARNING: any transport teardown can segfault older
                       # plasmashell (QAudioContext). Leave 0 unless your
@@ -71,6 +75,8 @@ cooldown_until=0
 connected_since=0
 last_batt_check=0
 last_codec_switch=0
+last_audio_refresh=0
+PAIRED_AUDIO=""
 prev_powered=""
 prev_connected=""
 prev_locked=""
@@ -254,6 +260,41 @@ codec_for() {
 current_profile() {
   local card="bluez_card.${BUDS_MAC//:/_}"
   pactl list cards 2>/dev/null | awk -v c="$card" 'index($0, c) {f=1} f && /Active Profile:/ {sub(/.*Active Profile: /, ""); print; exit}'
+}
+
+refresh_audio_devices() {
+  # cached list of paired headset MACs (not ours), rescanned periodically
+  [ $((now - last_audio_refresh)) -lt "$AUDIO_REFRESH" ] && return 0
+  last_audio_refresh=$now
+  PAIRED_AUDIO=""
+  local m
+  for m in $(bluetoothctl devices Paired 2>/dev/null | awk '{print $2}'); do
+    [ "$m" = "$BUDS_MAC" ] && continue
+    if bluetoothctl info "$m" 2>/dev/null | grep -qiE "Audio Sink|Headset|Handsfree"; then
+      PAIRED_AUDIO="$PAIRED_AUDIO $m"
+    fi
+  done
+}
+
+try_audio_sweep() {
+  # one extra connect per slot: first disconnected paired headset.
+  # radio off/blocked/hands-off callers never reach here (gated outside).
+  local m
+  [ "${AUDIO_PRIORITY:-1}" = "1" ] || return 1
+  refresh_audio_devices
+  for m in $PAIRED_AUDIO; do
+    if ! bluetoothctl info "$m" 2>/dev/null | grep -q "Connected: yes"; then
+      log "priority connect attempt to headset $m"
+      bluetoothctl trust "$m" >/dev/null 2>&1 || true
+      if command -v timeout >/dev/null 2>&1; then
+        timeout 10 bluetoothctl connect "$m" 2>&1 | tail -n 2 || true
+      else
+        bluetoothctl connect "$m" 2>&1 | tail -n 2 || true
+      fi
+      return 0   # one device per slot, no storms
+    fi
+  done
+  return 1
 }
 
 try_connect_once() {
@@ -456,6 +497,7 @@ while true; do
           did_fallback=0
         else
           cooldown_until=$((now + FAIL_BACKOFF))
+          try_audio_sweep || true
         fi
       fi
       if [ "$connected" = "0" ] && [ "$lost_for" -ge "$GRACE" ] && [ "$did_fallback" = "0" ]; then
