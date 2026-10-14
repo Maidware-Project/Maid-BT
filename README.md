@@ -4,49 +4,33 @@ one single click switcher  (PC / phone / off) with automatic audio routing
 for any earbuds + any wired fallback (speakers, DAC/AMP).
 this package — `install.sh` asks for your MAC and fallback sink.
 
-what it does and how does it work?
+what it does, in plain words:
 
-- `bluetooth-toggle.sh on` — unblock + power on, auto-connect earbuds,
-  move all audio to them. warm link = ~1s switch.
-  
-- `bluetooth-toggle.sh release` — park PC audio on the fallback sink, hand
-  buds to the phone. Link stays warm: instant switch-back, no link teardown.
-  
-- `bluetooth-toggle.sh off` — full off: disconnect, park audio, radio
-  power off + rfkill block. (Prefer `release` daily — see crash note.)
-  
-- `buds-fallback.service` (watcher) — catches any power change (even KDE's
-  tray toggle): auto-connects when buds appear, parks audio on the fallback
-  sink when they vanish, with anti-flap circuit breaker. Watches screen
-  lock: parks on lock, restores on unlock only if buds are connected.
-  
-- `bt-intent.service` — tiny LAN HTTP listener so the phone can push
-  playback/call intent (MacroDroid/Tasker). See `phone/`. **Off by
-  default at install** (opt-in prompt); core switching is fully local.
-- battery boost (opt-in, off by default) — watcher matches A2DP codec
-  to earbuds battery (LDAC/AAC/SBC-XQ/SBC bands). see CHANGELOG, it
-  can crash plasmashell on some systems so test first.
-- any-headset mode: a newly connected bluetooth headset (not yours)
-  grabs audio automatically, no manual switch. yours connect first and
-  always win on appearance; other paired headsets get priority connects
-  when yours are down. hands-off silences all of it; a vanished default
-  gets parked on fallback.
-- Tray widget (`plasmoid/`) + three launcher icons (`desktop/`) +
-  optional notification menu (`bt-notify-menu.sh`, superseded by widget).
-
-- **Maid Watcher** (`watcher/`, opt-in) — Python daemon that adds what the
-  switcher doesn't do: KDE Connect **call handling** (pauses media, mutes
-  Discord/Vesktop mic+output, restores on hangup), **2-device priority**
-  reconnects with backoff, and **battery** low/critical notifications over
-  BlueZ. Runs supervised under systemd where present (XDG autostart
-  elsewhere), so it works with any init system.
-  Combines safely with the warm-link flow: it only acts on real
-  disconnects and never tears down a warm link itself. Detects laptops
-  (DMI chassis) and backs the radio off automatically; override with
-  `laptop.mode` (`auto`/`on`/`off`) in its config.
-
-- KDE Connect pings to the phone on every switch (needs `kdeconnect-cli`
-  + paired phone; silently skipped otherwise).
+- `on` — turns bluetooth on, connects your earbuds, moves all sound
+  to them. switching takes about a second.
+- `release` — hands the buds to your phone without fully
+  disconnecting, so switching back is instant. use this every day.
+- `off` — full shutdown: disconnects, kills the radio. use `release`
+  instead unless you're done for the day.
+- background watcher — notices whenever bluetooth changes (even from
+  KDE's own toggle), connects your buds when they show up, parks
+  sound on your speakers when they vanish. also parks sound when you
+  lock the screen and restores it on unlock.
+- phone remote (optional, off unless you enable it) — an app on your
+  phone (MacroDroid/Tasker) can tell the PC "I'm playing music" or
+  "call started" over wifi. see `phone/`.
+- battery boost (optional, off unless you enable it) — picks the
+  sound quality based on earbud battery to save power. test first: on
+  some systems switching quality crashes the desktop.
+- any headset — if a *different* bluetooth headset connects, it gets
+  sound automatically. yours always win when they appear.
+- tray widget + launcher icons — buttons for PC / phone / off.
+- **Maid Watcher** (optional) — when a phone call comes in, it pauses
+  your music and mutes Discord, then restores everything on hangup.
+  also reconnects up to 2 earbuds in priority order and warns you at
+  low battery. works on any init system.
+- every switch can also ping your phone over KDE Connect (skipped
+  quietly if you don't have it paired).
 
 ## layout
 
