@@ -1,5 +1,14 @@
 # changelog
 
+## systemd-native watcher + actionable notifications
+
+- Maid Watcher installs as a supervised systemd user unit
+  (`maid-watcher.service`: Restart=on-failure, journal logging,
+  hardened like the other units) when systemd is present; XDG
+  autostart remains the fallback on OpenRC/runit.
+- the "giving up reconnect" notification now has a Reconnect-now
+  action button instead of being a dead end.
+
 ## laptop mode + reconnect safety
 
 - Maid Watcher detects laptop chassis over DMI and uses gentler radio

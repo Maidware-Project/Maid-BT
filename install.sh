@@ -16,13 +16,14 @@ for a in "$@"; do
 done
 
 if [ "$UNINST" = "1" ]; then
-  systemctl --user disable --now buds-fallback.service bt-intent.service 2>/dev/null || true
+  systemctl --user disable --now buds-fallback.service bt-intent.service maid-watcher.service 2>/dev/null || true
   rm -f "$HOME"/.local/bin/bluetooth-toggle.sh "$HOME"/.local/bin/buds-fallback.sh \
     "$HOME"/.local/bin/buds-on.sh "$HOME"/.local/bin/buds-off.sh "$HOME"/.local/bin/buds-release.sh \
     "$HOME"/.local/bin/bt-intent-server.py "$HOME"/.local/bin/bt-notify-menu.sh
   rm -f "$HOME"/.local/bin/maid-watcher
   rm -rf "$HOME"/.local/bin/maid_core
   rm -f "$HOME"/.config/autostart/maid-watcher.desktop
+  rm -f "$HOME"/.config/systemd/user/maid-watcher.service
   rm -f "$HOME"/.config/wireplumber/wireplumber.conf.d/51-bt-no-suspend.conf
   rm -f "$HOME"/.config/systemd/user/buds-fallback.service "$HOME"/.config/systemd/user/bt-intent.service \
     "$HOME"/.config/systemd/user/bt-menu.service
@@ -235,9 +236,18 @@ else
   say "Maid Watcher autostart skipped (non-interactive; copy watcher/maid-watcher.desktop to ~/.config/autostart/ to enable)"
 fi
 if [ "$WATCH_ON" = "1" ]; then
-  copy_one "$PKGDIR/watcher/maid-watcher.desktop" "$HOME/.config/autostart/maid-watcher.desktop" 1
+  if [ "$SKIP_SERVICES" != "1" ]; then
+    # systemd-native: supervised unit, journal logging, restart on failure.
+    copy_one "$PKGDIR/watcher/maid-watcher.service" "$HOME/.config/systemd/user/maid-watcher.service"
+    systemctl --user daemon-reload 2>/dev/null || true
+    systemctl --user enable --now maid-watcher.service 2>/dev/null \
+      || warn "could not enable maid-watcher.service"
+  else
+    # any other init: XDG autostart desktop instead.
+    copy_one "$PKGDIR/watcher/maid-watcher.desktop" "$HOME/.config/autostart/maid-watcher.desktop" 1
+  fi
 else
-  say "Maid Watcher autostart off (daemon still installed as maid-watcher; run it manually or copy the desktop file to autostart)"
+  say "Maid Watcher autostart off (daemon still installed as maid-watcher; run it manually or enable later)"
 fi
 # Warm-link audio: disable PipeWire auto-suspend on BT nodes so playback
 # starts instantly instead of losing ~1s after silence. Costs some earbud
