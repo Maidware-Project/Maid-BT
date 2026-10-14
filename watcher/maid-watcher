@@ -9,6 +9,7 @@ Usage:
   maid-watcher run      start daemon
   maid-watcher status   show managed devices, connection, battery
   maid-watcher scan     list nearby BT audio devices for config
+  maid-watcher bugreport [--full]  diagnostics bundle for bug reports
 """
 import json
 import os
@@ -210,6 +211,56 @@ def cmd_scan():
         print(f"  {mac}  {name}")
 
 
+def _sh(*args, timeout=10):
+    import subprocess
+    try:
+        p = subprocess.run(args, capture_output=True, text=True,
+                           timeout=timeout)
+        return p.stdout.strip().splitlines()[0] if p.stdout.strip() else ""
+    except (subprocess.SubprocessError, FileNotFoundError, IndexError):
+        return ""
+
+
+def redact_mac(mac):
+    """Keep vendor OUI, hide device-specific bytes: AA:BB:D9:**:**:12."""
+    parts = str(mac).split(":")
+    if len(parts) != 6:
+        return "** redacted **"
+    return ":".join(parts[:3] + ["**", "**", parts[5]])
+
+
+def cmd_bugreport(cfg, full=False):
+    """Print the diagnostics bundle bug reports should include."""
+    import platform
+    print("### maid-watcher bugreport "
+          + ("(FULL macs - trim before posting publicly)"
+             if full else "(macs redacted)"))
+    print(f"_os: {_sh('sh', '-c', '. /etc/os-release; echo $PRETTY_NAME')}")
+    print(f"kernel: {platform.release()}")
+    print(f"plasma: {_sh('plasmashell', '--version')}")
+    print(f"bluez: {_sh('bluetoothctl', '--version')}")
+    print(f"wireplumber: {_sh('sh', '-c', 'rpm -q wireplumber 2>/dev/null || dpkg -s wireplumber 2>/dev/null | grep Version || pacman -Q wireplumber 2>/dev/null')}")
+    print(f"pipewire: {_sh('pw-dump', '--version')}")
+    bus = dbus.SystemBus()
+    mon = DeviceMonitor(bus, lambda *a: None)
+    for dev in cfg["devices"]:
+        mac = dev["mac"]
+        mon.watch(mac)
+        shown = mac if full else redact_mac(mac)
+        print(f"device {dev.get('name', mac)} [{shown}]: "
+              f"connected={mon.is_connected(mac)} "
+              f"profile={audio.active_profile(mac)} "
+              f"battery={mon.battery_percent(mac)}%")
+    print("--- journal maid-watcher (last 15) ---")
+    print(_sh("journalctl", "--user", "-u", "maid-watcher", "-n", "15",
+              "--no-pager", "-o", "cat"))
+    print("--- journal buds-fallback (last 15) ---")
+    print(_sh("journalctl", "--user", "-u", "buds-fallback", "-n", "15",
+              "--no-pager", "-o", "cat"))
+    print("--- kdeconnect phones ---")
+    print(_sh("kdeconnect-cli", "-l"))
+
+
 def main():
     DBusGMainLoop(set_as_default=True)
     cfg = config_mod.load()
@@ -219,6 +270,8 @@ def main():
         cmd_status(cfg)
     elif sys.argv[1] == "scan":
         cmd_scan()
+    elif sys.argv[1] == "bugreport":
+        cmd_bugreport(cfg, full="--full" in sys.argv)
     else:
         print(__doc__)
 
