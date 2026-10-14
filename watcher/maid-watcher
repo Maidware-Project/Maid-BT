@@ -77,6 +77,16 @@ class Daemon:
         if mac not in self.retry or self.monitor.is_connected(mac):
             self.retry.pop(mac, None)
             return False
+        # Serialize connects: BlueZ rejects overlapping connects
+        # (InProgress) and parallel A2DP setups flap PipeWire. Highest
+        # priority pending device goes first; the rest wait their turn.
+        pending = [m for m in self.retry
+                   if not self.monitor.is_connected(m)]
+        pending.sort(key=lambda m: self.devices.get(m, {}).get("priority",
+                                                                 99))
+        if not pending or pending[0] != mac:
+            GLib.timeout_add_seconds(5, self._maybe_reconnect, mac)
+            return False
         fails, _ = self.retry[mac]
         rc = self.cfg["reconnect"]
         if fails >= rc["give_up_after"]:

@@ -25,5 +25,5 @@ def load(path=CONFIG_PATH):
             else:
                 cfg[key] = val
     cfg["devices"] = sorted(cfg.get("devices", []),
-                            key=lambda d: d.get("priority", 99))[:3]
+                            key=lambda d: d.get("priority", 99))[:2]
     return cfg

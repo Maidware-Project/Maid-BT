@@ -1,5 +1,5 @@
 {
-  "_comment": "Maid Watcher config (Maid BT component). Up to 3 BT audio devices in priority order.",
+  "_comment": "Maid Watcher config (Maid BT component). Up to 2 BT audio devices in priority order (Classic multipoint caps at 2 links; forks welcome to do more).",
   "devices": [
     {
       "mac": "AA:BB:CC:DD:EE:FF",
