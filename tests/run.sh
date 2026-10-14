@@ -54,6 +54,28 @@ grep -q "bluez_output" \
   "$PKGDIR/wireplumber/51-bt-no-suspend.conf" || fail "bluez match missing"
 ok "watcher extras"
 
+echo "== degraded mode (missing/outdated deps) =="
+mkdir -p /tmp/maidbt-emptybin
+( export PATH=/tmp/maidbt-emptybin
+  /usr/bin/bash "$PKGDIR/bin/bluetooth-toggle.sh" status > /tmp/maidbt-deg.out 2>&1
+  [ "$?" -eq 2 ] || fail "no clean exit without bluetoothctl"
+  grep -q "missing required tool: bluetoothctl" /tmp/maidbt-deg.out || fail "no clean missing-tool message"
+  ! grep -q "command not found" /tmp/maidbt-deg.out || fail "tool noise leaked" )
+ok "clean failure without bluetoothctl"
+/usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF2' || fail "watcher degraded helpers crashed"
+import os, sys
+os.environ["PATH"] = "/tmp/maidbt-emptybin"
+sys.path.insert(0, sys.argv[1])
+from maid_core import audio
+assert audio.bluez_card_id("AA:BB:CC:DD:EE:FF") is None
+assert audio.set_profile_a2dp("AA:BB:CC:DD:EE:FF") is False
+assert audio.find_app_streams(["discord"]) == []
+assert audio.active_profile("AA:BB:CC:DD:EE:FF") is None
+print("watcher degraded helpers clean")
+PYEOF2
+ok "watcher helpers survive missing tools"
+rm -rf /tmp/maidbt-emptybin /tmp/maidbt-deg.out
+
 echo "== installer dry run =="
 rm -rf /tmp/maidbt-t; mkdir -p /tmp/maidbt-t
 HOME=/tmp/maidbt-t bash "$PKGDIR/install.sh" --check >/dev/null 2>&1 || fail "install --check"
