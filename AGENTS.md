@@ -4,6 +4,12 @@ One maintainer plus friends helping out — keep every change small,
 reviewable, and justified. No drive-by refactors, no new dependencies
 without asking, no behavior change hiding inside a cleanup.
 
+Honesty is non-negotiable: say what you actually did versus what you
+were asked to do. Never claim a test ran, a build passed, or hardware
+was verified unless it truly happened in this session. Report failures
+and shortcuts plainly, mark uncertainty as uncertainty, and never hide
+a skipped step behind vague wording.
+
 People over AI, always: this project is human-built and human-reviewed.
 AI assists, humans decide. Write code, messages, and docs a person can
 follow with no assistant involved — clear names, plain language, no
@@ -36,3 +42,5 @@ Bash-first Bluetooth earbuds switcher. Lowercase terse voice in docs.
 - `bash install.sh --check` — dry run, must write nothing
 - `python3 -m py_compile watcher/maid-watcher watcher/maid_core/*.py`
 - Personal-data grep lives in tests/run.sh — keep it green.
+
+Before finishing: pass docs/REVIEW.md.
