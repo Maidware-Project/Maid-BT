@@ -24,7 +24,8 @@ if [ "$UNINST" = "1" ]; then
     "$HOME"/.config/systemd/user/bt-menu.service
   rm -rf "$HOME/.local/share/plasma/plasmoids/com.local.btearbuds"
   rm -f "$HOME"/.local/share/applications/bt-earbuds-pc.desktop \
-    "$HOME"/.local/share/applications/bt-earbuds-phone.desktop "$HOME"/.local/share/applications/bt-off.desktop
+    "$HOME"/.local/share/applications/bt-earbuds-phone.desktop "$HOME"/.local/share/applications/bt-off.desktop \
+    "$HOME"/.local/share/applications/bt-on.desktop
   say "uninstalled (kept: ~/.config/bluetooth-buds.conf ~/.config/bt-intent.token)"
   exit 0
 fi

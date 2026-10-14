@@ -114,7 +114,7 @@ systemctl --user disable --now buds-fallback.service bt-intent.service bt-menu.s
 rm ~/.local/bin/{bluetooth-toggle,buds-fallback,buds-on,buds-off,buds-release,bt-intent-server.py,bt-notify-menu.sh}*
 rm ~/.config/systemd/user/{buds-fallback,bt-intent,bt-menu}.service
 rm -rf ~/.local/share/plasma/plasmoids/com.local.btearbuds
-rm ~/.local/share/applications/bt-earbuds-*.desktop ~/.local/share/applications/bt-off.desktop
+rm ~/.local/share/applications/bt-earbuds-*.desktop ~/.local/share/applications/bt-off.desktop ~/.local/share/applications/bt-on.desktop
 ```
 
 ## License

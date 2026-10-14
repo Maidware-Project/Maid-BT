@@ -1,8 +1,9 @@
 [Desktop Entry]
-Name=Earbuds to PC
+Name=Maid BT to PC
 Comment=Connect earbuds and route audio to them
 Exec=/home/visa/.local/bin/bluetooth-toggle.sh on
 Icon=bluetooth
+Keywords=bluetooth;earbuds;pc;connect;
 Terminal=false
 Type=Application
 Categories=Audio;Bluetooth;
