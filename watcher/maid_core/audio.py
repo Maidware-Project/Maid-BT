@@ -127,3 +127,69 @@ def earbuds_active(mac):
         if mac_uc.replace(":", "_") in blob.upper() or "bluez" in blob.lower():
             return True
     return False
+
+
+# Typical one-way Bluetooth codec latencies (seconds, conservative).
+# Software cannot remove codec delay; players must be offset instead.
+CODEC_LATENCY = {
+    "sbc": 0.20,
+    "sbc_xq": 0.22,
+    "aac": 0.20,
+    "aptx": 0.15,
+    "aptx_hd": 0.20,
+    "ldac": 0.30,
+}
+
+
+def codec_of_profile(profile):
+    """'aac' from 'a2dp-sink-aac'; None for non-A2DP profiles."""
+    if not profile or not profile.startswith("a2dp"):
+        return None
+    parts = profile.split("a2dp-sink", 1)
+    if len(parts) < 2 or not parts[1].strip("-_"):
+        return None
+    return parts[1].strip("-_").lower()
+
+
+def mpv_sockets():
+    """mpv IPC sockets to drive (user enables with input-ipc-server)."""
+    import os
+    candidates = []
+    env = os.environ.get("MPV_SOCKET", "")
+    if env:
+        candidates.append(env)
+    home = os.path.expanduser("~")
+    candidates += ["/tmp/mpvsocket",
+                   os.path.join(home, ".config/mpv/socket")]
+    return [c for c in candidates if os.path.exists(c)]
+
+
+def set_mpv_delay(seconds):
+    """Set mpv audio-delay on all reachable instances. Returns count."""
+    import json as _json
+    import socket as _socket
+    done = 0
+    msg = (_json.dumps({"command": ["set_property", "audio-delay",
+                                    round(seconds, 2)]}) + "\n").encode()
+    for path in mpv_sockets():
+        try:
+            sock = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+            sock.settimeout(3)
+            sock.connect(path)
+            sock.sendall(msg)
+            sock.recv(4096)
+            sock.close()
+            done += 1
+        except OSError:
+            continue
+    return done
+
+
+def apply_av_offset(mac):
+    """Offset mpv to the current codec latency. Returns delay or None."""
+    delay = CODEC_LATENCY.get(codec_of_profile(active_profile(mac)))
+    if delay is None:
+        return None
+    if set_mpv_delay(-delay) > 0:
+        return -delay
+    return None
