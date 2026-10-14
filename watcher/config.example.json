@@ -6,7 +6,8 @@
       "name": "Your Earbuds",
       "priority": 1,
       "auto_reconnect": true,
-      "prefer_profile": "a2dp"
+      "prefer_profile": "a2dp",
+      "short": "Soundcore 5"
     }
   ],
   "reconnect": {
@@ -41,4 +42,4 @@
   "bt_fallback": {
     "enabled": false
   }
-}
+}\n
