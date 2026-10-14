@@ -66,6 +66,62 @@ out=$(HOME=/tmp/maidbt-t timeout 14 bash "$PKGDIR/bin/buds-fallback.sh" 2>&1 || 
 echo "$out" | grep -q "auto-connect attempt" || fail "no attempt without hands-off"
 ok "retry fires when free"
 
+echo "== generic headset auto-switch =="
+rm -rf /tmp/maidbt-g; mkdir -p /tmp/maidbt-g/stubs /tmp/maidbt-g/.config /tmp/maidbt-g/state
+cat > /tmp/maidbt-g/stubs/bluetoothctl <<'EOF'
+#!/bin/bash
+case "$*" in
+  *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
+  *11:22:33:44:55:66*) echo "Connected: no" ;;
+  *info*) echo "Alias: Test Headset" ;;
+  *connect*) echo "Failed to connect"; exit 1 ;;
+  *) exit 1 ;;
+esac
+exit 0
+EOF
+cat > /tmp/maidbt-g/stubs/pactl <<'EOF'
+#!/bin/bash
+S="${STUBSTATE:-/tmp}"
+case "$*" in
+  *short*sinks*) cat "$S/sinks" 2>/dev/null ;;
+  *short*sink-inputs*) echo "11 testsink 10 PipeWire" ;;
+  *info*) echo "Default Sink: $(cat "$S/default" 2>/dev/null)" ;;
+  *set-default-sink*) echo "set-default $2" >> "$S/calls"; echo "$2" > "$S/default" ;;
+  *suspend-sink*) : ;;
+  *move-sink-input*) echo "move $2 -> $3" >> "$S/calls" ;;
+  *list*cards*) : ;;
+esac
+exit 0
+EOF
+chmod +x /tmp/maidbt-g/stubs/*
+printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="testsink-fallback"\n' > /tmp/maidbt-g/.config/bluetooth-buds.conf
+export STUBSTATE=/tmp/maidbt-g/state
+export PATH="/tmp/maidbt-g/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-g
+echo "11 testsink" > /tmp/maidbt-g/state/sinks
+echo "testsink" > /tmp/maidbt-g/state/default
+HOME=/tmp/maidbt-g timeout 30 bash "$PKGDIR/bin/buds-fallback.sh" > /tmp/maidbt-g/daemon.log 2>&1 &
+DPID=$!
+sleep 3
+[ -f /tmp/maidbt-g/state/calls ] && fail "switched with nothing new"
+ok "silent on steady state"
+echo "77 bluez_output.AA_BB_CC_DD_EE_FF.1" >> /tmp/maidbt-g/state/sinks
+sleep 5
+grep -q "set-default bluez_output.AA_BB_CC_DD_EE_FF.1" /tmp/maidbt-g/state/calls || fail "no auto-switch to new headset"
+grep -q "move 11 -> bluez_output.AA_BB_CC_DD_EE_FF.1" /tmp/maidbt-g/state/calls || fail "streams not moved"
+[ "$(cat /tmp/maidbt-g/state/default)" = "bluez_output.AA_BB_CC_DD_EE_FF.1" ] || fail "default not flipped"
+ok "new headset grabbed + routed"
+n_before=$(grep -c "testsink-fallback" /tmp/maidbt-g/state/calls || true)
+sed -i '/bluez_output/d' /tmp/maidbt-g/state/sinks
+sleep 7
+n_after=$(grep -c "testsink-fallback" /tmp/maidbt-g/state/calls || true)
+[ "$n_after" -gt "$n_before" ] || fail "vanished default not parked"
+ok "vanished device parked on fallback"
+kill "$DPID" 2>/dev/null || true
+wait 2>/dev/null || true
+rm -rf /tmp/maidbt-g
+export PATH=$(echo "$PATH" | sed 's|/tmp/maidbt-g/stubs:||')
+unset STUBSTATE
+
 echo "== cleanup =="
 rm -rf /tmp/maidbt-t
 ok "cleanup"

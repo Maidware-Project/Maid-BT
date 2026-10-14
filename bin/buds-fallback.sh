@@ -74,6 +74,11 @@ last_codec_switch=0
 prev_powered=""
 prev_connected=""
 prev_locked=""
+KNOWN_BLUEZ=""
+KNOWN_INIT=""
+ghost_for=0
+GHOST_GRACE=4
+GHOST_PARKED=0
 
 is_locked() { qdbus6 org.freedesktop.ScreenSaver /ScreenSaver org.freedesktop.ScreenSaver.GetActive 2>/dev/null | grep -qi true; }
 
@@ -85,6 +90,35 @@ notify() {
   else
     kdialog --passivepopup "$1 $2" 5 2>/dev/null || true
   fi
+}
+
+current_bluez_sinks() { pactl list short sinks 2>/dev/null | grep -i "bluez" | awk '{print $2}'; }
+all_sink_names() { pactl list short sinks 2>/dev/null | awk '{print $2}'; }
+default_sink_name() { pactl info 2>/dev/null | sed -n 's/^Default Sink: //p'; }
+
+bt_alias() {
+  # friendly name for a bluez sink (MAC embedded in the node name)
+  local mac alias
+  mac=$(echo "$1" | grep -oE '[0-9A-Fa-f]{2}(_[0-9A-Fa-f]{2}){5}' | head -n 1 | tr '_' ':')
+  [ -n "$mac" ] && alias=$(bluetoothctl info "$mac" 2>/dev/null | sed -n 's/^[[:space:]]*Alias: //p' | head -n 1)
+  echo "${alias:-Bluetooth headset}"
+}
+
+on_new_bluez_sink() {
+  # any freshly appeared headset (not ours — owned by the buds path):
+  # route audio to it once, unless hands-off asked us to stand down
+  local sink="$1" mac alias
+  mac=$(echo "$sink" | grep -oE '[0-9A-Fa-f]{2}(_[0-9A-Fa-f]{2}){5}' | head -n 1 | tr '_' ':')
+  [ "$mac" = "$BUDS_MAC" ] && return 0
+  if hands_off; then log "new sink $sink ignored (hands-off)"; return 0; fi
+  alias=$(bt_alias "$sink")
+  log "new headset $alias ($sink) -> switching audio"
+  pactl set-default-sink "$sink" 2>/dev/null || true
+  pactl suspend-sink "$sink" 0 2>/dev/null || true
+  pactl list short sink-inputs 2>/dev/null | awk '{print $1}' | while read -r sid; do
+    pactl move-sink-input "$sid" "$sink" 2>/dev/null || true
+  done
+  notify "Headset connected" "Audio switched to $alias." normal bluetooth
 }
 
 # skip our own notify if the manual script just notified (<12s ago) to avoid doubles
@@ -246,6 +280,38 @@ while true; do
     [ "$connected" = "1" ] && did_fallback=0 || { [ "$powered" = "0" ] && did_fallback=1; }
   fi
 
+  # --- any-headset watch: new bluez sink appears -> route audio to it ---
+  cur_bluez=$(current_bluez_sinks | sort | tr '\n' ' ')
+  if [ -z "$KNOWN_INIT" ]; then
+    KNOWN_BLUEZ="$cur_bluez"   # silent baseline, no announce for steady state
+    KNOWN_INIT=1
+  else
+    for s in $cur_bluez; do
+      case " $KNOWN_BLUEZ " in
+        *" $s "*) : ;;
+        *) on_new_bluez_sink "$s" ;;
+      esac
+    done
+    KNOWN_BLUEZ="$cur_bluez"
+  fi
+
+  # --- default sink vanished (e.g. headset yanked) -> park on fallback ---
+  def_sink=$(default_sink_name)
+  if [ -n "$def_sink" ]; then
+    if echo "$(all_sink_names)" | grep -qxF "$def_sink"; then
+      ghost_for=0
+      GHOST_PARKED=0
+    else
+      ghost_for=$((ghost_for + POLL))
+      if [ "$ghost_for" -ge "$GHOST_GRACE" ] && [ "$GHOST_PARKED" = "0" ]; then
+        log "default sink $def_sink gone -> parking on fallback"
+        park_on_fallback
+        notify "Audio device gone" "Output parked on fallback." normal bluetooth-disabled
+        GHOST_PARKED=1
+      fi
+    fi
+  fi
+
   # --- power transitions (catches KDE tray clicks) ---
   if [ "$powered" = "1" ] && [ "$prev_powered" = "0" ]; then
     log "adapter powered ON (external or script)"
@@ -339,7 +405,24 @@ while true; do
   else
     # disconnected
     if [ "$powered" = "1" ]; then
-      lost_for=$((lost_for + POLL))
+      # a healthy non-buds headset owns the audio: pause the buds-loss
+      # timer so fallback never steals it (generic path routed it).
+      # your own buds still win on appearance via the buds path above.
+      def_now=$(default_sink_name)
+      case "$def_now" in
+        *bluez*)
+          mac_now=$(echo "$def_now" | grep -oE '[0-9A-Fa-f]{2}(_[0-9A-Fa-f]{2}){5}' | head -n 1 | tr '_' ':')
+          if [ "$mac_now" != "$BUDS_MAC" ] && echo "$(all_sink_names)" | grep -qxF "$def_now"; then
+            [ "$lost_for" -gt 0 ] && log "generic headset active, buds timer paused"
+            lost_for=0
+          else
+            lost_for=$((lost_for + POLL))
+          fi
+          ;;
+        *)
+          lost_for=$((lost_for + POLL))
+          ;;
+      esac
       # fresh drop: idle the bluez node instantly (clean teardown, anti-crash)
       # and arm a long cooldown if the connection died almost immediately (flap)
       if [ "$prev_connected" = "1" ]; then
