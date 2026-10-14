@@ -1,5 +1,11 @@
 # changelog
 
+## systemd only for now
+
+- installer skips service setup on non-systemd init with a warning
+  instead of failing weirdly. fork it and wire your own init if you
+  want — scripts don't care, only autostart does.
+
 ## any headset grabs audio
 
 - any newly connected bluetooth headset takes the audio, not just

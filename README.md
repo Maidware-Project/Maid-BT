@@ -60,6 +60,10 @@ install.sh      multi-distro installer (Arch/Debian/Fedora/openSUSE)
 | python3 (intent) | python | python3 | python3 | python3 |
 | phone pings (opt) | kdeconnect | kdeconnect | kdeconnect | kdeconnect-kde |
 
+systemd only for now — the watcher/listener run as user services. the
+scripts themselves work anywhere, autostart is on you. fork it and wire
+your own init if you want.
+
 
 ## installation
 
