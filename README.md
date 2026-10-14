@@ -26,6 +26,10 @@ what it does and how does it work?
 - battery boost (opt-in, off by default) — watcher matches A2DP codec
   to earbuds battery (LDAC/AAC/SBC-XQ/SBC bands). see CHANGELOG, it
   can crash plasmashell on some systems so test first.
+- any-headset mode: a newly connected bluetooth headset (not yours)
+  grabs audio automatically, no manual switch. your own buds always win
+  on appearance; hands-off silences all of it; a vanished default gets
+  parked on fallback.
 - Tray widget (`plasmoid/`) + three launcher icons (`desktop/`) +
   optional notification menu (`bt-notify-menu.sh`, superseded by widget).
   
