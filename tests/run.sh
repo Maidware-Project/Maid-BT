@@ -12,11 +12,16 @@ for f in "$PKGDIR"/bin/*.sh "$PKGDIR"/install.sh; do
   bash -n "$f" || fail "bash -n $f"
 done
 command -v shellcheck >/dev/null 2>&1 && shellcheck -S error "$PKGDIR"/bin/*.sh "$PKGDIR"/install.sh || true
+python3 -m py_compile "$PKGDIR"/watcher/maid-watcher "$PKGDIR"/watcher/maid_core/*.py || fail "watcher py_compile"
 ok "syntax"
 
 echo "== personal data =="
+# NOTE: watcher/maid-watcher.desktop carries an Exec=/home/visa/... path on
+# purpose (install.sh rewrites it, same convention as desktop/*.desktop).
 if grep -rn -E "90:BF|SmartAction|soundcore|Liberty|Mothership|10\.0\.0|/home/visa" \
-    "$PKGDIR/bin" "$PKGDIR/README.md" "$PKGDIR/CHANGELOG.md" "$PKGDIR/install.sh" 2>/dev/null \
+    "$PKGDIR/bin" "$PKGDIR/watcher/maid-watcher" "$PKGDIR"/watcher/maid_core \
+    "$PKGDIR/watcher/config.example.json" \
+    "$PKGDIR/README.md" "$PKGDIR/CHANGELOG.md" "$PKGDIR/install.sh" 2>/dev/null \
     | grep -v "s|/home/visa|"; then
   fail "personal string leaked"
 fi

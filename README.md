@@ -33,7 +33,15 @@ what it does and how does it work?
   gets parked on fallback.
 - Tray widget (`plasmoid/`) + three launcher icons (`desktop/`) +
   optional notification menu (`bt-notify-menu.sh`, superseded by widget).
-  
+
+- **Maid Watcher** (`watcher/`, opt-in) — Python daemon that adds what the
+  switcher doesn't do: KDE Connect **call handling** (pauses media, mutes
+  Discord/Vesktop mic+output, restores on hangup), **3-device priority**
+  reconnects with backoff, and **battery** low/critical notifications over
+  BlueZ. Runs from XDG autostart, so it works with any init system.
+  Combines safely with the warm-link flow: it only acts on real
+  disconnects and never tears down a warm link itself.
+
 - KDE Connect pings to the phone on every switch (needs `kdeconnect-cli`
   + paired phone; silently skipped otherwise).
 
@@ -41,6 +49,7 @@ what it does and how does it work?
 
 ```
 bin/            toggle + watcher + wrappers + intent server + notify menu
+watcher/        Maid Watcher daemon (calls, 3-device priority, battery)
 systemd/        user units (fallback watcher, intent listener, menu)
 plasmoid/       KDE tray widget (PC / Phone / Off buttons + live state)
 desktop/        launcher icons (pin to panel/task manager)
