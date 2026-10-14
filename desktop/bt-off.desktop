@@ -1,8 +1,9 @@
 [Desktop Entry]
-Name=Bluetooth Off
+Name=Maid BT Off
 Comment=Disconnect earbuds, audio to fallback sink, radio off
 Exec=/home/EXAMPLEUSER/.local/bin/bluetooth-toggle.sh off
 Icon=bluetooth-disabled
+Keywords=bluetooth;off;radio;disconnect;
 Terminal=false
 Type=Application
 Categories=Audio;Bluetooth;
