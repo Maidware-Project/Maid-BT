@@ -140,3 +140,9 @@ warm-link audio config).
 ## License
 
 MIT — see LICENSE.
+
+## works with the Maid suite
+
+Maid BT stands alone, but plays nice: [Maid AU](https://github.com/visadaking) tracks
+this repo and pulls its updates (`MAID_SUITE`, deploy with `UPDATE_MAID_DEPLOY=1`),
+and the bundled Maid Watcher shares your KDE Connect phone pairing with Maidshare.
