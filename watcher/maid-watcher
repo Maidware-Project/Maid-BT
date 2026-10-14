@@ -68,9 +68,15 @@ class Daemon:
                 self.retry[mac] = [0, time.time() + delay]
                 GLib.timeout_add_seconds(delay + 1, self._maybe_reconnect, mac)
 
-    def _enforce_a2dp(self, mac):
+    def _enforce_a2dp(self, mac, attempt=0):
+        # Card appears in PipeWire slightly after the BlueZ connect;
+        # retry a few times instead of assuming one shot lands.
         if self.monitor.is_connected(mac):
-            audio.set_profile_a2dp(mac)
+            if audio.set_profile_a2dp(mac):
+                return False
+            if attempt < 2:
+                GLib.timeout_add_seconds(3, self._enforce_a2dp, mac,
+                                         attempt + 1)
         return False
 
     def _maybe_reconnect(self, mac):
@@ -159,6 +165,7 @@ def cmd_status(cfg):
         mon.watch(mac)
         print(f"{dev.get('name', mac)} [{mac}]")
         print(f"  connected: {mon.is_connected(mac)}")
+        print(f"  profile:   {audio.active_profile(mac)}")
         print(f"  battery:   {mon.battery_percent(mac)}%")
     if not cfg["devices"]:
         print("no devices configured — copy config.example.json to "

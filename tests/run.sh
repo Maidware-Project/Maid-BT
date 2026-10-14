@@ -27,6 +27,16 @@ if grep -rn -E "AA:BB|RemoteApp|ExampleBuds|Liberty|example-host|10\.0\.0|/home/
 fi
 ok "no personal data"
 
+echo "== watcher extras =="
+[ -x "$PKGDIR/watcher/maid-watcher" ] || fail "watcher not executable"
+[ -f "$PKGDIR/watcher/maid-watcher.desktop" ] || fail "watcher desktop missing"
+[ -f "$PKGDIR/wireplumber/51-bt-no-suspend.conf" ] || fail "no-suspend conf missing"
+grep -q "session.suspend-timeout-seconds" \
+  "$PKGDIR/wireplumber/51-bt-no-suspend.conf" || fail "suspend knob missing"
+grep -q "bluez_output" \
+  "$PKGDIR/wireplumber/51-bt-no-suspend.conf" || fail "bluez match missing"
+ok "watcher extras"
+
 echo "== installer dry run =="
 rm -rf /tmp/maidbt-t; mkdir -p /tmp/maidbt-t
 HOME=/tmp/maidbt-t bash "$PKGDIR/install.sh" --check >/dev/null 2>&1 || fail "install --check"
