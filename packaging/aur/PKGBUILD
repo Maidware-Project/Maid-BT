@@ -1,0 +1,26 @@
+# Maintainer: visa <yahalom.mauni@protonmail.com>
+pkgname=maid-bt-git
+pkgver=0.4.r1.g0000000
+pkgrel=1
+pkgdesc="Seamless Bluetooth earbuds switcher for Linux (PC/phone/off, warm-link, watcher)"
+arch=('any')
+url="https://github.com/Maidware-Project/Maid-BT"
+license=('MIT')
+depends=('bluez' 'bluez-utils' 'libnotify' 'libpulse' 'python' 'python-dbus' 'python-gobject')
+optdepends=('kdeconnect: phone pings and intent integration'
+            'wireplumber: warm-link audio support')
+makedepends=('git')
+provides=('maid-bt')
+conflicts=('maid-bt')
+source=("git+https://github.com/Maidware-Project/Maid-BT.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "Maid-BT"
+  printf "0.4.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+package() {
+  cd "Maid-BT"
+  DESTDIR="$pkgdir" bash install.sh --prefix=/usr --no-packages --no-config
+}

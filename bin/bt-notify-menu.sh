@@ -8,7 +8,10 @@
 # Phone side: KDE Connect run commands (PC only / Phone only / BT Off).
 set -u
 
-BIN="$HOME/.local/bin/bluetooth-toggle.sh"
+_here="$(cd "$(dirname "$0")" && pwd)"
+BIN="$_here/bluetooth-toggle.sh"
+[ -x "$BIN" ] || BIN="$HOME/.local/bin/bluetooth-toggle.sh"
+[ -x "$BIN" ] || BIN="/usr/bin/bluetooth-toggle.sh"
 RFKILL_BIN="$(command -v rfkill 2>/dev/null || { [ -x /usr/sbin/rfkill ] && echo /usr/sbin/rfkill; } || { [ -x /sbin/rfkill ] && echo /sbin/rfkill; } || echo rfkill)"
 POLL=2
 IDFILE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-menu-id"
