@@ -38,7 +38,8 @@ what it does and how does it work?
   switcher doesn't do: KDE Connect **call handling** (pauses media, mutes
   Discord/Vesktop mic+output, restores on hangup), **2-device priority**
   reconnects with backoff, and **battery** low/critical notifications over
-  BlueZ. Runs from XDG autostart, so it works with any init system.
+  BlueZ. Runs supervised under systemd where present (XDG autostart
+  elsewhere), so it works with any init system.
   Combines safely with the warm-link flow: it only acts on real
   disconnects and never tears down a warm link itself. Detects laptops
   (DMI chassis) and backs the radio off automatically; override with
