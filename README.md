@@ -35,122 +35,107 @@ what it does, in plain words:
 ## layout
 
 ```
-bin/            toggle + watcher + wrappers + intent server + notify menu
-watcher/        Maid Watcher daemon (calls, 2-device priority, battery)
-systemd/        user units (fallback watcher, intent listener, menu)
-plasmoid/       KDE tray widget (PC / Phone / Off buttons + live state)
-desktop/        launcher icons (pin to panel/task manager)
-phone/          MacroDroid/Tasker recipes + intent endpoint table
-bluetooth-buds.conf.example   per-machine MAC + fallback sink template
-install.sh      multi-distro installer (Arch/Debian/Fedora/openSUSE)
+bin/            the switcher scripts (on/off/release, background watcher)
+watcher/        Maid Watcher daemon (calls, reconnects, battery)
+wireplumber/    optional fix for the 1-second late start (see below)
+systemd/        background services (auto-connect watcher, phone listener)
+plasmoid/       the tray widget with PC / phone / off buttons
+desktop/        launcher icons you can pin to your panel
+phone/          phone setup guide (MacroDroid/Tasker)
+install.sh      installer — works on Arch, Debian/Ubuntu, Fedora, openSUSE
 ```
 
-## requirements (important read)
+## what you need
 
 | need | arch | debian/ubuntu | fedora | opensuse |
 |---|---|---|---|---|
-| bluetooth stack | bluez bluez-utils | bluez bluetooth | bluez | bluez |
+| bluetooth | bluez bluez-utils | bluez bluetooth | bluez | bluez |
 | rfkill | util-linux | rfkill | rfkill | (util-linux) |
-| notify-send | libnotify | libnotify-bin | libnotify | libnotify-tools |
-| pactl | libpulse | pulseaudio-utils | pulseaudio-utils | pulseaudio-utils |
-| python3 (intent) | python | python3 | python3 | python3 |
-| phone pings (opt) | kdeconnect | kdeconnect | kdeconnect | kdeconnect-kde |
+| notifications | libnotify | libnotify-bin | libnotify | libnotify-tools |
+| audio control | libpulse | pulseaudio-utils | pulseaudio-utils | pulseaudio-utils |
+| python3 | python | python3 | python3 | python3 |
+| phone pings (optional) | kdeconnect | kdeconnect | kdeconnect | kdeconnect-kde |
 
-systemd only for now — the watcher/listener run as user services. the
-scripts themselves work anywhere, autostart is on you. fork it and wire
-your own init if you want.
-
+the background pieces need systemd. no systemd (OpenRC etc.)? the
+switcher scripts and Maid Watcher still work — you just start them
+yourself instead of getting auto-start.
 
 ## installation
 
 ```sh
-bash install.sh            # deps (sudo) + copy + enable services + prompt for earbuds
-bash install.sh --check    # dry run
-bash install.sh --no-packages  # skip package install
+bash install.sh                # installs everything, asks you questions
+bash install.sh --check        # dry run: shows what it would do
+bash install.sh --no-packages  # skip installing packages
 ```
 
-install.sh copies (never symlinks) into `~/.local/bin`, `~/.config/systemd/user`,
-`~/.local/share/{plasma/applications}`, enables `buds-fallback.service` and
-`bt-intent.service`, generates `~/.config/bt-intent.token` (only used if
-you enable phone integration at the prompt), and prompts for
-`~/.config/bluetooth-buds.conf` (MAC validated, placeholder rejected).
-Existing files are backed up to `*.bak-<timestamp>`. install.sh downloads
-nothing — every dependency comes from your distro repos.
+what the installer does: copies files into place (never symlinks, so
+moving the folder can't break anything), asks for your earbuds, offers
+the optional extras (phone remote, Maid Watcher, warm-link audio),
+backs up anything it replaces. it downloads nothing — everything comes
+from your distro's own packages.
 
-ten: pair + trust earbuds (`bluetoothctl pair/trust`), open the intent
-TCP port if using phone push (e.g. `sudo firewall-cmd --permanent --add-port=8899/tcp`),
-Add Widgets → BT Earbuds (tray), log out/in.
+then: pair + trust your earbuds (`bluetoothctl pair` + `trust`), add
+the "BT Earbuds" widget to your panel, log out and back in. if you use
+the phone remote, also open TCP port 8899 in your firewall.
 
-## usage 
+## usage
 
 ```sh
 bluetooth-toggle.sh on|off|release|radio|toggle|status|porcelain
-buds-on.sh / buds-off.sh / buds-release.sh   # wrappers
+buds-on.sh / buds-off.sh / buds-release.sh   # shortcuts for the above
+maid-watcher status                          # connection, profile, battery
 ```
 
-## NOTES (MUST READ)
+## notes (please read)
 
-kde plasma for some unknown reason could segfault / crash when bluetooth A2DP transport dies ¯\_(ツ)_/¯ (do not blame me honestly)
-abruptly (`spa.bluez5: Failure ...` → `QAudioContext` SIGSEGV) — a system bug
-not this package. This setup is designed around it: warm-link `release`
-instead of disconnects, anti-flap backoff, instant bluez suspend on drop.
-Prefer `release` over `off`; if plasmashell crashes, check
-`coredumpctl` + journal for the `spa.bluez5: Failure` signature.
+**KDE can crash when bluetooth audio dies suddenly.** that's a system
+bug, not this package (`spa.bluez5: Failure` → desktop crash). the
+whole setup is designed around it: `release` keeps the link warm
+instead of tearing it down, reconnects back off instead of hammering.
+prefer `release` over `off` every day.
 
-electron/chromium apps (spotify, vesktop, discord, browsers) can go
-silent after a switch even though the stream moved fine. their web-audio
-stack opens the output at fixed params and stalls when the bluetooth
-codec/rate renegotiates under it (LDAC 96k ↔ SBC 44.1k/48k) — not our
-routing, the app itself. fix is pause → switch → play; if an app stays
-dead, restart just that app. the scripts do this automatically now
-(pause Playing players across every switch, resume only those after —
-opt out with `APP_CYCLE=0` in the conf).
+**some apps go silent after a switch** (Spotify, Discord, browsers).
+their sound engine stalls when bluetooth changes quality underneath
+them — again not our routing. fix: pause, switch, play. the scripts do
+that automatically; if one app stays dead, restart just that app
+(opt out with `APP_CYCLE=0`).
 
-audio delay, the three kinds and what helps:
+**sound delays, and what helps:**
 
-- late start (~1s cut after silence): PipeWire suspends idle BT nodes.
-  fix is `wireplumber/51-bt-no-suspend.conf` (install.sh offers it,
-  opt-in, default off — it costs earbud battery). `maid-watcher status`
-  shows the live profile.
-- lip-sync lag: codec physics (SBC/AAC ~200ms, LDAC 300ms+). no PC
-  software removes it — compensate in the player (VLC: J/K keys,
-  mpv: `--audio-delay=-0.2`). SBC is usually the lowest-latency choice.
-- switch gap: reconnect + A2DP setup + reroute takes seconds by nature.
-  the watcher retries the profile a few times so it sticks first try.
+- late start (~1 second cut after silence): bluetooth naps when idle.
+  fix is the optional warm-link config (installer offers it; costs a
+  little earbud battery).
+- lip-sync lag: bluetooth sound always trails video a bit (SBC/AAC
+  ~0.2s, LDAC ~0.3s). nothing on the PC removes it — nudge it right
+  in your player (VLC: J/K keys, mpv: `--audio-delay=-0.2`).
+- switch gap: reconnecting + rerouting takes a few seconds by nature.
+  that's physics, not a bug.
 
-## RAM budget (measured live, x86_64)
+## RAM budget (measured live)
 
-| piece | idle RSS | notes |
+| piece | idle memory | notes |
 |---|---|---|
-| `buds-fallback.sh` watcher | ~4 MB | bash, event-driven |
-| `maid-watcher` daemon | ~29 MB | python3 + dbus + GLib loop |
-| `bt-intent-server.py` | ~24 MB | only when phone integration enabled |
-| plasmoid widget | ~0 MB extra | lives inside plasmashell |
-| **full stack** | **~57 MB** | ~1.4% of a 4 GB machine |
+| background watcher | ~4 MB | tiny script, sleeps until needed |
+| Maid Watcher daemon | ~29 MB | does calls, reconnects, battery |
+| phone listener | ~24 MB | only runs if you enable phone remote |
+| tray widget | ~0 MB extra | lives inside the desktop itself |
+| **everything together** | **~57 MB** | ~1.4% of a 4 GB machine |
 
-4 GB rules: keep phone integration off unless used (saves 24 MB),
-leave the idle saver off (default), and let zram/zswap handle the rest
-— Fedora/openSUSE enable zram by default; Arch/Debian users on 4 GB
-should turn it on. The watcher unit caps itself at 150 MB
-(`MemoryMax`) so a leak restarts instead of OOMing you. Kernel
-differences don't matter here: everything talks to stable userspace
-APIs (BlueZ D-Bus, PipeWire, MPRIS), never to kernel internals.
+on 4 GB machines: leave phone remote off unless you use it, leave the
+idle saver off (it is by default). Fedora/openSUSE already compress RAM
+for you (zram); Arch/Debian users should turn it on. the watcher also
+caps itself so a bug can never eat your memory.
 
 ## uninstalling
 
 ```sh
-bash install.sh --uninstall   # services off + files out (keeps your config + token)
+bash install.sh --uninstall   # removes everything, keeps your settings
 ```
 
-manual version of the same:
-
-```sh
-systemctl --user disable --now buds-fallback.service bt-intent.service bt-menu.service
-rm ~/.local/bin/{bluetooth-toggle,buds-fallback,buds-on,buds-off,buds-release,bt-intent-server.py,bt-notify-menu.sh}*
-rm ~/.config/systemd/user/{buds-fallback,bt-intent,bt-menu}.service
-rm -rf ~/.local/share/plasma/plasmoids/com.local.btearbuds
-rm ~/.local/share/applications/bt-earbuds-*.desktop ~/.local/share/applications/bt-off.desktop ~/.local/share/applications/bt-on.desktop
-```
+or by hand: stop the background services, delete the installed files
+and the widget (see `install.sh --uninstall` for the exact list, it
+also removes the Maid Watcher, its autostart entry, and the
+warm-link audio config).
 
 ## License
 
