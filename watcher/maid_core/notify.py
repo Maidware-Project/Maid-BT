@@ -66,3 +66,21 @@ def send(summary, body="", urgency="normal", actions=None,
     except (subprocess.SubprocessError, FileNotFoundError):
         pass
     return 0
+
+
+def audit(msg):
+    """Journal + ~/MaidLogs/maid-watcher.log trail (visible folder)."""
+    import datetime
+    import os
+    try:
+        subprocess.run(["logger", "-t", "maid-watcher", "--", msg],
+                       capture_output=True, timeout=5)
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+    try:
+        logdir = os.path.expanduser("~/MaidLogs")
+        os.makedirs(logdir, exist_ok=True)
+        with open(os.path.join(logdir, "maid-watcher.log"), "a") as f:
+            f.write(datetime.datetime.now().strftime("%F_%T ") + msg + "\n")
+    except OSError:
+        pass

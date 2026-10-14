@@ -41,6 +41,11 @@ EOF
 [ -f "$PKGDIR/watcher/maid-watcher.desktop" ] || fail "watcher desktop missing"
 [ -f "$PKGDIR/watcher/maid-watcher.service" ] || fail "watcher unit missing"
 grep -q "MemoryMax" "$PKGDIR/watcher/maid-watcher.service" || fail "watcher unit has no RAM cap"
+grep -q "maid_audit maid-bt" "$PKGDIR/bin/bluetooth-toggle.sh" || fail "toggle not audited"
+grep -q "audit-lib.sh" "$PKGDIR/bin/buds-fallback.sh" || fail "fallback audit lib missing"
+grep -q "MaidLogs" "$PKGDIR/bin/audit-lib.sh" || fail "audit log dir missing"
+grep -q "def audit" "$PKGDIR/watcher/maid_core/notify.py" || fail "watcher audit missing"
+grep -q "MaidLogs" "$PKGDIR/install.sh" || fail "installer hides log location"
 grep -q 'rm -f "$HOME/.config/autostart/maid-watcher.desktop"' "$PKGDIR/install.sh" || fail "installer allows double daemon"
 [ -f "$PKGDIR/wireplumber/51-bt-no-suspend.conf" ] || fail "no-suspend conf missing"
 grep -q "session.suspend-timeout-seconds" \

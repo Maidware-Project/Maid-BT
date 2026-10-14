@@ -57,13 +57,19 @@ class DeviceMonitor:
 
     @staticmethod
     def connect(mac):
-        subprocess.run(["bluetoothctl", "connect", mac],
-                       capture_output=True, timeout=30)
+        try:
+            subprocess.run(["bluetoothctl", "connect", mac],
+                           capture_output=True, timeout=30)
+        except (subprocess.SubprocessError, FileNotFoundError):
+            pass
 
     @staticmethod
     def disconnect(mac):
-        subprocess.run(["bluetoothctl", "disconnect", mac],
-                       capture_output=True, timeout=30)
+        try:
+            subprocess.run(["bluetoothctl", "disconnect", mac],
+                           capture_output=True, timeout=30)
+        except (subprocess.SubprocessError, FileNotFoundError):
+            pass
 
     @staticmethod
     def scan_audio_devices(timeout=8):

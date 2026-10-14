@@ -67,11 +67,13 @@ class Daemon:
         dev = self.devices.get(mac, {})
         name = dev.get("name", mac)
         if connected:
+            notify.audit(f"connected: {name}")
             notify.send("Earbuds connected", name)
             self.retry.pop(mac, None)
             if dev.get("prefer_profile") == "a2dp":
                 GLib.timeout_add_seconds(2, self._enforce_a2dp, mac)
         else:
+            notify.audit(f"disconnected: {name}")
             notify.send("Earbuds disconnected", name)
             if dev.get("auto_reconnect", True):
                 delay = self.rc["initial_delay_s"]
@@ -116,6 +118,7 @@ class Daemon:
                 self.retry[_mac] = [0, time.time()]
                 GLib.timeout_add_seconds(1, self._maybe_reconnect, _mac)
 
+            notify.audit(f"reconnect gave up: {name}")
             notify.send("Giving up reconnect",
                         f"{name} — tap to retry, or reconnect manually",
                         "critical",
@@ -133,6 +136,7 @@ class Daemon:
 
     # -- call mode --------------------------------------------------------
     def on_call_start(self, info):
+        notify.audit(f"call started: {info}")
         notify.send("Incoming call", info)
         if self.cfg["calls"]["pause_media"]:
             self.call_paused = media.pause_all(self.session_bus)
@@ -160,6 +164,7 @@ class Daemon:
         self.call_muted = []
         media.resume(self.session_bus, self.call_paused)
         self.call_paused = []
+        notify.audit(f"call ended: {reason}")
         notify.send("Call ended", reason)
 
     # -- periodic ---------------------------------------------------------
