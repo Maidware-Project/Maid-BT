@@ -22,7 +22,7 @@ if grep -rn -E "90:BF|SmartAction|soundcore|Liberty|Mothership|10\.0\.0|/home/vi
     "$PKGDIR/bin" "$PKGDIR/watcher/maid-watcher" "$PKGDIR"/watcher/maid_core \
     "$PKGDIR/watcher/config.example.json" \
     "$PKGDIR/README.md" "$PKGDIR/CHANGELOG.md" "$PKGDIR/install.sh" 2>/dev/null \
-    | grep -v "s|/home/visa|"; then
+    | grep -vE "s\\|/home/visa"; then
   fail "personal string leaked"
 fi
 ok "no personal data"

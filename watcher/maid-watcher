@@ -227,7 +227,7 @@ def _sh(*args, timeout=10):
 
 
 def redact_mac(mac):
-    """Keep vendor OUI, hide device-specific bytes: 90:BF:D9:**:**:12."""
+    """Keep vendor OUI, hide device-specific bytes: AA:BB:CC:**:**:FF."""
     parts = str(mac).split(":")
     if len(parts) != 6:
         return "** redacted **"
