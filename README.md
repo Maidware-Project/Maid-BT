@@ -124,8 +124,6 @@ Mint is Ubuntu underneath, so the `apt` installer path handles it
   (shown as unknown, never crashes), HFP wideband needs 5.65+ and
   falls back to CVSD silently, A2DP SBC always works (mandatory
   codec). LDAC/aptX need their codec libs installed or you get SBC.
-- **Nemo** (Cinnamon) gets a MaidShare right-click action; Dolphin
-  keeps its servicemenu. Both install side by side harmlessly.
 
 ## RAM budget (measured live)
 
