@@ -31,7 +31,7 @@ class DeviceMonitor:
     def watch(self, mac):
         self._paths[mac_to_path(mac)] = mac
 
-    def _props_changed(self, iface, changed, invalidated, path=None):
+    def _props_changed(self, iface, changed, invalidated=None, path=None):
         if iface != DEVICE_IFACE or "Connected" not in changed:
             return
         mac = self._paths.get(path)
