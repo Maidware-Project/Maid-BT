@@ -123,8 +123,7 @@ that automatically; if one app stays dead, restart just that app
 
 on 4 GB machines: leave phone remote off unless you use it, leave the
 idle saver off (it is by default). Fedora/openSUSE already compress RAM
-for you (zram); Arch/Debian users should turn it on. the watcher also
-caps itself so a bug can never eat your memory.
+for you (zram); Arch/Debian users should turn it on.
 
 ## uninstalling
 
