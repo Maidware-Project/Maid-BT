@@ -166,12 +166,19 @@ fi
 if [ "$CHECK" = "1" ]; then say "(check only, nothing changed)"; exit 0; fi
 
 systemctl --user daemon-reload 2>/dev/null || true
-systemctl --user enable --now buds-fallback.service 2>/dev/null \
+# OpenRC/runit/etc are not supported: services need systemd user units.
+# Scripts still work if started manually, but nothing is auto-enabled.
+SKIP_SERVICES=0
+if [ "$(ps -p 1 -o comm= 2>/dev/null || echo unknown)" != "systemd" ]; then
+  warn "no systemd here — skipping services (fork it for your init if you want)"
+  SKIP_SERVICES=1
+fi
+[ "$SKIP_SERVICES" = "1" ] || systemctl --user enable --now buds-fallback.service 2>/dev/null \
   || warn "could not enable buds-fallback.service"
 # phone integration stays OFF unless asked: it opens a LAN port, so it is
 # opt-in, never default.
 PHONE_ON=0
-if [ -t 0 ]; then
+if [ "$SKIP_SERVICES" != "1" ] && [ -t 0 ]; then
   printf 'Enable phone integration (bt-intent.service, LAN port 8899)? [y/N]: '
   read -r _ans
   case "$_ans" in [Yy]*) PHONE_ON=1 ;; esac
