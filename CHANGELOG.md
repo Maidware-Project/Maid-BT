@@ -1,5 +1,18 @@
 # changelog
 
+## Maid Watcher update
+
+- new optional `watcher/` daemon (`maid-watcher`, XDG-autostarted,
+  init-independent): KDE Connect call handling (pause media, mute
+  Discord/Vesktop, restore on hangup + safety timeout), up to 3
+  prioritized devices with backoff reconnect, BlueZ battery
+  low/critical notifications, opt-in idle saver.
+- installer offers Maid Watcher autostart (default off), installs its
+  python dbus/gi deps, writes `~/.config/maid-watcher/config.json`
+  once, and removes all of it on `--uninstall`.
+- plays nice with warm-link: acts only on real disconnects, A2DP
+  enforcement is a no-op when the profile already matches.
+
 ## systemd only for now
 
 - installer skips service setup on non-systemd init with a warning
