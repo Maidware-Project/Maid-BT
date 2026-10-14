@@ -21,6 +21,16 @@ BUDS_MAC="AA:BB:CC:DD:EE:FF"
 NOTIF_ID=0
 [ -f "$IDFILE" ] && NOTIF_ID="$(cat "$IDFILE" 2>/dev/null || echo 0)"
 
+for _alib in "$_here/audit-lib.sh" "$HOME/.local/bin/audit-lib.sh" \
+            "/usr/bin/audit-lib.sh"; do
+  if [ -z "${AUDIT_LIB_LOADED:-}" ] && [ -f "$_alib" ]; then
+    . "$_alib"
+    break
+  fi
+done
+unset _alib
+command -v maid_audit >/dev/null 2>&1 || maid_audit() { :; }
+
 is_blocked() { "$RFKILL_BIN" list bluetooth 2>/dev/null | grep -qi "soft blocked: yes"; }
 is_powered() { bluetoothctl show 2>/dev/null | grep -qi "powered: yes"; }
 is_buds_connected() { bluetoothctl info "$BUDS_MAC" 2>/dev/null | grep -q "Connected: yes"; }

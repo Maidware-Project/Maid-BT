@@ -27,6 +27,7 @@ class BatteryWatch:
                         self.crit_warned.add(mac)
                         notify.send(f"{dev.get('name', mac)} battery critical",
                                     f"{pct}% — charge soon", "critical")
+                        notify.audit(f"battery critical: {dev.get('name', mac)} {pct}%")
                 elif pct <= self.cfg["warn_percent"]:
                     if mac not in self.warned:
                         self.warned.add(mac)

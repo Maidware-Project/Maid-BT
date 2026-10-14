@@ -331,5 +331,7 @@ fi
 command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 
 say "done. Backups (if any): *.bak-${BACKUP_TS}"
+mkdir -p "$HOME/MaidLogs" 2>/dev/null || true
+say "logs live in ~/MaidLogs/ (visible folder) + journalctl --user -t maid-bt -t maid-watcher"
 say "Next: pair+trust earbuds, add the 'BT Earbuds' widget (Add Widgets), log out/in."
 say "Phone remote: see phone/README-macrodroid-tasker.md (needs ~/.config/bt-intent.token + open TCP 8899)."

@@ -4,6 +4,10 @@
 # Plain terminal prompts only — no new dependencies.
 set -u
 
+command -v need >/dev/null 2>&1 || need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required tool: $1" >&2; exit 2; }; }
+need bluetoothctl "bluez package"
+need pactl "pulseaudio-utils / libpulse package"
+
 CONF="$HOME/.config/bluetooth-buds.conf"
 WCONF="$HOME/.config/maid-watcher/config.json"
 

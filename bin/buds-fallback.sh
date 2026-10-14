@@ -11,6 +11,20 @@
 # This daemon is the safety net for KDE tray clicks (2s delay max).
 set -u
 
+_here_bf="$(cd "$(dirname "$0")" && pwd)"
+for _alib in "$_here_bf/audit-lib.sh" "$HOME/.local/bin/audit-lib.sh" \
+            "/usr/bin/audit-lib.sh"; do
+  if [ -z "${AUDIT_LIB_LOADED:-}" ] && [ -f "$_alib" ]; then
+    . "$_alib"
+    break
+  fi
+done
+unset _here_bf _alib
+command -v maid_audit >/dev/null 2>&1 || maid_audit() { :; }
+command -v need >/dev/null 2>&1 || need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required tool: $1" >&2; exit 2; }; }
+need bluetoothctl "bluez package"
+need pactl "pulseaudio-utils / libpulse package"
+
 BUDS_MAC="AA:BB:CC:DD:EE:FF"
 FALLBACK_SINK=""
 APP_CYCLE=1
@@ -346,6 +360,7 @@ while true; do
       ghost_for=$((ghost_for + POLL))
       if [ "$ghost_for" -ge "$GHOST_GRACE" ] && [ "$GHOST_PARKED" = "0" ]; then
         log "default sink $def_sink gone -> parking on fallback"
+        maid_audit maid-bt "vanished sink parked on fallback"
         park_on_fallback
         notify "Audio device gone" "Output parked on fallback." normal bluetooth-disabled
         GHOST_PARKED=1
@@ -368,6 +383,7 @@ while true; do
 
   if [ "$powered" = "0" ] && [ "$prev_powered" = "1" ]; then
     log "adapter powered OFF"
+    maid_audit maid-bt "adapter powered off, parking on fallback"
     park_on_fallback
     if [ "$BLOCK_ON_EXTERNAL_OFF" = "1" ]; then
       RFKILL_BIN="$(command -v rfkill 2>/dev/null || { [ -x /usr/sbin/rfkill ] && echo /usr/sbin/rfkill; } || { [ -x /sbin/rfkill ] && echo /sbin/rfkill; } || echo rfkill)"
@@ -405,6 +421,7 @@ while true; do
     lost_for=0
     if [ "$prev_connected" = "0" ]; then
       log "buds connected"
+      maid_audit maid-bt "buds connected, routing audio"
       connected_since=$now
       media_cycle_start
       switch_to_buds_nowait
@@ -502,6 +519,7 @@ while true; do
       fi
       if [ "$connected" = "0" ] && [ "$lost_for" -ge "$GRACE" ] && [ "$did_fallback" = "0" ]; then
         log "buds lost (${lost_for}s) -> default to $FALLBACK_SINK"
+        maid_audit maid-bt "buds lost, parked on fallback"
         park_on_fallback
         if [ "$POWER_OFF_ON_LOST" = "1" ]; then
           if other_device_connected; then

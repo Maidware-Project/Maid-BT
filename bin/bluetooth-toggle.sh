@@ -15,6 +15,21 @@
 # running — only the radio follows this switch).
 
 set -o pipefail
+# audit trail: journal + ~/MaidLogs (visible folder, see install summary)
+_here_bt="$(cd "$(dirname "$0")" && pwd)"
+for _alib in "$_here_bt/audit-lib.sh" "$HOME/.local/bin/audit-lib.sh" \
+            "/usr/bin/audit-lib.sh"; do
+  if [ -z "${AUDIT_LIB_LOADED:-}" ] && [ -f "$_alib" ]; then
+    . "$_alib"
+    break
+  fi
+done
+unset _here_bt _alib
+# old installs lack audit-lib.sh: degrade to silent no-op, never crash
+command -v maid_audit >/dev/null 2>&1 || maid_audit() { :; }
+command -v need >/dev/null 2>&1 || need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required tool: $1" >&2; exit 2; }; }
+need bluetoothctl "bluez package"
+need pactl "pulseaudio-utils / libpulse package"
 RFKILL="$(command -v rfkill 2>/dev/null || { [ -x /usr/sbin/rfkill ] && echo /usr/sbin/rfkill; } || { [ -x /sbin/rfkill ] && echo /sbin/rfkill; } || echo rfkill)"
 ACTION="${1:-toggle}"
 
@@ -207,10 +222,12 @@ do_on() {
     media_cycle_start
     switch_to_buds || true
     media_cycle_end
+    maid_audit maid-bt "action=on buds connected, audio moved"
     notify "Bluetooth on" "Connected to earbuds." normal bluetooth
     notify_phone "Earbuds switched to PC"
     mark_manual
   else
+    maid_audit maid-bt "action=on connect FAILED"
     notify "Bluetooth on" "Powered on, but earbuds didn't connect — open case / wake buds, re-run: bluetooth-toggle.sh on" critical dialog-error
     mark_manual
     return 1
@@ -234,6 +251,7 @@ do_release() {
     echo "Buds not on PC right now — PC grabs when free and hands-off lapses."
   fi
   echo "Released (PC stays hands-off $((HANDS_SECS/60)) min; '$0 on' cancels)."
+  maid_audit maid-bt "action=release parked on fallback, link warm"
   notify "Earbuds released" "Audio on fallback sink. Use the phone — link stays warm." normal bluetooth-disabled
   notify_phone "Earbuds switched to phone"
   mark_manual
@@ -283,12 +301,14 @@ do_off() {
   sleep 1
   if is_blocked; then
     echo "Bluetooth OFF (buds disconnected, audio on fallback, radio blocked)."
+    maid_audit maid-bt "action=off parked, radio blocked"
     notify "Bluetooth off" "Earbuds disconnected, audio back on fallback sink." normal bluetooth-disabled
     notify_phone "PC Bluetooth off"
     systemctl --user stop buds-fallback.service 2>/dev/null || true
     mark_manual
   else
     echo "Bluetooth OFF requested, but rfkill block failed."
+    maid_audit maid-bt "action=off block FAILED"
     notify "Bluetooth off?" "Audio parked on fallback, but block failed." critical dialog-error
     mark_manual
     return 1
