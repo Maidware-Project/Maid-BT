@@ -119,6 +119,18 @@ dead, restart just that app. the scripts do this automatically now
 (pause Playing players across every switch, resume only those after —
 opt out with `APP_CYCLE=0` in the conf).
 
+audio delay, the three kinds and what helps:
+
+- late start (~1s cut after silence): PipeWire suspends idle BT nodes.
+  fix is `wireplumber/51-bt-no-suspend.conf` (install.sh offers it,
+  opt-in, default off — it costs earbud battery). `maid-watcher status`
+  shows the live profile.
+- lip-sync lag: codec physics (SBC/AAC ~200ms, LDAC 300ms+). no PC
+  software removes it — compensate in the player (VLC: J/K keys,
+  mpv: `--audio-delay=-0.2`). SBC is usually the lowest-latency choice.
+- switch gap: reconnect + A2DP setup + reroute takes seconds by nature.
+  the watcher retries the profile a few times so it sticks first try.
+
 ## uninstalling
 
 ```sh

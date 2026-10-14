@@ -23,6 +23,7 @@ if [ "$UNINST" = "1" ]; then
   rm -f "$HOME"/.local/bin/maid-watcher
   rm -rf "$HOME"/.local/bin/maid_core
   rm -f "$HOME"/.config/autostart/maid-watcher.desktop
+  rm -f "$HOME"/.config/wireplumber/wireplumber.conf.d/51-bt-no-suspend.conf
   rm -f "$HOME"/.config/systemd/user/buds-fallback.service "$HOME"/.config/systemd/user/bt-intent.service \
     "$HOME"/.config/systemd/user/bt-menu.service
   rm -rf "$HOME/.local/share/plasma/plasmoids/com.local.btearbuds"
@@ -226,9 +227,7 @@ fi
 # Maid Watcher autostart is opt-in: it overlaps buds-fallback (reconnects +
 # A2DP enforcement). Safe to combine, but ask first.
 WATCH_ON=0
-if [ "$CHECK" = "1" ]; then
-  echo "AUTOSTART ~/.config/autostart/maid-watcher.desktop (opt-in prompt on real run)"
-elif [ -t 0 ]; then
+if [ -t 0 ]; then
   printf 'Enable Maid Watcher autostart (calls, battery, 3-device priority)? [y/N]: '
   read -r _wans
   case "$_wans" in [Yy]*) WATCH_ON=1 ;; esac
@@ -239,6 +238,25 @@ if [ "$WATCH_ON" = "1" ]; then
   copy_one "$PKGDIR/watcher/maid-watcher.desktop" "$HOME/.config/autostart/maid-watcher.desktop" 1
 else
   say "Maid Watcher autostart off (daemon still installed as maid-watcher; run it manually or copy the desktop file to autostart)"
+fi
+# Warm-link audio: disable PipeWire auto-suspend on BT nodes so playback
+# starts instantly instead of losing ~1s after silence. Costs some earbud
+# battery. Opt-in, off by default.
+WARM_ON=0
+if [ -t 0 ]; then
+  printf 'Keep BT audio warm (no suspend delay, more earbud drain)? [y/N]: '
+  read -r _wans2
+  case "$_wans2" in [Yy]*) WARM_ON=1 ;; esac
+else
+  say "warm-link audio skipped (non-interactive; copy wireplumber/51-bt-no-suspend.conf to ~/.config/wireplumber/wireplumber.conf.d/ to enable, then restart wireplumber)"
+fi
+if [ "$WARM_ON" = "1" ]; then
+  mkdir -p "$HOME/.config/wireplumber/wireplumber.conf.d"
+  copy_one "$PKGDIR/wireplumber/51-bt-no-suspend.conf" \
+    "$HOME/.config/wireplumber/wireplumber.conf.d/51-bt-no-suspend.conf"
+  say "warm-link on — restart wireplumber to apply: systemctl --user restart wireplumber"
+else
+  say "warm-link audio off"
 fi
 command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 

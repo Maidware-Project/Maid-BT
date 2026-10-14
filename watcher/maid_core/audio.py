@@ -27,11 +27,14 @@ def bluez_card_id(mac):
     for node in _pw_dump():
         info = node.get("info", {})
         props = info.get("props", {})
-        if (props.get("device.bus") == "bluetooth"
-                and mac_uc in str(props.get("device.name", "")).upper()):
-            if "card" in str(node.get("type", "")).lower() \
-                    or "Card" in str(node.get("type", "")):
-                return node.get("id")
+        if props.get("device.bus") != "bluetooth":
+            continue
+        if mac_uc not in str(props.get("device.name", "")).upper():
+            continue
+        # PipeWire exposes BT cards as Interface:Device nodes.
+        ntype = str(node.get("type", "")).lower()
+        if "device" in ntype or "card" in ntype:
+            return node.get("id")
     # fallback: wpctl status parse
     p = _run("wpctl", "status")
     if p and p.stdout:
@@ -45,15 +48,52 @@ def bluez_card_id(mac):
 
 
 def set_profile_a2dp(mac):
-    """Force high-fidelity A2DP sink profile on the BT card."""
-    card = bluez_card_id(mac)
-    if card is None:
-        return False
-    for profile in ("a2dp-sink", "a2dp_sink"):
+    """Force high-fidelity A2DP sink profile on the BT card.
+
+    Card object ids go stale across reconnects and the bare
+    'a2dp-sink' alias does not always stick, so re-resolve the card and
+    walk explicit codec profiles until one holds. Never leaves the card
+    worse than found: restores the previous profile on failure.
+    """
+    import time
+    prev = active_profile(mac)
+    for profile in ("a2dp-sink", "a2dp_sink",
+                    "a2dp-sink-aac", "a2dp-sink-sbc"):
+        card = bluez_card_id(mac)
+        if card is None:
+            continue
         p = _run("wpctl", "set-profile", str(card), profile)
-        if p and p.returncode == 0:
+        if not (p and p.returncode == 0):
+            continue
+        time.sleep(1)
+        if (active_profile(mac) or "").startswith("a2dp"):
             return True
+    if (active_profile(mac) or "off") == "off" \
+            and (prev or "off") != "off":
+        card = bluez_card_id(mac)
+        if card is not None:
+            _run("wpctl", "set-profile", str(card), prev)
     return False
+
+
+def active_profile(mac):
+    """Active card profile name for a BT device, or None."""
+    import re
+    p = _run("pactl", "list", "cards")
+    if not p or not p.stdout:
+        return None
+    mac_us = mac.upper().replace(":", "_")
+    in_card = False
+    for line in p.stdout.splitlines():
+        if line.startswith("Card #"):
+            in_card = False
+        if "bluez_card." + mac_us in line:
+            in_card = True
+        if in_card:
+            m = re.search(r"Active Profile:\s*(\S+)", line)
+            if m:
+                return m.group(1)
+    return None
 
 
 def find_app_streams(patterns):

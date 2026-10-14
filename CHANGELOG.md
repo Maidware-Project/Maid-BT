@@ -1,5 +1,15 @@
 # changelog
 
+## audio delay tuning
+
+- new opt-in `wireplumber/51-bt-no-suspend.conf`: kills the ~1s
+  late-start after silence by never suspending BT nodes (costs earbud
+  battery, hence opt-in). installer offers it, removes it on uninstall.
+- `maid-watcher status` now shows the live A2DP profile (codec) so
+  lip-sync lag can be matched to a player-side A/V offset.
+- profile enforcement retries twice on slow card appearance, shrinking
+  the switch gap.
+
 ## Maid Watcher update
 
 - new optional `watcher/` daemon (`maid-watcher`, XDG-autostarted,
