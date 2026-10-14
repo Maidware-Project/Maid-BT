@@ -134,6 +134,24 @@ audio delay, the three kinds and what helps:
 - switch gap: reconnect + A2DP setup + reroute takes seconds by nature.
   the watcher retries the profile a few times so it sticks first try.
 
+## RAM budget (measured live, x86_64)
+
+| piece | idle RSS | notes |
+|---|---|---|
+| `buds-fallback.sh` watcher | ~4 MB | bash, event-driven |
+| `maid-watcher` daemon | ~29 MB | python3 + dbus + GLib loop |
+| `bt-intent-server.py` | ~24 MB | only when phone integration enabled |
+| plasmoid widget | ~0 MB extra | lives inside plasmashell |
+| **full stack** | **~57 MB** | ~1.4% of a 4 GB machine |
+
+4 GB rules: keep phone integration off unless used (saves 24 MB),
+leave the idle saver off (default), and let zram/zswap handle the rest
+— Fedora/openSUSE enable zram by default; Arch/Debian users on 4 GB
+should turn it on. The watcher unit caps itself at 150 MB
+(`MemoryMax`) so a leak restarts instead of OOMing you. Kernel
+differences don't matter here: everything talks to stable userspace
+APIs (BlueZ D-Bus, PipeWire, MPRIS), never to kernel internals.
+
 ## uninstalling
 
 ```sh

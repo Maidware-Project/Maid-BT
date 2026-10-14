@@ -8,6 +8,9 @@ Type=simple
 ExecStart=%h/.local/bin/maid-watcher run
 Restart=on-failure
 RestartSec=10
+# RAM guard: whole daemon idles around 30 MB; cap well above that so a
+# leak fails loud (restart) instead of eating a 4 GB machine.
+MemoryMax=150M
 # Hardened like the Maid BT units; daemon only needs BT + audio + netlink.
 NoNewPrivileges=true
 ProtectSystem=strict
