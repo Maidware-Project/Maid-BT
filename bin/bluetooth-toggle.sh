@@ -16,7 +16,8 @@
 
 set -o pipefail
 # audit trail: journal + ~/MaidLogs (visible folder, see install summary)
-_here_bt="$(cd "$(dirname "$0")" && pwd)"
+_here_bt="${0%/*}"
+case "$_here_bt" in "$0") _here_bt="." ;; esac
 for _alib in "$_here_bt/audit-lib.sh" "$HOME/.local/bin/audit-lib.sh" \
             "/usr/bin/audit-lib.sh"; do
   if [ -z "${AUDIT_LIB_LOADED:-}" ] && [ -f "$_alib" ]; then

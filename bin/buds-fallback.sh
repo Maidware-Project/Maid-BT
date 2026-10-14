@@ -11,7 +11,8 @@
 # This daemon is the safety net for KDE tray clicks (2s delay max).
 set -u
 
-_here_bf="$(cd "$(dirname "$0")" && pwd)"
+_here_bf="${0%/*}"
+case "$_here_bf" in "$0") _here_bf="." ;; esac
 for _alib in "$_here_bf/audit-lib.sh" "$HOME/.local/bin/audit-lib.sh" \
             "/usr/bin/audit-lib.sh"; do
   if [ -z "${AUDIT_LIB_LOADED:-}" ] && [ -f "$_alib" ]; then
