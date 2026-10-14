@@ -4,7 +4,7 @@
 
 - new optional `watcher/` daemon (`maid-watcher`, XDG-autostarted,
   init-independent): KDE Connect call handling (pause media, mute
-  Discord/Vesktop, restore on hangup + safety timeout), up to 3
+  Discord/Vesktop, restore on hangup + safety timeout), up to 2
   prioritized devices with backoff reconnect, BlueZ battery
   low/critical notifications, opt-in idle saver.
 - installer offers Maid Watcher autostart (default off), installs its

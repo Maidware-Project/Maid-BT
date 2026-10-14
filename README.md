@@ -36,7 +36,7 @@ what it does and how does it work?
 
 - **Maid Watcher** (`watcher/`, opt-in) — Python daemon that adds what the
   switcher doesn't do: KDE Connect **call handling** (pauses media, mutes
-  Discord/Vesktop mic+output, restores on hangup), **3-device priority**
+  Discord/Vesktop mic+output, restores on hangup), **2-device priority**
   reconnects with backoff, and **battery** low/critical notifications over
   BlueZ. Runs from XDG autostart, so it works with any init system.
   Combines safely with the warm-link flow: it only acts on real
@@ -49,7 +49,7 @@ what it does and how does it work?
 
 ```
 bin/            toggle + watcher + wrappers + intent server + notify menu
-watcher/        Maid Watcher daemon (calls, 3-device priority, battery)
+watcher/        Maid Watcher daemon (calls, 2-device priority, battery)
 systemd/        user units (fallback watcher, intent listener, menu)
 plasmoid/       KDE tray widget (PC / Phone / Off buttons + live state)
 desktop/        launcher icons (pin to panel/task manager)
