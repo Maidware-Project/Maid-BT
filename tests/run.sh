@@ -72,7 +72,9 @@ cat > /tmp/maidbt-g/stubs/bluetoothctl <<'EOF'
 #!/bin/bash
 case "$*" in
   *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
+  *Paired*) echo "Device AA:BB:CC:DD:EE:FF Test Headset" ;;
   *11:22:33:44:55:66*) echo "Connected: no" ;;
+  *AA:BB:CC:DD:EE:FF*) printf 'UUID: Audio Sink (0000110b-0000-1000-8000-00805f9b34fb)\n\tConnected: no\nAlias: Test Headset\n' ;;
   *info*) echo "Alias: Test Headset" ;;
   *connect*) echo "Failed to connect"; exit 1 ;;
   *) exit 1 ;;
@@ -103,7 +105,8 @@ HOME=/tmp/maidbt-g timeout 30 bash "$PKGDIR/bin/buds-fallback.sh" > /tmp/maidbt-
 DPID=$!
 sleep 3
 [ -f /tmp/maidbt-g/state/calls ] && fail "switched with nothing new"
-ok "silent on steady state"
+grep -q "priority connect attempt to headset AA:BB:CC:DD:EE:FF" /tmp/maidbt-g/daemon.log || fail "no priority sweep for paired headset"
+ok "silent on steady state + priority sweep attempted"
 echo "77 bluez_output.AA_BB_CC_DD_EE_FF.1" >> /tmp/maidbt-g/state/sinks
 sleep 5
 grep -q "set-default bluez_output.AA_BB_CC_DD_EE_FF.1" /tmp/maidbt-g/state/calls || fail "no auto-switch to new headset"
