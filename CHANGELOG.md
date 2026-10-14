@@ -1,5 +1,13 @@
 # changelog
 
+## laptop mode + reconnect safety
+
+- Maid Watcher detects laptop chassis over DMI and uses gentler radio
+  timing there (longer backoff, fewer attempts); `laptop.mode` forces
+  `auto`/`on`/`off`. `maid-watcher status` shows chassis + mode.
+- documented: reconnect "give up" is a safety valve (stops hammering
+  BlueZ/the phone, notifies, restarts on the next disconnect event).
+
 ## audio delay tuning
 
 - new opt-in `wireplumber/51-bt-no-suspend.conf`: kills the ~1s

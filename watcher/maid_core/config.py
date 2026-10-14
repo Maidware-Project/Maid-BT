@@ -9,7 +9,30 @@ DEFAULTS = {
               "max_call_mode_s": 300},
     "battery": {"warn_percent": 25, "critical_percent": 12, "poll_s": 120},
     "saver": {"enabled": False, "idle_minutes": 30},
+    "laptop": {"mode": "auto"},
 }
+
+# SMBIOS chassis types that run on battery at least sometimes.
+PORTABLE_CHASSIS = {8, 9, 10, 11, 14, 30, 31, 32}
+
+
+def chassis_type():
+    try:
+        with open("/sys/class/dmi/id/chassis_type") as f:
+            return int(f.read().strip().split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def laptop_mode(cfg):
+    """True when radio-gentle laptop behavior applies."""
+    mode = cfg.get("laptop", {}).get("mode", "auto")
+    if mode == "on":
+        return True
+    if mode == "off":
+        return False
+    ct = chassis_type()
+    return ct in PORTABLE_CHASSIS if ct is not None else False
 
 CONFIG_PATH = os.path.expanduser("~/.config/maid-watcher/config.json")
 

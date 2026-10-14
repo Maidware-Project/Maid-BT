@@ -35,6 +35,15 @@ class Daemon:
     def __init__(self, cfg):
         self.cfg = cfg
         self.devices = {d["mac"]: d for d in cfg["devices"]}
+        # Laptops run on battery: back the radio off (longer delays,
+        # fewer attempts) instead of hammering BlueZ.
+        self.laptop = config_mod.laptop_mode(cfg)
+        rc = dict(cfg["reconnect"])
+        if self.laptop:
+            rc["initial_delay_s"] = max(rc["initial_delay_s"], 10)
+            rc["max_delay_s"] = max(rc["max_delay_s"], 300)
+            rc["give_up_after"] = min(rc.get("give_up_after", 10), 6)
+        self.rc = rc
         self.session_bus = dbus.SessionBus()
         self.system_bus = dbus.SystemBus()
         self.monitor = DeviceMonitor(self.system_bus, self.on_conn_change)
@@ -64,7 +73,7 @@ class Daemon:
         else:
             notify.send("Earbuds disconnected", name)
             if dev.get("auto_reconnect", True):
-                delay = self.cfg["reconnect"]["initial_delay_s"]
+                delay = self.rc["initial_delay_s"]
                 self.retry[mac] = [0, time.time() + delay]
                 GLib.timeout_add_seconds(delay + 1, self._maybe_reconnect, mac)
 
@@ -94,8 +103,12 @@ class Daemon:
             GLib.timeout_add_seconds(5, self._maybe_reconnect, mac)
             return False
         fails, _ = self.retry[mac]
-        rc = self.cfg["reconnect"]
+        rc = self.rc
         if fails >= rc["give_up_after"]:
+            # Safety valve, not abandonment: stop hammering BlueZ (and the
+            # phone that may be holding the link) and tell the user to
+            # reconnect manually. Any new disconnect event restarts the
+            # cycle. Tune via reconnect.give_up_after / max_delay_s.
             notify.send("Giving up reconnect",
                         f"{self.devices.get(mac, {}).get('name', mac)} — "
                         "reconnect manually", "critical")
@@ -147,11 +160,18 @@ class Daemon:
     def run(self):
         poll_s = max(30, self.cfg["battery"]["poll_s"])
         GLib.timeout_add_seconds(poll_s, self.tick)
-        # initial: enforce profile on already-connected devices
+        # initial: enforce profile on already-connected devices,
+        # seed reconnect for managed devices that are already down
+        # (no disconnect event will ever fire for these).
         for mac, dev in self.devices.items():
-            if self.monitor.is_connected(mac) \
-                    and dev.get("prefer_profile") == "a2dp":
-                self._enforce_a2dp(mac)
+            if self.monitor.is_connected(mac):
+                if dev.get("prefer_profile") == "a2dp":
+                    self._enforce_a2dp(mac)
+            elif dev.get("auto_reconnect", True):
+                delay = self.rc["initial_delay_s"]
+                self.retry[mac] = [0, time.time() + delay]
+                GLib.timeout_add_seconds(delay + 1, self._maybe_reconnect,
+                                         mac)
         notify.send("Maid Watcher started",
                     f"watching {len(self.devices)} device(s)")
         GLib.MainLoop().run()
@@ -160,6 +180,9 @@ class Daemon:
 def cmd_status(cfg):
     bus = dbus.SystemBus()
     mon = DeviceMonitor(bus, lambda *a: None)
+    ct = config_mod.chassis_type()
+    print(f"chassis:   {ct} "
+          f"(laptop mode {'on' if config_mod.laptop_mode(cfg) else 'off'})")
     for dev in cfg["devices"]:
         mac = dev["mac"]
         mon.watch(mac)

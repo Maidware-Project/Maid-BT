@@ -28,5 +28,8 @@
   "saver": {
     "enabled": false,
     "idle_minutes": 30
+  },
+  "laptop": {
+    "mode": "auto"
   }
 }

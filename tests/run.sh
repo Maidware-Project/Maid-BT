@@ -29,6 +29,15 @@ ok "no personal data"
 
 echo "== watcher extras =="
 [ -x "$PKGDIR/watcher/maid-watcher" ] || fail "watcher not executable"
+python3 - <<EOF || fail "watcher unit checks"
+import sys
+sys.path.insert(0, "$PKGDIR/watcher")
+from maid_core.config import laptop_mode
+assert laptop_mode({"laptop": {"mode": "on"}}) is True
+assert laptop_mode({"laptop": {"mode": "off"}}) is False
+assert laptop_mode({}) is False
+print("watcher unit checks passed")
+EOF
 [ -f "$PKGDIR/watcher/maid-watcher.desktop" ] || fail "watcher desktop missing"
 [ -f "$PKGDIR/wireplumber/51-bt-no-suspend.conf" ] || fail "no-suspend conf missing"
 grep -q "session.suspend-timeout-seconds" \
