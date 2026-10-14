@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # Universal installer: Arch (pacman), Debian/Ubuntu (apt), Fedora (dnf),
 # openSUSE (zypper). Copies files (no symlinks — survives folder moves).
-# Usage: ./install.sh [--check] [--no-packages] [--uninstall]
+# Usage: ./install.sh [--check] [--no-packages] [--uninstall [--purge]]
 set -u
 PKGDIR="$(cd "$(dirname "$0")" && pwd)"
 BACKUP_TS="$(date +%Y%m%d-%H%M%S)"
-CHECK=0; NO_PKGS=0; UNINST=0
+CHECK=0; NO_PKGS=0; UNINST=0; PURGE=0
 for a in "$@"; do
   case "$a" in
     --check) CHECK=1 ;;
     --no-packages) NO_PKGS=1 ;;
     --uninstall) UNINST=1 ;;
-    *) echo "unknown option: $a (see: --check --no-packages --uninstall)" >&2; exit 2 ;;
+    --purge) PURGE=1 ;;
+    *) echo "unknown option: $a (see: --check --no-packages --uninstall [--purge])" >&2; exit 2 ;;
   esac
 done
 
@@ -31,7 +32,22 @@ if [ "$UNINST" = "1" ]; then
   rm -f "$HOME"/.local/share/applications/bt-earbuds-pc.desktop \
     "$HOME"/.local/share/applications/bt-earbuds-phone.desktop "$HOME"/.local/share/applications/bt-off.desktop \
     "$HOME"/.local/share/applications/bt-on.desktop
-  echo "==> uninstalled (kept: ~/.config/bluetooth-buds.conf ~/.config/bt-intent.token ~/.config/maid-watcher/)"
+  if [ "$PURGE" = "1" ]; then
+    rm -f "$HOME"/.config/bluetooth-buds.conf "$HOME"/.config/bt-intent.token
+    rm -rf "$HOME"/.config/maid-watcher
+    echo "==> uninstalled, all settings removed (--purge)"
+  elif [ -t 0 ]; then
+    printf 'Remove settings too (earbuds conf, phone token, watcher config)? [y/N]: '
+    read -r _ans
+    case "$_ans" in [Yy]*)
+      rm -f "$HOME"/.config/bluetooth-buds.conf "$HOME"/.config/bt-intent.token
+      rm -rf "$HOME"/.config/maid-watcher
+      echo "==> uninstalled, settings removed" ;;
+    *) echo "==> uninstalled (kept: ~/.config/bluetooth-buds.conf ~/.config/bt-intent.token ~/.config/maid-watcher/)" ;;
+    esac
+  else
+    echo "==> uninstalled (kept: ~/.config/bluetooth-buds.conf ~/.config/bt-intent.token ~/.config/maid-watcher/; rerun with --purge to remove)"
+  fi
   exit 0
 fi
 
