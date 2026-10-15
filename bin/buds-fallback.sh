@@ -283,14 +283,24 @@ current_profile() {
 
 enforce_quality() {
   # quality lock (opt-in): pin A2DP to LDAC after every switch.
-  # never touches HSP/HFP (call in progress); writes throttled by
-  # BATT_COOLDOWN like the battery-boost switches.
+  # HSP/HFP with a live BT mic means a call: hands off. HSP with a
+  # free mic means stuck (e.g. after a restart): rescue to LDAC.
+  # writes throttled by BATT_COOLDOWN like the battery-boost switches.
   [ "${QUALITY_LOCK:-0}" = "1" ] || return 0
   local cur card
   cur=$(current_profile)
   case "$cur" in
-    headset*|handsfree*) return 0 ;;
     "a2dp-sink"|"") return 0 ;;
+    headset*|handsfree*)
+      bt_mic_in_use && return 0
+      card="bluez_card.${BUDS_MAC//:/_}"
+      if [ $((now - last_codec_switch)) -ge "$BATT_COOLDOWN" ]; then
+        if pactl set-card-profile "$card" a2dp-sink 2>/dev/null; then
+          last_codec_switch=$now
+          log "quality lock rescued HSP -> LDAC (mic free)"
+        fi
+      fi
+      return 0 ;;
     a2dp*)
       card="bluez_card.${BUDS_MAC//:/_}"
       if [ $((now - last_codec_switch)) -ge "$BATT_COOLDOWN" ]; then
@@ -300,6 +310,21 @@ enforce_quality() {
         fi
       fi ;;
   esac
+}
+
+bt_mic_in_use() {
+  # true when any recording stream captures from a bluetooth mic.
+  # herestring keeps the loop in this shell so return works.
+  local idxs sidx sname srcs
+  idxs=$(pactl list source-outputs 2>/dev/null | sed -n 's/^\tSource: //p')
+  [ -n "$idxs" ] || return 1
+  srcs=$(pactl list short sources 2>/dev/null) || return 1
+  while read -r sidx; do
+    [ -n "$sidx" ] || continue
+    sname=$(echo "$srcs" | awk -v i="$sidx" '$1==i {print $2}')
+    case "$sname" in *bluez*) return 0 ;; esac
+  done <<< "$idxs"
+  return 1
 }
 
 refresh_audio_devices() {
