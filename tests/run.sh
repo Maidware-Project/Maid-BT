@@ -52,6 +52,15 @@ grep -q "session.suspend-timeout-seconds" \
   "$PKGDIR/wireplumber/51-bt-no-suspend.conf" || fail "suspend knob missing"
 grep -q "bluez_output" \
   "$PKGDIR/wireplumber/51-bt-no-suspend.conf" || fail "bluez match missing"
+[ -f "$PKGDIR/wireplumber/52-bt-max-quality.conf" ] || fail "max-quality conf missing"
+grep -q "bluez5.codecs" \
+  "$PKGDIR/wireplumber/52-bt-max-quality.conf" || fail "codec ladder missing"
+grep -q "bluez5.enable-sbc-xq" \
+  "$PKGDIR/wireplumber/52-bt-max-quality.conf" || fail "sbc-xq knob missing"
+grep -q "QUALITY_LOCK" "$PKGDIR/bin/buds-fallback.sh" || fail "quality lock missing (fallback)"
+grep -q "QUALITY_LOCK" "$PKGDIR/bin/bluetooth-toggle.sh" || fail "quality lock missing (toggle)"
+grep -q "QUALITY_LOCK" "$PKGDIR/bluetooth-buds.conf.example" || fail "quality lock undocumented"
+grep -q "52-bt-max-quality" "$PKGDIR/install.sh" || fail "installer skips max-quality"
 ok "watcher extras"
 grep -q "fallback_grab" "$PKGDIR/watcher/config.example.json" || fail "grab config missing"
 grep -q "phones_up" "$PKGDIR/watcher/maid-watcher" || fail "grab logic missing"
@@ -255,6 +264,40 @@ wait 2>/dev/null || true
 rm -rf /tmp/maidbt-g
 export PATH=$(echo "$PATH" | sed 's|/tmp/maidbt-g/stubs:||')
 unset STUBSTATE
+
+echo "== quality lock pins LDAC =="
+rm -rf /tmp/maidbt-q; mkdir -p /tmp/maidbt-q/stubs /tmp/maidbt-q/.config /tmp/maidbt-q/state
+cat > /tmp/maidbt-q/stubs/bluetoothctl <<'EOF'
+#!/bin/bash
+case "$*" in
+  *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
+  *11:22:33:44:55:66*) printf 'Device 11:22:33:44:55:66 Test Buds\n\tConnected: yes\n' ;;
+  *) exit 1 ;;
+esac
+exit 0
+EOF
+cat > /tmp/maidbt-q/stubs/pactl <<'EOF'
+#!/bin/bash
+S="${STUBSTATE:-/tmp}"
+case "$*" in
+  *short*cards*) echo "99 bluez_card.11_22_33_44_55_66" ;;
+  *list*cards*) printf 'Card #99\n\tName: bluez_card.11_22_33_44_55_66\n\tActive Profile: a2dp-sink-sbc\n' ;;
+  *set-card-profile*) echo "profile $2 -> $3" >> "$S/calls" ;;
+  *short*sinks*) echo "77 bluez_output.11_22_33_44_55_66.1" ;;
+  *short*sink-inputs*) : ;;
+  *info*) echo "Default Sink: bluez_output.11_22_33_44_55_66.1" ;;
+  *set-default-sink*|*suspend-sink*|*move-sink-input*) : ;;
+esac
+exit 0
+EOF
+chmod +x /tmp/maidbt-q/stubs/*
+printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\nQUALITY_LOCK=1\n' > /tmp/maidbt-q/.config/bluetooth-buds.conf
+STUBSTATE=/tmp/maidbt-q/state PATH="/tmp/maidbt-q/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-q \
+  HOME=/tmp/maidbt-q timeout 6 bash "$PKGDIR/bin/buds-fallback.sh" > /tmp/maidbt-q/daemon.log 2>&1 || true
+grep -q "quality lock -> LDAC (was a2dp-sink-sbc)" /tmp/maidbt-q/daemon.log || fail "quality lock did not fire"
+grep -q "profile bluez_card.11_22_33_44_55_66 -> a2dp-sink" /tmp/maidbt-q/state/calls || fail "LDAC profile not set"
+ok "quality lock pins LDAC"
+rm -rf /tmp/maidbt-q
 
 echo "== cleanup =="
 rm -rf /tmp/maidbt-t

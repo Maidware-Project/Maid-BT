@@ -8,3 +8,4 @@ BUDS_MAC="AA:BB:CC:DD:EE:FF"
 FALLBACK_SINK=""
 # Opt out of the app pause/resume cycle with: APP_CYCLE=0
 # Opt out of auto-connecting other paired headsets with: AUDIO_PRIORITY=0
+# Pin LDAC after every switch (needs LDAC headset) with: QUALITY_LOCK=1

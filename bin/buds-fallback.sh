@@ -56,6 +56,8 @@ BATTERY_BOOST=0       # opt-in: match A2DP codec to buds battery (saves power).
                       # WARNING: any transport teardown can segfault older
                       # plasmashell (QAudioContext). Leave 0 unless your
                       # desktop survives profile switches (test one first).
+QUALITY_LOCK=0        # opt-in: pin A2DP to LDAC (a2dp-sink) after every
+                      # switch. costs earbud battery; needs LDAC headset.
 BATTERY_POLL=60       # seconds between battery checks
 BATT_COOLDOWN=180     # min seconds between codec switches (anti-flap)
 POWER_OFF_ON_LOST=0   # 0 = seamless mode: radio stays on, buds reconnect on case-open
@@ -215,6 +217,7 @@ switch_to_buds_nowait() {
     pactl list short sink-inputs 2>/dev/null | awk '{print $1}' | while read -r sid; do
       pactl move-sink-input "$sid" "$sink" 2>/dev/null || true
     done
+    enforce_quality
     log "default -> $sink"
   else
     log "connected but no bluez sink yet"
@@ -276,6 +279,27 @@ codec_for() {
 current_profile() {
   local card="bluez_card.${BUDS_MAC//:/_}"
   pactl list cards 2>/dev/null | awk -v c="$card" 'index($0, c) {f=1} f && /Active Profile:/ {sub(/.*Active Profile: /, ""); print; exit}'
+}
+
+enforce_quality() {
+  # quality lock (opt-in): pin A2DP to LDAC after every switch.
+  # never touches HSP/HFP (call in progress); writes throttled by
+  # BATT_COOLDOWN like the battery-boost switches.
+  [ "${QUALITY_LOCK:-0}" = "1" ] || return 0
+  local cur card
+  cur=$(current_profile)
+  case "$cur" in
+    headset*|handsfree*) return 0 ;;
+    "a2dp-sink"|"") return 0 ;;
+    a2dp*)
+      card="bluez_card.${BUDS_MAC//:/_}"
+      if [ $((now - last_codec_switch)) -ge "$BATT_COOLDOWN" ]; then
+        if pactl set-card-profile "$card" a2dp-sink 2>/dev/null; then
+          last_codec_switch=$now
+          log "quality lock -> LDAC (was $cur)"
+        fi
+      fi ;;
+  esac
 }
 
 refresh_audio_devices() {
@@ -437,6 +461,7 @@ while true; do
       log "buds back, re-armed"
       did_fallback=0
     fi
+    enforce_quality
     # battery boost (opt-in): match codec to buds battery, never during calls
     if [ "$BATTERY_BOOST" = "1" ] && [ $((now - last_batt_check)) -ge "$BATTERY_POLL" ]; then
       last_batt_check=$now

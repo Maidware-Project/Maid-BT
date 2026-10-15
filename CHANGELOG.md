@@ -1,5 +1,14 @@
 # changelog
 
+## max-quality audio
+
+- opt-in `52-bt-max-quality.conf` (installer offers it): pins the A2DP
+  codec ladder LDAC > AAC > SBC-XQ > SBC and unlocks high-bitpool
+  SBC-XQ, so fallbacks land closer to LDAC than stock SBC.
+- opt-in `QUALITY_LOCK=1` in `bluetooth-buds.conf`: the switcher and
+  the fallback daemon pin LDAC (`a2dp-sink`) after every switch and
+  restore it on mid-session downgrades. never touches HSP/HFP calls.
+
 ## installer fixes
 
 - backups only on real change: the compare now runs against the

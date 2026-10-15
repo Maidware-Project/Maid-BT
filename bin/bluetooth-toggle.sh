@@ -37,9 +37,11 @@ ACTION="${1:-toggle}"
 BUDS_MAC="AA:BB:CC:DD:EE:FF"
 FALLBACK_SINK=""
 APP_CYCLE=1
+QUALITY_LOCK=0
 # Fill these via ~/.config/bluetooth-buds.conf (install.sh prompts for them):
 #   BUDS_MAC="..." and FALLBACK_SINK="..."
 # Opt out of the app pause/resume cycle with: APP_CYCLE=0
+# Pin LDAC after every switch (needs LDAC headset) with: QUALITY_LOCK=1
 [ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
 command -v validate_conf >/dev/null 2>&1 && validate_conf
 CONNECT_TIMEOUT=20   # seconds to retry bluetoothctl connect
@@ -169,6 +171,7 @@ switch_to_buds() {
       echo "Default sink -> $sink" || echo "warn: set-default-sink $sink failed"
     pactl suspend-sink "$sink" 0 2>/dev/null || true
     move_all_to "$sink"
+    enforce_quality
     return 0
   else
     echo "warn: connected but no bluez sink appeared within ${SINK_WAIT}s (PipeWire/bluez delay?)"
@@ -176,10 +179,31 @@ switch_to_buds() {
   fi
 }
 
+current_profile() {
+  local card="bluez_card.${BUDS_MAC//:/_}"
+  pactl list cards 2>/dev/null | awk -v c="$card" 'index($0, c) {f=1} f && /Active Profile:/ {sub(/.*Active Profile: /, ""); print; exit}'
+}
+
+enforce_quality() {
+  # quality lock (opt-in): pin A2DP to LDAC. manual run = explicit
+  # intent, so no cooldown. never touches HSP/HFP (call in progress).
+  [ "${QUALITY_LOCK:-0}" = "1" ] || return 0
+  local cur card
+  cur=$(current_profile)
+  case "$cur" in
+    headset*|handsfree*) return 0 ;;
+    "a2dp-sink"|"") return 0 ;;
+    a2dp*)
+      card="bluez_card.${BUDS_MAC//:/_}"
+      if pactl set-card-profile "$card" a2dp-sink 2>/dev/null; then
+        echo "Quality lock -> LDAC (was $cur)"
+      fi ;;
+  esac
+}
+
 connect_buds() {
   # make sure future power-ons want this device
   bluetoothctl trust "$BUDS_MAC" >/dev/null 2>&1 || true
-
   if is_buds_connected; then
     echo "Already connected to $BUDS_MAC."
     return 0

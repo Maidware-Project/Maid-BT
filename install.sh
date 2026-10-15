@@ -47,6 +47,7 @@ if [ "$UNINST" = "1" ]; then
   rm -f "$HOME"/.config/autostart/maid-watcher.desktop
   rm -f "$SYSDDIR"/maid-watcher.service
   rm -f "$HOME"/.config/wireplumber/wireplumber.conf.d/51-bt-no-suspend.conf
+  rm -f "$HOME"/.config/wireplumber/wireplumber.conf.d/52-bt-max-quality.conf
   rm -f "$SYSDDIR"/buds-fallback.service "$SYSDDIR"/bt-intent.service \
     "$SYSDDIR"/bt-menu.service
   rm -rf "$SHAREDIR/plasma/plasmoids/com.local.btearbuds"
@@ -335,6 +336,26 @@ if [ "$WARM_ON" = "1" ]; then
   say "warm-link on — restart wireplumber to apply: systemctl --user restart wireplumber"
 else
   say "warm-link audio off"
+fi
+# Max-quality audio: pin codec ladder LDAC > AAC > SBC-XQ > SBC and
+# unlock high-bitpool SBC-XQ. Needs LDAC/AAC headset; harmless
+# otherwise. Pair with QUALITY_LOCK=1 in ~/.config/bluetooth-buds.conf
+# to enforce LDAC after every switch. Opt-in, off by default.
+QLOCK_ON=0
+if [ -t 0 ]; then
+  printf 'Prefer best codec (LDAC first, SBC-XQ unlocked, more earbud drain)? [y/N]: '
+  read -r _wans3
+  case "$_wans3" in [Yy]*) QLOCK_ON=1 ;; esac
+else
+  say "max-quality audio skipped (non-interactive; copy wireplumber/52-bt-max-quality.conf to ~/.config/wireplumber/wireplumber.conf.d/ to enable, then restart wireplumber)"
+fi
+if [ "$QLOCK_ON" = "1" ]; then
+  mkdir -p "$HOME/.config/wireplumber/wireplumber.conf.d"
+  copy_one "$PKGDIR/wireplumber/52-bt-max-quality.conf" \
+    "$HOME/.config/wireplumber/wireplumber.conf.d/52-bt-max-quality.conf"
+  say "max-quality on — restart wireplumber to apply: systemctl --user restart wireplumber"
+else
+  say "max-quality audio off"
 fi
 command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 
