@@ -361,6 +361,41 @@ grep -q "rescued HSP" /tmp/maidbt-h/daemon.log && fail "rescued during a call!"
 ok "hsp rescue needs free mic"
 rm -rf /tmp/maidbt-h
 
+echo "== multipoint release parks all day =="
+rm -rf /tmp/maidbt-m; mkdir -p /tmp/maidbt-m/stubs /tmp/maidbt-m/.config
+cat > /tmp/maidbt-m/stubs/bluetoothctl <<'EOF'
+#!/bin/bash
+case "$*" in
+  *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
+  *11:22:33:44:55:66*) printf 'Device 11:22:33:44:55:66 Test Buds\n\tConnected: yes\n' ;;
+  *) exit 1 ;;
+esac
+exit 0
+EOF
+cat > /tmp/maidbt-m/stubs/pactl <<'EOF'
+#!/bin/bash
+case "$*" in
+  *info*) echo "Default Sink: testsink" ;;
+  *short*sinks*) echo "77 bluez_output.11_22_33_44_55_66.1" ;;
+esac
+exit 0
+EOF
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-m/stubs/systemctl
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-m/stubs/notify-send
+printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-m/stubs/kdeconnect-cli
+chmod +x /tmp/maidbt-m/stubs/*
+printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\nMULTIPOINT=1\n' > /tmp/maidbt-m/.config/bluetooth-buds.conf
+PATH="/tmp/maidbt-m/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-m HOME=/tmp/maidbt-m \
+  bash "$PKGDIR/bin/bluetooth-toggle.sh" release >/dev/null 2>&1
+[ "$(awk '{print $2}' /tmp/maidbt-m/bt-hands-off 2>/dev/null)" = "28800" ] || fail "multipoint release did not park 8h"
+printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-m/.config/bluetooth-buds.conf
+rm -f /tmp/maidbt-m/bt-hands-off
+PATH="/tmp/maidbt-m/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-m HOME=/tmp/maidbt-m \
+  bash "$PKGDIR/bin/bluetooth-toggle.sh" release >/dev/null 2>&1
+[ "$(awk '{print NF}' /tmp/maidbt-m/bt-hands-off 2>/dev/null)" = "1" ] || fail "single-link release lost its short window"
+ok "multipoint release parks all day"
+rm -rf /tmp/maidbt-m
+
 echo "== cleanup =="
 rm -rf /tmp/maidbt-t
 ok "cleanup"

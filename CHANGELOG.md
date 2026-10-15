@@ -1,5 +1,14 @@
 # changelog
 
+## dual-connection buds
+
+- opt-in `MULTIPOINT=1` in `bluetooth-buds.conf`: `release` (and the
+  phone intents behind it) parks the PC for 8h instead of 20 min, so
+  dual-link buds share phone+PC all day without the daemon fighting
+  the phone. explicit `on` cancels anytime. single-link behavior
+  unchanged. (Bluetooth can't see the phone-side link, so this is a
+  tell-it-once flag, not auto-detection.)
+
 ## max-quality audio
 
 - opt-in `52-bt-max-quality.conf` (installer offers it): pins the A2DP
