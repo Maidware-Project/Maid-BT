@@ -182,7 +182,7 @@ warm-link audio config).
 
 ## License
 
-MIT — see LICENSE.
+MIT — see LICENSE. a Maidware Project: forkable open-source tools for linux users.
 
 ## works with the Maid suite
 
