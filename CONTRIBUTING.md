@@ -34,3 +34,6 @@ AI assistants alike). maintained by Maidware Project.
 use the bug report template, paste the diagnostics it asks for, trim
 personal data before posting publicly. "it doesn't work" with nothing
 attached will be closed with a pointer back here.
+
+behavior: CODE_OF_CONDUCT.md (technical scope only, no politics,
+stay neutral).
