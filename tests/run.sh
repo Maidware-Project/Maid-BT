@@ -310,6 +310,57 @@ grep -q "profile bluez_card.11_22_33_44_55_66 -> a2dp-sink" /tmp/maidbt-q/state/
 ok "quality lock pins LDAC"
 rm -rf /tmp/maidbt-q
 
+echo "== hsp rescue needs free mic =="
+rm -rf /tmp/maidbt-h; mkdir -p /tmp/maidbt-h/stubs /tmp/maidbt-h/.config /tmp/maidbt-h/state
+cat > /tmp/maidbt-h/stubs/bluetoothctl <<'EOF'
+#!/bin/bash
+case "$*" in
+  *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
+  *11:22:33:44:55:66*) printf 'Device 11:22:33:44:55:66 Test Buds\n\tConnected: yes\n' ;;
+  *) exit 1 ;;
+esac
+exit 0
+EOF
+cat > /tmp/maidbt-h/stubs/pactl <<'EOF'
+#!/bin/bash
+S="${STUBSTATE:-/tmp}"
+case "$*" in
+  *short*cards*) echo "99 bluez_card.11_22_33_44_55_66" ;;
+  *list*cards*) printf 'Card #99\n\tName: bluez_card.11_22_33_44_55_66\n\tActive Profile: headset-head-unit\n' ;;
+  *set-card-profile*) echo "profile $2 -> $3" >> "$S/calls" ;;
+  *short*sinks*) echo "77 bluez_output.11_22_33_44_55_66.1" ;;
+  *short*sink-inputs*) : ;;
+  *short*sources*) echo "3 bluez_input.11_22_33_44_55_66.0" ;;
+  *source-outputs*)
+    if [ "${MIC_BUSY:-0}" = "1" ]; then
+      printf 'Source Output #7\n\tSource: 3\n\tProperties:\n\tapplication.name = "TestCall"\n'
+    fi
+    ;;
+  *info*) echo "Default Sink: bluez_output.11_22_33_44_55_66.1" ;;
+  *set-default-sink*|*suspend-sink*|*move-sink-input*) : ;;
+esac
+exit 0
+EOF
+chmod +x /tmp/maidbt-h/stubs/*
+# silence cross-boundary side effects: no real phone pings, no real popups.
+printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-h/stubs/kdeconnect-cli
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-h/stubs/notify-send
+chmod +x /tmp/maidbt-h/stubs/*
+printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\nQUALITY_LOCK=1\n' > /tmp/maidbt-h/.config/bluetooth-buds.conf
+# free mic: stuck HSP gets rescued to LDAC
+MIC_BUSY=0 STUBSTATE=/tmp/maidbt-h/state PATH="/tmp/maidbt-h/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-h \
+  HOME=/tmp/maidbt-h timeout 6 bash "$PKGDIR/bin/buds-fallback.sh" > /tmp/maidbt-h/daemon.log 2>&1 || true
+grep -q "rescued HSP -> LDAC (mic free)" /tmp/maidbt-h/daemon.log || fail "hsp rescue did not fire"
+grep -q "profile bluez_card.11_22_33_44_55_66 -> a2dp-sink" /tmp/maidbt-h/state/calls || fail "rescue did not set LDAC"
+# busy mic: a real call means hands off, no rescue, no profile write
+rm -f /tmp/maidbt-h/state/calls /tmp/maidbt-h/daemon.log
+MIC_BUSY=1 STUBSTATE=/tmp/maidbt-h/state PATH="/tmp/maidbt-h/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-h \
+  HOME=/tmp/maidbt-h timeout 6 bash "$PKGDIR/bin/buds-fallback.sh" > /tmp/maidbt-h/daemon.log 2>&1 || true
+grep -q "rescued HSP" /tmp/maidbt-h/daemon.log && fail "rescued during a call!"
+[ -s /tmp/maidbt-h/state/calls ] && fail "profile written during a call!"
+ok "hsp rescue needs free mic"
+rm -rf /tmp/maidbt-h
+
 echo "== cleanup =="
 rm -rf /tmp/maidbt-t
 ok "cleanup"

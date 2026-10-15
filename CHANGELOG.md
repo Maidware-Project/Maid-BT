@@ -8,6 +8,8 @@
 - opt-in `QUALITY_LOCK=1` in `bluetooth-buds.conf`: the switcher and
   the fallback daemon pin LDAC (`a2dp-sink`) after every switch and
   restore it on mid-session downgrades. never touches HSP/HFP calls.
+- the lock also rescues HSP stuck states with a free mic (post-restart
+  silence): switches to LDAC only when no app captures the BT mic.
 - fixed: `BATTERY_BOOST=1` from the conf is honored again (the default
   assignment used to clobber it, so the opt-in never took effect).
 
