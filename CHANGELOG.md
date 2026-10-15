@@ -1,5 +1,16 @@
 # changelog
 
+## intent listener audit
+
+- full auth review of the port 8899 listener: token required on every
+  endpoint (header preferred, query legacy), constant-time compare,
+  fail-closed with no token file, fixed action allowlist, no shell,
+  no query in logs, sandboxed unit. added a 60 s per-connection
+  socket cap and a `MAID_INTENT_PORT` override so the suite tests
+  auth live (bad token 403, both token paths, unknown 404, no leaks).
+- installer only mints the token when missing, so a running daemon
+  never goes stale.
+
 ## dual-connection buds
 
 - opt-in `MULTIPOINT=1` in `bluetooth-buds.conf`: `release` (and the

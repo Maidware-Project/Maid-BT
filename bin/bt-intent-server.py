@@ -13,7 +13,7 @@ import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-PORT = 8899
+PORT = int(os.environ.get("MAID_INTENT_PORT", "8899"))
 HOME = os.path.expanduser("~")
 TOGGLE = os.path.join(HOME, ".local/bin/bluetooth-toggle.sh")
 HANDS = os.path.join("/run/user", str(os.getuid()), "bt-hands-off")
@@ -56,6 +56,9 @@ def clear_handsoff():
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "bt-intent/1.0"
+    timeout = 60  # per-connection socket cap: trickled requests can't
+    # hold a thread forever (plus token gate + tiny handlers + expiry
+    # via the phone flow itself; LAN-only by design, see README).
 
     def log_message(self, fmt, *args):  # journal-friendly single lines
         # NEVER log the query string: legacy ?token= auth would otherwise
