@@ -34,6 +34,8 @@ AUDIO_PRIORITY=1
 #   BUDS_MAC="..." and FALLBACK_SINK="..."
 # Opt out of the app pause/resume cycle with: APP_CYCLE=0
 # Opt out of auto-connecting other paired headsets with: AUDIO_PRIORITY=0
+# Pin LDAC after every switch (needs LDAC headset) with: QUALITY_LOCK=1
+# Match codec to battery to save power with: BATTERY_BOOST=1
 [ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
 command -v validate_conf >/dev/null 2>&1 && validate_conf
 # Refuse to run unconfigured (placeholder MAC) instead of retry-spamming.
@@ -51,13 +53,11 @@ FAIL_BACKOFF=30       # quiet period after a failed connect (anti-flap)
 FLAP_WINDOW=15        # a connection dying this fast counts as a flap
 FLAP_BACKOFF=120      # quiet period after a flap (anti-flap)
 AUDIO_REFRESH=120     # seconds between paired-device rescans
-BATTERY_BOOST=0       # opt-in: match A2DP codec to buds battery (saves power).
-# Opt out of the app pause/resume cycle with APP_CYCLE=0 in the conf.
-                      # WARNING: any transport teardown can segfault older
-                      # plasmashell (QAudioContext). Leave 0 unless your
-                      # desktop survives profile switches (test one first).
-QUALITY_LOCK=0        # opt-in: pin A2DP to LDAC (a2dp-sink) after every
-                      # switch. costs earbud battery; needs LDAC headset.
+# opt-in knobs below keep conf values when set (defaults apply first,
+# so the conf sourced above wins). BATTERY_BOOST was silently stuck
+# off before this: the plain assignment clobbered the conf value.
+: "${BATTERY_BOOST:=0}"      # match A2DP codec to buds battery (saves power)
+: "${QUALITY_LOCK:=0}"       # pin A2DP to LDAC after every switch
 BATTERY_POLL=60       # seconds between battery checks
 BATT_COOLDOWN=180     # min seconds between codec switches (anti-flap)
 POWER_OFF_ON_LOST=0   # 0 = seamless mode: radio stays on, buds reconnect on case-open
