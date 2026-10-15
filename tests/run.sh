@@ -396,6 +396,24 @@ PATH="/tmp/maidbt-m/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-m HOME=/tmp/maidbt-
 ok "multipoint release parks all day"
 rm -rf /tmp/maidbt-m
 
+echo "== intent server auth =="
+rm -rf /tmp/maidbt-i; mkdir -p /tmp/maidbt-i/.config
+python3 -c "import secrets; print(secrets.token_urlsafe(24))" > /tmp/maidbt-i/.config/bt-intent.token
+chmod 600 /tmp/maidbt-i/.config/bt-intent.token
+HOME=/tmp/maidbt-i MAID_INTENT_PORT=8891 python3 "$PKGDIR/bin/bt-intent-server.py" > /tmp/maidbt-i/srv.log 2>&1 &
+SRV=$!
+sleep 2
+TOK=$(cat /tmp/maidbt-i/.config/bt-intent.token)
+[ "$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8891/health?token=wrong")" = "403" ] || fail "bad token not rejected"
+[ "$(curl -s "http://127.0.0.1:8891/health?token=$TOK")" = "ok" ] || fail "good query token rejected"
+[ "$(curl -s -H "X-Token: $TOK" "http://127.0.0.1:8891/health")" = "ok" ] || fail "good header token rejected"
+[ "$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8891/nope?token=$TOK")" = "404" ] || fail "unknown path not 404"
+kill "$SRV" 2>/dev/null || true
+wait "$SRV" 2>/dev/null || true
+grep -q "$TOK" /tmp/maidbt-i/srv.log && fail "token leaked into logs"
+ok "intent server auth"
+rm -rf /tmp/maidbt-i
+
 echo "== cleanup =="
 rm -rf /tmp/maidbt-t
 ok "cleanup"
