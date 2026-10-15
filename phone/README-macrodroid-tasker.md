@@ -42,17 +42,17 @@ battery killers are common, not just samsung: xiaomi/redmi/poco
 (autostart + No restrictions), huawei/honor (manual app launch),
 oneplus/oppo/realme (don't optimize + background activity on),
 vivo/iqoo (autostart + background power). pixels/motorola/nothing are
-usually fine stock. exact menus move every update — dontkillmyapps.com
+usually fine stock. exact menus move every update - dontkillmyapps.com
 has per-brand steps.
 
 Tasker (paid, no ads): same thing with State `BT Connected` + Event
 `UI → Notification` for media, State `Phone → Call` / Event `Phone Idle`
 for calls. needs notification access + unrestricted battery (same
-killers list as above: samsung, xiaomi, huawei, oneplus, oppo, vivo —
+killers list as above: samsung, xiaomi, huawei, oneplus, oppo, vivo -
 exempt the app or it dies in background).
 
 ## notes
 
-token rides plain HTTP on your own LAN — fine at home, never expose
+token rides plain HTTP on your own LAN - fine at home, never expose
 8899 past your router. phone stuff is off by default at install; core
 switching never touches the network.

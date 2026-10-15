@@ -18,12 +18,12 @@ maid_audit() {
 validate_conf() {
   case "${BUDS_MAC:-}" in
     ""|"AA:BB:CC:DD:EE:FF")
-      echo "earbuds not configured yet — run install.sh first" >&2; exit 2 ;;
+      echo "earbuds not configured yet - run install.sh first" >&2; exit 2 ;;
   esac
   [[ "$BUDS_MAC" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]] || {
-    echo "bad BUDS_MAC in bluetooth-buds.conf — fix it or rerun install.sh" >&2; exit 2; }
+    echo "bad BUDS_MAC in bluetooth-buds.conf - fix it or rerun install.sh" >&2; exit 2; }
   [[ "${FALLBACK_SINK:-}" =~ ^[A-Za-z0-9_.,:/+=@-]+$ ]] || {
-    echo "bad FALLBACK_SINK in bluetooth-buds.conf — fix it or rerun install.sh" >&2; exit 2; }
+    echo "bad FALLBACK_SINK in bluetooth-buds.conf - fix it or rerun install.sh" >&2; exit 2; }
 }
 
 # need <cmd> [hint]: hard requirement with a clean error (no traceback,

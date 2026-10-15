@@ -130,7 +130,7 @@ bt_alias() {
 }
 
 on_new_bluez_sink() {
-  # any freshly appeared headset (not ours — owned by the buds path):
+  # any freshly appeared headset (not ours - owned by the buds path):
   # route audio to it once, unless hands-off asked us to stand down
   local sink="$1" mac alias
   mac=$(echo "$sink" | grep -oE '[0-9A-Fa-f]{2}(_[0-9A-Fa-f]{2}){5}' | head -n 1 | tr '_' ':')
@@ -162,7 +162,7 @@ other_device_connected() { bluetoothctl devices Connected 2>/dev/null | grep -vq
 bluez_sink() { pactl list short sinks 2>/dev/null | grep -i "bluez" | awk '{print $2}' | head -n 1; }
 
 bluez_sink_id() {
-  # short sink-inputs list sinks by numeric id, not name — resolve it
+  # short sink-inputs list sinks by numeric id, not name - resolve it
   pactl list sinks 2>/dev/null | awk '/^Sink #/{gsub(/#/,"",$2); id=$2} /Name: / && /bluez/ {print id; exit}'
 }
 
@@ -429,7 +429,7 @@ while true; do
     if hands_off; then
       log "hands-off active, skipping auto-connect"
     elif ! manual_recent; then
-      notify "Bluetooth on" "Adapter powered on — connecting to earbuds…" normal bluetooth
+      notify "Bluetooth on" "Adapter powered on - connecting to earbuds…" normal bluetooth
     fi
   fi
 
@@ -442,7 +442,7 @@ while true; do
       "$RFKILL_BIN" block bluetooth 2>/dev/null || true
     fi
     if ! manual_recent; then
-      notify "Bluetooth off" "Bluetooth is off — audio back on fallback sink." normal bluetooth-disabled
+      notify "Bluetooth off" "Bluetooth is off - audio back on fallback sink." normal bluetooth-disabled
       ping_phone "PC Bluetooth off"
     fi
     did_fallback=1
@@ -504,7 +504,7 @@ while true; do
               if pactl set-card-profile "$card" "$want" 2>/dev/null; then
                 last_codec_switch=$now
                 log "battery ${batt}% -> codec $want"
-                notify "Battery saver" "Earbuds at ${batt}% — codec $want." normal bluetooth
+                notify "Battery saver" "Earbuds at ${batt}% - codec $want." normal bluetooth
               else
                 log "codec switch to $want failed"
               fi
@@ -583,7 +583,7 @@ while true; do
             # power-off transition notify happens next loop; send combined one now
             # if manual didn't just handle it (avoids double when manual off ran)
             if ! manual_recent; then
-              notify "Bluetooth off" "Earbuds gone — audio back on fallback sink." normal bluetooth-disabled
+              notify "Bluetooth off" "Earbuds gone - audio back on fallback sink." normal bluetooth-disabled
               ping_phone "Earbuds disconnected from PC"
             fi
           fi

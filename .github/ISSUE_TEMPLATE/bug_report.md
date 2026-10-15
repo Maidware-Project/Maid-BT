@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Something broke — tell it plainly, paste the diagnostics
+about: Something broke - tell it plainly, paste the diagnostics
 title: "[bug] "
 ---
 
@@ -16,7 +16,7 @@ title: "[bug] "
 - Distro + Plasma version:
 - Earbuds model:
 
-## Diagnostics (paste this — trim your MAC if posting publicly)
+## Diagnostics (paste this - trim your MAC if posting publicly)
 
 ```
 maid-watcher bugreport
