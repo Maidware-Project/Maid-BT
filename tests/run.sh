@@ -193,7 +193,10 @@ case "$*" in
   *) exit 1 ;;
 esac
 EOF
-chmod +x /tmp/maidbt-t/stubs/bluetoothctl
+# silence cross-boundary side effects: no real phone pings, no real popups.
+printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-t/stubs/kdeconnect-cli
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-t/stubs/notify-send
+chmod +x /tmp/maidbt-t/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-t/.config/bluetooth-buds.conf
 export PATH="/tmp/maidbt-t/stubs:$PATH"
 date +%s > /tmp/maidbt-t/bt-hands-off
@@ -235,6 +238,10 @@ case "$*" in
 esac
 exit 0
 EOF
+chmod +x /tmp/maidbt-g/stubs/*
+# silence cross-boundary side effects: no real phone pings, no real popups.
+printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-g/stubs/kdeconnect-cli
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-g/stubs/notify-send
 chmod +x /tmp/maidbt-g/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="testsink-fallback"\n' > /tmp/maidbt-g/.config/bluetooth-buds.conf
 export STUBSTATE=/tmp/maidbt-g/state
@@ -290,6 +297,10 @@ case "$*" in
 esac
 exit 0
 EOF
+chmod +x /tmp/maidbt-q/stubs/*
+# silence cross-boundary side effects: no real phone pings, no real popups.
+printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-q/stubs/kdeconnect-cli
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-q/stubs/notify-send
 chmod +x /tmp/maidbt-q/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\nQUALITY_LOCK=1\n' > /tmp/maidbt-q/.config/bluetooth-buds.conf
 STUBSTATE=/tmp/maidbt-q/state PATH="/tmp/maidbt-q/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-q \
