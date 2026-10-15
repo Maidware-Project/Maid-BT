@@ -188,4 +188,4 @@ and the bundled Maid Watcher shares your KDE Connect phone pairing with Maidshar
 
 ## License
 
-MIT — see LICENSE.
+MIT — see LICENSE. a Maidware Project, Forkable open source tools served to help
