@@ -12,7 +12,7 @@
 #
 # Usage: bluetooth-toggle.sh [on|off|release|radio|toggle|status]   (default: toggle)
 # No sudo needed. Wired controllers are unaffected (inputplumber/joycond keep
-# running — only the radio follows this switch).
+# running - only the radio follows this switch).
 
 set -o pipefail
 # audit trail: journal + ~/MaidLogs (visible folder, see install summary)
@@ -124,7 +124,7 @@ move_all_to() {
 }
 
 bluez_sink_id() {
-  # short sink-inputs list sinks by numeric id, not name — resolve it
+  # short sink-inputs list sinks by numeric id, not name - resolve it
   pactl list sinks 2>/dev/null | awk '/^Sink #/{gsub(/#/,"",$2); id=$2} /Name: / && /bluez/ {print id; exit}'
 }
 
@@ -263,7 +263,7 @@ do_on() {
   bluetoothctl power on 2>&1 | tail -n 1
   if ! is_powered; then
     echo "Bluetooth ON requested, but adapter not powered (check dongle/hard block)."
-    notify "Bluetooth on?" "Unblocked, but adapter won't power — check hardware switch." critical dialog-error
+    notify "Bluetooth on?" "Unblocked, but adapter won't power - check hardware switch." critical dialog-error
     return 1
   fi
   echo "Bluetooth ON (unblocked + powered)."
@@ -279,7 +279,7 @@ do_on() {
     mark_manual
   else
     maid_audit maid-bt "action=on connect FAILED"
-    notify "Bluetooth on" "Powered on, but earbuds didn't connect — open case / wake buds, re-run: bluetooth-toggle.sh on" critical dialog-error
+    notify "Bluetooth on" "Powered on, but earbuds didn't connect - open case / wake buds, re-run: bluetooth-toggle.sh on" critical dialog-error
     mark_manual
     return 1
   fi
@@ -306,7 +306,7 @@ do_release() {
   if is_buds_connected; then
     echo "Link stays warm for instant switch-back."
   else
-    echo "Buds not on PC right now — PC grabs when free and hands-off lapses."
+    echo "Buds not on PC right now - PC grabs when free and hands-off lapses."
   fi
   if [ "${MULTIPOINT:-0}" = "1" ]; then
     echo "Released (multipoint: hands-off $((MULTIPOINT_SECS/3600))h; '$0 on' cancels)."
@@ -314,7 +314,7 @@ do_release() {
     echo "Released (PC stays hands-off $((HANDS_SECS/60)) min; '$0 on' cancels)."
   fi
   maid_audit maid-bt "action=release parked on fallback, link warm"
-  notify "Earbuds released" "Audio on fallback sink. Use the phone — link stays warm." normal bluetooth-disabled
+  notify "Earbuds released" "Audio on fallback sink. Use the phone - link stays warm." normal bluetooth-disabled
   notify_phone "Earbuds switched to phone"
   mark_manual
 }
@@ -335,7 +335,7 @@ do_radio() {
   printf '%s %s\n' "$(date +%s)" "28800" > "$HANDS" 2>/dev/null || true
   systemctl --user start buds-fallback.service 2>/dev/null || true
   echo "Radio ON (buds untouched, daemon hands-off 8h; '$0 on' cancels)."
-  notify "Bluetooth on" "Radio on for other devices — buds stay put." normal bluetooth
+  notify "Bluetooth on" "Radio on for other devices - buds stay put." normal bluetooth
   notify_phone "PC Bluetooth on (radio only)"
   mark_manual
 }
@@ -350,7 +350,7 @@ do_off() {
   echo "Settling PipeWire..."
   sleep 2
   # 2. now drop the buds link (note: any link teardown can crash plasmashell
-  #    audio — system bug; prefer `release` for daily use)
+  #    audio - system bug; prefer `release` for daily use)
   if is_buds_connected; then
     echo "Disconnecting $BUDS_MAC..."
     bluetoothctl disconnect "$BUDS_MAC" 2>&1 | tail -n 1 || true

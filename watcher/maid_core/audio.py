@@ -92,7 +92,7 @@ def set_profile_a2dp(mac):
         if (active_profile(mac) or "").startswith("a2dp"):
             return True
     # PulseAudio fallback (Mint, or wpctl failing): underscore names.
-    # Harmless on PipeWire too — pactl speaks to the same server.
+    # Harmless on PipeWire too - pactl speaks to the same server.
     import subprocess
     card_name = "bluez_card." + mac.upper().replace(":", "_")
     for profile in ("a2dp_sink", "a2dp_sink_aac", "a2dp_sink_sbc",
@@ -228,7 +228,7 @@ def default_source_name():
 def route_comms_to_default(patterns=COMMS_PATTERNS):
     """Move matching playback streams onto the default sink.
 
-    Playback only — microphone routing is never touched. Returns the
+    Playback only - microphone routing is never touched. Returns the
     number of streams moved. Streams already on the default are left
     alone, so this is a no-op aligner, not a hijack.
     """
@@ -297,7 +297,7 @@ def mic_holders():
 def bt_mic_holders(mac=None):
     """Subset of mic_holders() capturing from a Bluetooth mic.
 
-    Only these block A2DP — a capture on a USB mic is harmless.
+    Only these block A2DP - a capture on a USB mic is harmless.
     Matches node/target names containing bluez (or the device MAC).
     """
     mac_us = (mac or "").upper().replace(":", "_")

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Maid BT first-run wizard: discovers hardware, writes configs, offers
 # opt-ins. Rerunnable anytime; safe to run twice (asks before overwrite).
-# Plain terminal prompts only — no new dependencies.
+# Plain terminal prompts only - no new dependencies.
 set -u
 
 command -v need >/dev/null 2>&1 || need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required tool: $1" >&2; exit 2; }; }
@@ -18,7 +18,7 @@ pick_bt_device() {
   say "looking for bluetooth audio devices (make earbuds discoverable)..." >&2
   mapfile -t DEVS < <(bluetoothctl devices 2>/dev/null | grep "^Device" || true)
   if [ "${#DEVS[@]}" -eq 0 ]; then
-    say "none found — pair first: bluetoothctl pair <MAC>, then rerun me"
+    say "none found - pair first: bluetoothctl pair <MAC>, then rerun me"
     return 1
   fi
   local i=1
@@ -43,7 +43,7 @@ valid_sink() { [[ "$1" =~ ^[A-Za-z0-9_.,:/+=@-]+$ ]]; }
 
 # ---- 1. earbuds + fallback ----
 if [ -f "$CONF" ]; then
-  say "$CONF exists — kept (delete it to redo this step)"
+  say "$CONF exists - kept (delete it to redo this step)"
 else
   MAC=$(pick_bt_device) || exit 1
   valid_mac "$MAC" || { echo "bad MAC, quitting"; exit 1; }
@@ -57,7 +57,7 @@ fi
 
 # ---- 2. watcher config seed ----
 if [ -f "$WCONF" ]; then
-  say "$WCONF exists — kept"
+  say "$WCONF exists - kept"
 else
   MAC2=$(grep -oE 'BUDS_MAC="[^"]+"' "$CONF" 2>/dev/null | cut -d'"' -f2 || true)
   if [ -n "$MAC2" ]; then
@@ -123,7 +123,7 @@ case "$REPLY" in [Yy]*)
   mkdir -p "$HOME/.config/wireplumber/wireplumber.conf.d"
   cp -a "$WCONF_SRC" \
     "$HOME/.config/wireplumber/wireplumber.conf.d/" 2>/dev/null \
-    && say "warm audio on — restart wireplumber to apply" || say "copy failed" ;;
+    && say "warm audio on - restart wireplumber to apply" || say "copy failed" ;;
 esac
 
 say "done. add the BT Earbuds widget, log out/in. test: bluetooth-toggle.sh status"

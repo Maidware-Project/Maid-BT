@@ -1,5 +1,5 @@
 [Unit]
-Description=Maid Watcher — Bluetooth earbuds connection/call/battery manager
+Description=Maid Watcher - Bluetooth earbuds connection/call/battery manager
 After=bluetooth.service
 Wants=bluetooth.service
 

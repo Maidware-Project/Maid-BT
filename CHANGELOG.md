@@ -118,12 +118,12 @@
 
 - installer skips service setup on non-systemd init with a warning
   instead of failing weirdly. fork it and wire your own init if you
-  want — scripts don't care, only autostart does.
+  want - scripts don't care, only autostart does.
 
 ## any headset grabs audio
 
 - any newly connected bluetooth headset takes the audio, not just
-  yours — no manual switching. yours connect first, other paired
+  yours - no manual switching. yours connect first, other paired
   headsets get priority connects when yours are down (radio on,
   hands-off off). yours still win when they show up, hands-off silences
   all of it, yanked devices park on fallback, and the buds timer pauses
@@ -137,14 +137,14 @@
 - switches now pause Playing chromium/electron apps over MPRIS and
   resume only those after the move (their web-audio stalls across BT
   renegotiation otherwise). opt out with `APP_CYCLE=0`. never pauses on
-  fallback/lock parks — music keeps flowing to speakers.
+  fallback/lock parks - music keeps flowing to speakers.
 
 ## intent + installer hardening
 
 - intent server never logs query strings anymore, so a `?token=` can
   never land in the journal. new preferred auth: `X-Token` header
   (query still works for old macros).
-- installer no longer enables bt-intent by default — opt-in prompt,
+- installer no longer enables bt-intent by default - opt-in prompt,
   off for non-interactive runs. core switching never touches network.
 - token file created with umask 077 (never 644, even briefly); warns
   instead of silently failing without python3.
@@ -154,7 +154,7 @@
   through a crafted FALLBACK_SINK).
 - `sed` home rewrite survives `&` in $HOME.
 - systemd units hardened (NoNewPrivileges, ProtectSystem=strict,
-  ProtectHome read-only, PrivateTmp, address families) — verified live,
+  ProtectHome read-only, PrivateTmp, address families) - verified live,
   watcher + intent server both healthy after.
 
 ## phone integration hardening
@@ -162,7 +162,7 @@
 - intent server no longer logs query strings, so a legacy `?token=`
   can never land in the journal. new preferred auth: `X-Token` header
   (never logged); query auth still accepted for old macros.
-- installer no longer enables `bt-intent.service` by default — opt-in
+- installer no longer enables `bt-intent.service` by default - opt-in
   prompt at install, off for non-interactive runs. core switching is
   fully local and unaffected.
 
@@ -175,8 +175,8 @@
 - **off by default** (`BATTERY_BOOST=0`). turning it on means transport
   teardowns on purpose, and on some plasmashell builds any A2DP
   teardown segfaults the audio thread (`spa.bluez5: Failure ...` →
-  `QAudioContext` SIGSEGV — seen live here). flip it to 1 only if your
+  `QAudioContext` SIGSEGV - seen live here). flip it to 1 only if your
   desktop survives a manual profile switch:
   `pactl set-card-profile bluez_card.<AA_BB_CC_DD_EE_FF> a2dp-sink-aac`
-  then back, with no crash. if it crashes, leave it 0 — warm link +
+  then back, with no crash. if it crashes, leave it 0 - warm link +
   no teardowns is the whole crash strategy of this package.

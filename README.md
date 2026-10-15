@@ -4,7 +4,7 @@ category: audio
 
 one single click switcher (PC / phone / off) with automatic audio routing
 for any earbuds + any wired fallback (speakers, DAC/AMP).
-this package — `install.sh` asks for your MAC and fallback sink.
+this package - `install.sh` asks for your MAC and fallback sink.
 
 ## quick start
 
@@ -28,28 +28,28 @@ suite green in CI (`bash tests/run.sh`, 20+ checks).
 
 what it does, in plain words:
 
-- `on` — turns bluetooth on, connects your earbuds, moves all sound
+- `on` - turns bluetooth on, connects your earbuds, moves all sound
   to them. switching takes about a second.
-- `release` — hands the buds to your phone without fully
+- `release` - hands the buds to your phone without fully
   disconnecting, so switching back is instant. use this every day.
   dual-connection buds (phone+PC at once): set `MULTIPOINT=1` once
   and release parks the PC for the day instead of minutes.
-- `off` — full shutdown: disconnects, kills the radio. use `release`
+- `off` - full shutdown: disconnects, kills the radio. use `release`
   instead unless you're done for the day.
-- background watcher — notices whenever bluetooth changes (even from
+- background watcher - notices whenever bluetooth changes (even from
   KDE's own toggle), connects your buds when they show up, parks
   sound on your speakers when they vanish. also parks sound when you
   lock the screen and restores it on unlock.
-- phone remote (optional, off unless you enable it) — an app on your
+- phone remote (optional, off unless you enable it) - an app on your
   phone (MacroDroid/Tasker) can tell the PC "I'm playing music" or
   "call started" over wifi. see `phone/`.
-- battery boost (optional, off unless you enable it) — picks the
+- battery boost (optional, off unless you enable it) - picks the
   sound quality based on earbud battery to save power. test first: on
   some systems switching quality crashes the desktop.
-- any headset — if a *different* bluetooth headset connects, it gets
+- any headset - if a *different* bluetooth headset connects, it gets
   sound automatically. yours always win when they appear.
-- tray widget + launcher icons — buttons for PC / phone / off.
-- **Maid Watcher** (optional) — when a phone call comes in, it pauses
+- tray widget + launcher icons - buttons for PC / phone / off.
+- **Maid Watcher** (optional) - when a phone call comes in, it pauses
   your music and mutes Discord, then restores everything on hangup.
   also reconnects up to 2 earbuds in priority order and warns you at
   low battery. works on any init system.
@@ -66,7 +66,7 @@ systemd/        background services (auto-connect watcher, phone listener)
 plasmoid/       the tray widget with PC / phone / off buttons
 desktop/        launcher icons you can pin to your panel
 phone/          phone setup guide (MacroDroid/Tasker)
-install.sh      installer — works on Arch, Debian/Ubuntu, Fedora, openSUSE
+install.sh      installer - works on Arch, Debian/Ubuntu, Fedora, openSUSE
 ```
 
 ## what you need
@@ -81,7 +81,7 @@ install.sh      installer — works on Arch, Debian/Ubuntu, Fedora, openSUSE
 | phone pings (optional) | kdeconnect | kdeconnect | kdeconnect | kdeconnect-kde |
 
 the background pieces need systemd. no systemd (OpenRC etc.)? the
-switcher scripts and Maid Watcher still work — you just start them
+switcher scripts and Maid Watcher still work - you just start them
 yourself instead of getting auto-start.
 
 ## installation
@@ -95,7 +95,7 @@ bash install.sh --no-packages  # skip installing packages
 what the installer does: copies files into place (never symlinks, so
 moving the folder can't break anything), asks for your earbuds, offers
 the optional extras (phone remote, Maid Watcher, warm-link audio),
-backs up anything it replaces. it downloads nothing — everything comes
+backs up anything it replaces. it downloads nothing - everything comes
 from your distro's own packages.
 
 then: pair + trust your earbuds (`bluetoothctl pair` + `trust`), add
@@ -120,7 +120,7 @@ prefer `release` over `off` every day.
 
 **some apps go silent after a switch** (Spotify, Discord, browsers).
 their sound engine stalls when bluetooth changes quality underneath
-them — again not our routing. fix: pause, switch, play. the scripts do
+them - again not our routing. fix: pause, switch, play. the scripts do
 that automatically; if one app stays dead, restart just that app
 (opt out with `APP_CYCLE=0`).
 
@@ -135,9 +135,9 @@ that automatically; if one app stays dead, restart just that app
   `QUALITY_LOCK=1` in `~/.config/bluetooth-buds.conf` to enforce
   LDAC after every switch. costs earbud battery; needs LDAC buds.
   the lock also rescues a card stuck on HSP/HFP with nobody on the
-  mic (e.g. after a restart) — a live call mic is never touched.
+  mic (e.g. after a restart) - a live call mic is never touched.
 - lip-sync lag: bluetooth sound always trails video a bit (SBC/AAC
-  ~0.2s, LDAC ~0.3s). nothing on the PC removes it — nudge it right
+  ~0.2s, LDAC ~0.3s). nothing on the PC removes it - nudge it right
   in your player (VLC: J/K keys, mpv: `--audio-delay=-0.2`).
 - switch gap: reconnecting + rerouting takes a few seconds by nature.
   that's physics, not a bug.
@@ -150,7 +150,7 @@ Mint is Ubuntu underneath, so the `apt` installer path handles it
 - **PulseAudio, not PipeWire** on most Mint installs: every audio
   helper tries PipeWire first, then the same operation over `pactl`
   (profiles with underscore names, stream moves, mute). Nothing to
-  configure — it degrades automatically.
+  configure - it degrades automatically.
 - **Older BlueZ** (5.53 on Mint 20.x): battery reporting may be absent
   (shown as unknown, never crashes), HFP wideband needs 5.65+ and
   falls back to CVSD silently, A2DP SBC always works (mandatory
@@ -190,4 +190,4 @@ and the bundled Maid Watcher shares your KDE Connect phone pairing with Maidshar
 
 ## License
 
-MIT — see LICENSE. a Maidware Project, Forkable open source tools served to help
+MIT - see LICENSE. a Maidware Project, Forkable open source tools served to help

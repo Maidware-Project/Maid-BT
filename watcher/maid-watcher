@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""maid-watcher — earbuds manager daemon for KDE Plasma (BlueZ + PipeWire).
+"""maid-watcher - earbuds manager daemon for KDE Plasma (BlueZ + PipeWire).
 
 XDG-autostart friendly, no systemd/OpenRC dependency. Uses only APIs that
 are stable across Plasma versions (BlueZ D-Bus, MPRIS, freedesktop
@@ -124,7 +124,7 @@ class Daemon:
                                     for a, n in holders)
                     notify.audit(f"a2dp blocked, bt mic held by: {who}")
                     notify.send("Can't switch to high quality",
-                                f"Microphone in use by {who} — "
+                                f"Microphone in use by {who} - "
                                 "leave the call (or quit it) and I will retry.")
                 else:
                     notify.audit("a2dp switch failed with mic free "
@@ -175,7 +175,7 @@ class Daemon:
 
             notify.audit(f"reconnect gave up: {name}")
             notify.send("Giving up reconnect",
-                        f"{name} — tap to retry, or reconnect manually",
+                        f"{name} - tap to retry, or reconnect manually",
                         "critical",
                         actions=[("retry", "Reconnect now")],
                         on_action=_retry_now,
@@ -276,7 +276,7 @@ class Daemon:
                 pass
             if self.phones_up():
                 notify.send("Bluetooth link up",
-                            "Phone reachable again — resuming.")
+                            "Phone reachable again - resuming.")
                 notify.audit("phone back via bluetooth link")
                 self._phone_down_ticks = 0
                 self._bt_offered = False
@@ -324,7 +324,7 @@ class Daemon:
 
     def fallback_grab(self):
         # Phone-down fallback (opt-in): if no phone is reachable and a
-        # managed device sits disconnected, its link is probably free —
+        # managed device sits disconnected, its link is probably free -
         # grab it instead of waiting for a manual switch.
         if not self.cfg.get("fallback_grab", {}).get("enabled", False):
             return
@@ -381,7 +381,7 @@ def cmd_status(cfg):
               f"{', '.join(a if a != '?' else n for a, n in holders) or 'nobody'}")
         print(f"  battery:   {mon.battery_percent(mac)}%")
     if not cfg["devices"]:
-        print("no devices configured — copy config.example.json to "
+        print("no devices configured - copy config.example.json to "
               "~/.config/maid-watcher/config.json")
 
 
