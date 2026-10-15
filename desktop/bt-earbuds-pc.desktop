@@ -6,4 +6,4 @@ Icon=bluetooth
 Keywords=bluetooth;earbuds;pc;connect;
 Terminal=false
 Type=Application
-Categories=Audio;Bluetooth;
+Categories=AudioVideo;Audio;
