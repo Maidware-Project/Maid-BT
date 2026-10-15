@@ -18,6 +18,9 @@
   `.bak-<timestamp>` copies of every desktop file.
 - `--uninstall` honors `--prefix`/`DESTDIR`: program files come out of
   the same `BINDIR`/`SHAREDIR`/`SYSDDIR` the install used.
+- shipped example config is placeholder-only again (`Buds 1`, no real
+  product names); the personal-data test is now case-insensitive so
+  variants can't slip through.
 
 ## Linux Mint support
 

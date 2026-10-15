@@ -18,7 +18,7 @@ ok "syntax"
 echo "== personal data =="
 # NOTE: watcher/maid-watcher.desktop carries an Exec=/home/EXAMPLEUSER/... path on
 # purpose (install.sh rewrites it, same convention as desktop/*.desktop).
-if grep -rn -E "AA:BB|RemoteApp|ExampleBuds|Liberty|example-host|10\.0\.0|/home/EXAMPLEUSER/" \
+if grep -rni -E "AA:BB|RemoteApp|ExampleBuds|Liberty|example-host|10\.0\.0|/home/EXAMPLEUSER/" \
     "$PKGDIR/bin" "$PKGDIR/watcher/maid-watcher" "$PKGDIR"/watcher/maid_core \
     "$PKGDIR/watcher/config.example.json" \
     "$PKGDIR/README.md" "$PKGDIR/CHANGELOG.md" "$PKGDIR/install.sh" 2>/dev/null \
