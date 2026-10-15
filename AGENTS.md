@@ -2,14 +2,15 @@
 
 One maintainer plus a few friends helping out. Keep changes small enough
 to review, skip refactors nobody asked for, and ask before adding a
-dependency. Never hide a behavior change inside a cleanup.
+dependency. Never hide a behavior change inside a cleanup, and never let a
+script tear down an audio link on its own.
 
-Say what you actually did, not what you were asked to do. If a test, a
-build, or a hardware check didn't happen this session, don't write that
-it passed. Failures and shortcuts are worth writing down as they are.
+Say what you actually did, not what you were asked to do. Audio bugs don't
+show up in a stubbed run, so say plainly whether you tested on real earbuds
+or only in the fake.
 
-The assistant helps, a person decides. Write so somebody can follow it
-with no assistant around: plain names, plain words, nothing clever.
+The assistant helps, a person decides. Bluetooth is fiddly enough on its
+own, so keep the code readable.
 
 Bash-first Bluetooth earbuds switcher. Lowercase terse voice in docs.
 
