@@ -37,20 +37,22 @@ if [ "$USERMODE" = "0" ]; then NOCONFIG=1; fi
 
 if [ "$UNINST" = "1" ]; then
   systemctl --user disable --now buds-fallback.service bt-intent.service maid-watcher.service 2>/dev/null || true
-  rm -f "$HOME"/.local/bin/bluetooth-toggle.sh "$HOME"/.local/bin/buds-fallback.sh \
-    "$HOME"/.local/bin/buds-on.sh "$HOME"/.local/bin/buds-off.sh "$HOME"/.local/bin/buds-release.sh \
-    "$HOME"/.local/bin/bt-intent-server.py "$HOME"/.local/bin/bt-notify-menu.sh
-  rm -f "$HOME"/.local/bin/maid-watcher
-  rm -rf "$HOME"/.local/bin/maid_core
+  # program files come out of the same dirs the install used, so
+  # --prefix/DESTDIR installs uninstall cleanly too.
+  rm -f "$BINDIR"/bluetooth-toggle.sh "$BINDIR"/buds-fallback.sh \
+    "$BINDIR"/buds-on.sh "$BINDIR"/buds-off.sh "$BINDIR"/buds-release.sh \
+    "$BINDIR"/bt-intent-server.py "$BINDIR"/bt-notify-menu.sh
+  rm -f "$BINDIR"/maid-watcher
+  rm -rf "$BINDIR"/maid_core
   rm -f "$HOME"/.config/autostart/maid-watcher.desktop
-  rm -f "$HOME"/.config/systemd/user/maid-watcher.service
+  rm -f "$SYSDDIR"/maid-watcher.service
   rm -f "$HOME"/.config/wireplumber/wireplumber.conf.d/51-bt-no-suspend.conf
-  rm -f "$HOME"/.config/systemd/user/buds-fallback.service "$HOME"/.config/systemd/user/bt-intent.service \
-    "$HOME"/.config/systemd/user/bt-menu.service
-  rm -rf "$HOME/.local/share/plasma/plasmoids/com.local.btearbuds"
-  rm -f "$HOME"/.local/share/applications/bt-earbuds-pc.desktop \
-    "$HOME"/.local/share/applications/bt-earbuds-phone.desktop "$HOME"/.local/share/applications/bt-off.desktop \
-    "$HOME"/.local/share/applications/bt-on.desktop
+  rm -f "$SYSDDIR"/buds-fallback.service "$SYSDDIR"/bt-intent.service \
+    "$SYSDDIR"/bt-menu.service
+  rm -rf "$SHAREDIR/plasma/plasmoids/com.local.btearbuds"
+  rm -f "$SHAREDIR"/applications/bt-earbuds-pc.desktop \
+    "$SHAREDIR"/applications/bt-earbuds-phone.desktop "$SHAREDIR"/applications/bt-off.desktop \
+    "$SHAREDIR"/applications/bt-on.desktop
   if [ "$PURGE" = "1" ]; then
     rm -f "$HOME"/.config/bluetooth-buds.conf "$HOME"/.config/bt-intent.token
     rm -rf "$HOME"/.config/maid-watcher
@@ -137,23 +139,29 @@ else
 fi
 
 copy_one() {
-  local src="$1" dest="$2" rewrite="${3:-0}"
+  local src="$1" dest="$2" rewrite="${3:-0}" tmp=""
   if [ "$CHECK" = "1" ]; then echo "COPY $dest"; return 0; fi
   mkdir -p "$(dirname "$dest")"
-  if [ -e "$dest" ] && ! cmp -s "$src" "$dest"; then
-    cp -a "$dest" "${dest}.bak-${BACKUP_TS}"
-    say "backed up $dest"
-  fi
+  # render first, compare second: $src still holds the /home/EXAMPLEUSER/
+  # placeholder, which never equals an installed file — comparing raw
+  # would back up on every run. compare what we would write instead.
+  tmp="$(mktemp)" || return 1
   if [ "$rewrite" = "1" ]; then
     # user install: fix the Exec placeholder to this $HOME.
     # escape & (sed replacement metachar) in $HOME
-    sed -e "s|/home/EXAMPLEUSER/|${HOME//&/\\&}|g" "$src" > "$dest"
+    sed -e "s|/home/EXAMPLEUSER/|${HOME//&/\\&}|g" "$src" > "$tmp"
   elif [ "$rewrite" = "2" ]; then
     # system package: bare command names, resolved via PATH.
-    sed -e "s|/home/EXAMPLEUSER/.local/bin/||g" "$src" > "$dest"
+    sed -e "s|/home/EXAMPLEUSER/.local/bin/||g" "$src" > "$tmp"
   else
-    cp -a "$src" "$dest"
+    cp -a "$src" "$tmp"
   fi
+  if [ -e "$dest" ] && ! cmp -s "$tmp" "$dest"; then
+    cp -a "$dest" "${dest}.bak-${BACKUP_TS}"
+    say "backed up $dest"
+  fi
+  cat "$tmp" > "$dest"
+  rm -f "$tmp"
   echo "installed $dest"
 }
 
