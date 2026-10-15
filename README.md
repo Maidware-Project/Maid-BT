@@ -105,6 +105,11 @@ that automatically; if one app stays dead, restart just that app
 - late start (~1 second cut after silence): bluetooth naps when idle.
   fix is the optional warm-link config (installer offers it; costs a
   little earbud battery).
+- thin sound after a switch (stuck on SBC): the card can land on a
+  low codec and stay there. fix is the optional max-quality config
+  (installer offers it; pins LDAC first, unlocks SBC-XQ) plus
+  `QUALITY_LOCK=1` in `~/.config/bluetooth-buds.conf` to enforce
+  LDAC after every switch. costs earbud battery; needs LDAC buds.
 - lip-sync lag: bluetooth sound always trails video a bit (SBC/AAC
   ~0.2s, LDAC ~0.3s). nothing on the PC removes it — nudge it right
   in your player (VLC: J/K keys, mpv: `--audio-delay=-0.2`).
