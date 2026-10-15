@@ -180,12 +180,12 @@ and the widget (see `install.sh --uninstall` for the exact list, it
 also removes the Maid Watcher, its autostart entry, and the
 warm-link audio config).
 
-## License
-
-MIT — see LICENSE. a Maidware Project: forkable open-source tools for linux users.
-
 ## works with the Maid suite
 
 Maid BT stands alone, but plays nice: [Maid AU](https://github.com/Maidware-Project/Maid-AU) tracks
 this repo and pulls its updates (`MAID_SUITE`, deploy with `UPDATE_MAID_DEPLOY=1`),
 and the bundled Maid Watcher shares your KDE Connect phone pairing with Maidshare.
+
+## License
+
+MIT — see LICENSE.
