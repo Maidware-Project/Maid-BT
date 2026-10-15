@@ -142,11 +142,14 @@ rm -rf /tmp/micstub
 
 echo "== degraded mode (missing/outdated deps) =="
 mkdir -p /tmp/maidbt-emptybin
+# strip PATH only for the script; check its output with a normal PATH, or
+# grep itself can't be found and the check below reads as a false failure
 ( export PATH=/tmp/maidbt-emptybin
-  /usr/bin/bash "$PKGDIR/bin/bluetooth-toggle.sh" status > /tmp/maidbt-deg.out 2>&1
-  [ "$?" -eq 2 ] || fail "no clean exit without bluetoothctl"
-  grep -q "missing required tool: bluetoothctl" /tmp/maidbt-deg.out || fail "no clean missing-tool message"
-  ! grep -q "command not found" /tmp/maidbt-deg.out || fail "tool noise leaked" )
+  /usr/bin/bash "$PKGDIR/bin/bluetooth-toggle.sh" status > /tmp/maidbt-deg.out 2>&1 )
+code=$?
+[ "$code" -eq 2 ] || fail "no clean exit without bluetoothctl (got $code)"
+grep -q "missing required tool: bluetoothctl" /tmp/maidbt-deg.out || fail "no clean missing-tool message"
+! grep -q "command not found" /tmp/maidbt-deg.out || fail "tool noise leaked"
 ok "clean failure without bluetoothctl"
 /usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF2' || fail "watcher degraded helpers crashed"
 import os, sys
@@ -169,11 +172,26 @@ HOME=/tmp/maidbt-t bash "$PKGDIR/install.sh" --check >/dev/null 2>&1 || fail "in
 ok "installer dry run clean"
 
 echo "== porcelain state readout =="
-state=$(bash "$PKGDIR/bin/bluetooth-toggle.sh" porcelain 2>/dev/null || true)
+# stubbed like the rest of the suite: no real bluez/pulse needed here
+rm -rf /tmp/maidbt-p && mkdir -p /tmp/maidbt-p/stubs /tmp/maidbt-p/.config
+cat > /tmp/maidbt-p/stubs/bluetoothctl <<'EOF'
+#!/bin/bash
+# fake adapter: powered, buds never connected
+case "$*" in
+  *show*) echo "Controller AA:BB:CC:DD:EE:FF test"; echo "Powered: yes" ;;
+  *info*) echo "Device 11:22:33:44:55:66 (public)"; echo "Connected: no" ;;
+  *) exit 1 ;;
+esac
+EOF
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-p/stubs/pactl
+chmod +x /tmp/maidbt-p/stubs/*
+printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-p/.config/bluetooth-buds.conf
+state=$(PATH="/tmp/maidbt-p/stubs:$PATH" HOME=/tmp/maidbt-p bash "$PKGDIR/bin/bluetooth-toggle.sh" porcelain 2>/dev/null || true)
 case "$state" in
   off|on|buds) ok "porcelain -> $state" ;;
-  *) fail "porcelain garbage: $state" ;;
+  *) fail "porcelain garbage (stub adapter, expected off|on|buds): '$state'" ;;
 esac
+rm -rf /tmp/maidbt-p
 
 echo "== unconfigured daemon refuses =="
 rm -rf /tmp/maidbt-t; mkdir -p /tmp/maidbt-t
