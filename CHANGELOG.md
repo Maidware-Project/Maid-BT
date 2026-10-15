@@ -1,5 +1,13 @@
 # changelog
 
+## installer fixes
+
+- backups only on real change: the compare now runs against the
+  rewritten file content, so reinstalls no longer pile up
+  `.bak-<timestamp>` copies of every desktop file.
+- `--uninstall` honors `--prefix`/`DESTDIR`: program files come out of
+  the same `BINDIR`/`SHAREDIR`/`SYSDDIR` the install used.
+
 ## Linux Mint support
 
 - PulseAudio fallbacks across the audio layer (card lookup, profiles,
