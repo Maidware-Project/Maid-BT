@@ -10,6 +10,8 @@ what it does, in plain words:
   to them. switching takes about a second.
 - `release` — hands the buds to your phone without fully
   disconnecting, so switching back is instant. use this every day.
+  dual-connection buds (phone+PC at once): set `MULTIPOINT=1` once
+  and release parks the PC for the day instead of minutes.
 - `off` — full shutdown: disconnects, kills the radio. use `release`
   instead unless you're done for the day.
 - background watcher — notices whenever bluetooth changes (even from

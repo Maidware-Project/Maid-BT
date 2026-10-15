@@ -36,6 +36,7 @@ AUDIO_PRIORITY=1
 # Opt out of auto-connecting other paired headsets with: AUDIO_PRIORITY=0
 # Pin LDAC after every switch (needs LDAC headset) with: QUALITY_LOCK=1
 # Match codec to battery to save power with: BATTERY_BOOST=1
+# Dual-connection buds (phone+PC at once) with: MULTIPOINT=1
 [ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
 command -v validate_conf >/dev/null 2>&1 && validate_conf
 # Refuse to run unconfigured (placeholder MAC) instead of retry-spamming.

@@ -38,10 +38,12 @@ BUDS_MAC="AA:BB:CC:DD:EE:FF"
 FALLBACK_SINK=""
 APP_CYCLE=1
 QUALITY_LOCK=0
+MULTIPOINT=0
 # Fill these via ~/.config/bluetooth-buds.conf (install.sh prompts for them):
 #   BUDS_MAC="..." and FALLBACK_SINK="..."
 # Opt out of the app pause/resume cycle with: APP_CYCLE=0
 # Pin LDAC after every switch (needs LDAC headset) with: QUALITY_LOCK=1
+# Dual-connection buds (phone+PC at once) with: MULTIPOINT=1
 [ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
 command -v validate_conf >/dev/null 2>&1 && validate_conf
 CONNECT_TIMEOUT=20   # seconds to retry bluetoothctl connect
@@ -50,6 +52,7 @@ MARKER="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-toggle-manual"
 mark_manual() { touch "$MARKER" 2>/dev/null || true; }
 HANDS="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-hands-off"
 HANDS_SECS=1200  # release-to-phone window (20 min); explicit `on` clears it early
+MULTIPOINT_SECS=28800  # dual-connection buds share all day; explicit `on` cancels
 clear_hands() { rm -f "$HANDS" 2>/dev/null || true; }
 CYCLE_RESUME=""
 
@@ -292,13 +295,24 @@ do_release() {
   park_on_fallback
   media_cycle_end
   systemctl --user start buds-fallback.service 2>/dev/null || true
-  date +%s > "$HANDS" 2>/dev/null || true
+  if [ "${MULTIPOINT:-0}" = "1" ]; then
+    # dual-connection buds share the link all day: hands-off until
+    # tomorrow (explicit `on` cancels anytime). single-link buds keep
+    # the short window so a closed case re-grabs fast on open.
+    printf '%s %s\n' "$(date +%s)" "$MULTIPOINT_SECS" > "$HANDS" 2>/dev/null || true
+  else
+    date +%s > "$HANDS" 2>/dev/null || true
+  fi
   if is_buds_connected; then
     echo "Link stays warm for instant switch-back."
   else
     echo "Buds not on PC right now — PC grabs when free and hands-off lapses."
   fi
-  echo "Released (PC stays hands-off $((HANDS_SECS/60)) min; '$0 on' cancels)."
+  if [ "${MULTIPOINT:-0}" = "1" ]; then
+    echo "Released (multipoint: hands-off $((MULTIPOINT_SECS/3600))h; '$0 on' cancels)."
+  else
+    echo "Released (PC stays hands-off $((HANDS_SECS/60)) min; '$0 on' cancels)."
+  fi
   maid_audit maid-bt "action=release parked on fallback, link warm"
   notify "Earbuds released" "Audio on fallback sink. Use the phone — link stays warm." normal bluetooth-disabled
   notify_phone "Earbuds switched to phone"
