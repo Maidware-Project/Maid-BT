@@ -1,51 +1,47 @@
 # contributing
 
-small, reviewable changes only - one logical change per pull request
-(the kernel puts it well: one patch, one problem; if your description
-gets long, split it). read AGENTS.md first (it applies to humans and
-AI assistants alike). maintained by Maidware Project.
+small, reviewable changes only - one logical change per pull request.
+keep a cleanup and a behavior change in separate patches. read AGENTS.md
+first; it applies to humans and AI assistants alike. maintained by
+Maidware Project.
 
 ## commits
 
 - short lowercase summaries with a prefix: `fix:`, `feat:`, `docs:`,
   `tests:`, `chore:` - e.g. `fix: retry bluetooth connect with backoff`
 - sign off every commit (`git commit -s` appends it):
-  `Signed-off-by: Your Name <you@example.com>`
-  (developer's certificate of origin - proves you may contribute it)
-- AI-assisted work gets an `Assisted-by:` trailer naming the tool,
-  e.g. `Assisted-by: opencode (muse-spark)`. the kernel requires this;
-  so do we. never claim a test ran that didn't.
-- bug fixes reference what they fix: `Fixes: #123` or
-  `Closes: #123` (issue number, or the symptom if no issue exists).
+  `Signed-off-by: Your Name <you@example.com>` - the developer's
+  certificate of origin, your word that you may contribute it
+- AI-assisted work gets an `Assisted-by:` trailer naming the tool, e.g.
+  `Assisted-by: opencode (muse-spark)`. the kernel requires it; so do we.
+  never claim a hardware check you didn't run.
+- bug fixes name what they fix: `Fixes: #123` or `Closes: #123`
 
 ## before opening anything
 
-- `bash tests/run.sh` green on your machine - paste the results
-  in the PR (the template asks for them). tested on openSUSE; Arch
-  and Fedora too if you can (VM or live USB counts - say which).
+- `bash tests/run.sh` green, output pasted in the pull request. it's
+  hardware-free - every adapter and sink is stubbed - and covers the
+  watcher extras, degraded mode, the hands-off rule, auto-switch, the
+  quality lock, HSP rescue and multipoint release.
+- anything that reaches real audio also needs a live check: `maid-watcher
+  status`, a real switch, a real call. say which you did.
 - `bash install.sh --check` writes nothing
-- hardware touched? say what device/distro you verified live
-- no personal data anywhere (MACs, names, IPs, home paths) - the
-  suite enforces this, CI fails it
-- lay out the fix: what broke, what you changed, why that way
-
+- no personal data anywhere (MACs, names, IPs, home paths). the suite
+  greps for it, minus the desktop Exec path install.sh rewrites by design
 
 ## know your patch
 
-understand every line you send, assistant-written parts included. if you
-can't say what a line does, drop it. "the assistant wrote it" doesn't
-answer the question.
+understand every line you send, assistant-written ones included. if you
+can't say what a line does, don't send it.
 
-you need basic linux: the terminal, file permissions, what sudo does,
-where configs live (~/.config). not an expert, but this project ships
-scripts that run on other people's machines, so guessing isn't
-contributing.
+you need basic linux, and some patience for bluetooth. this repo moves
+people's audio around, so "should work" doesn't get merged.
 
 ## issues
 
-use the bug report template, paste the diagnostics it asks for, trim
-personal data before posting publicly. "it doesn't work" with nothing
-attached will be closed with a pointer back here.
+use the bug report template and paste the diagnostics it asks for, minus
+your MAC address if you're posting in public. "it doesn't work" with
+nothing attached gets closed with a pointer back here.
 
 behavior: CODE_OF_CONDUCT.md (technical scope only, no politics,
 stay neutral).
