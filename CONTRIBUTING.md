@@ -26,6 +26,8 @@ Maidware Project.
 - anything that reaches real audio also needs a live check: `maid-watcher
   status`, a real switch, a real call. say which you did.
 - `bash install.sh --check` writes nothing
+- CI must be green before review - a green run on your machine is the
+  start, not the finish
 - no personal data anywhere (MACs, names, IPs, home paths). the suite
   greps for it, minus the desktop Exec path install.sh rewrites by design
 
@@ -36,6 +38,10 @@ can't say what a line does, don't send it.
 
 you need basic linux, and some patience for bluetooth. this repo moves
 people's audio around, so "should work" doesn't get merged.
+
+reviewers here are people, not bots: expect to answer questions about your
+patch, and don't open one you can't back up. unattended drive-by or bot
+PRs get closed.
 
 ## issues
 
