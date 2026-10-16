@@ -194,8 +194,14 @@ esac
 rm -rf /tmp/maidbt-p
 
 echo "== unconfigured daemon refuses =="
-rm -rf /tmp/maidbt-t; mkdir -p /tmp/maidbt-t
-out=$(XDG_RUNTIME_DIR=/tmp/maidbt-t HOME=/tmp/maidbt-t timeout 3 bash "$PKGDIR/bin/buds-fallback.sh" 2>&1 || true)
+# buds-fallback checks `need bluetoothctl` / `need pactl` before it reads its
+# config, so without stubs this test passes or fails on whatever the host has
+# installed - ubuntu ci has no bluez and never reached the refusal we want.
+rm -rf /tmp/maidbt-t; mkdir -p /tmp/maidbt-t/stubs
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-t/stubs/bluetoothctl
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-t/stubs/pactl
+chmod +x /tmp/maidbt-t/stubs/*
+out=$(PATH="/tmp/maidbt-t/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-t HOME=/tmp/maidbt-t timeout 3 bash "$PKGDIR/bin/buds-fallback.sh" 2>&1 || true)
 echo "$out" | grep -q "not configured" || fail "refusal message missing: $out"
 ok "unconfigured refusal"
 
@@ -214,6 +220,9 @@ EOF
 # silence cross-boundary side effects: no real phone pings, no real popups.
 printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-t/stubs/kdeconnect-cli
 printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-t/stubs/notify-send
+# pactl is the daemon's second hard requirement, and ubuntu ci has no
+# pulseaudio-utils - without this stub the daemon quits before ever trying.
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-t/stubs/pactl
 chmod +x /tmp/maidbt-t/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-t/.config/bluetooth-buds.conf
 export PATH="/tmp/maidbt-t/stubs:$PATH"
