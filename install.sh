@@ -36,7 +36,7 @@ fi
 if [ "$USERMODE" = "0" ]; then NOCONFIG=1; fi
 
 if [ "$UNINST" = "1" ]; then
-  systemctl --user disable --now buds-fallback.service bt-intent.service maid-watcher.service 2>/dev/null || true
+  systemctl --user disable --now buds-fallback.service bt-intent.service bt-menu.service maid-watcher.service 2>/dev/null || true
   # program files come out of the same dirs the install used, so
   # --prefix/DESTDIR installs uninstall cleanly too.
   rm -f "$BINDIR"/bluetooth-toggle.sh "$BINDIR"/buds-fallback.sh \
@@ -50,12 +50,12 @@ if [ "$UNINST" = "1" ]; then
   rm -f "$HOME"/.config/wireplumber/wireplumber.conf.d/52-bt-max-quality.conf
   rm -f "$SYSDDIR"/buds-fallback.service "$SYSDDIR"/bt-intent.service \
     "$SYSDDIR"/bt-menu.service
-  rm -rf "$SHAREDIR/plasma/plasmoids/com.local.btearbuds"
+  rm -rf "$SHAREDIR/maid-bt" "$SHAREDIR/plasma/plasmoids/com.local.btearbuds"
   rm -f "$SHAREDIR"/applications/bt-earbuds-pc.desktop \
     "$SHAREDIR"/applications/bt-earbuds-phone.desktop "$SHAREDIR"/applications/bt-off.desktop \
     "$SHAREDIR"/applications/bt-on.desktop
   if [ "$PURGE" = "1" ]; then
-    rm -f "$HOME"/.config/bluetooth-buds.conf "$HOME"/.config/bt-intent.token
+    rm -f "$HOME"/.config/bluetooth-buds.conf "$HOME"/.config/bluetooth-buds.conf.example "$HOME"/.config/bt-intent.token
     rm -rf "$HOME"/.config/maid-watcher
     echo "==> uninstalled, all settings removed (--purge)"
   elif [ -t 0 ]; then
@@ -158,8 +158,13 @@ copy_one() {
     cp -a "$src" "$tmp"
   fi
   if [ -e "$dest" ] && ! cmp -s "$tmp" "$dest"; then
-    cp -a "$dest" "${dest}.bak-${BACKUP_TS}"
-    say "backed up $dest"
+    if cp -a "$dest" "${dest}.bak-${BACKUP_TS}"; then
+      say "backed up $dest"
+    else
+      warn "backup failed - not replacing $dest"
+      rm -f "$tmp"
+      return 1
+    fi
   fi
   cat "$tmp" > "$dest"
   rm -f "$tmp"
@@ -173,7 +178,7 @@ for f in "$PKGDIR"/bin/*; do
   [ -f "$f" ] || continue
   copy_one "$f" "$BINDIR/$(basename "$f")"
 done
-[ "$CHECK" = "0" ] && chmod +x "$BINDIR"/bluetooth-toggle.sh "$BINDIR"/buds-*.sh "$BINDIR"/bt-*.sh "$BINDIR"/bt-*.py 2>/dev/null || true
+[ "$CHECK" = "0" ] && chmod +x "$BINDIR"/bluetooth-toggle.sh "$BINDIR"/maid-setup.sh "$BINDIR"/buds-*.sh "$BINDIR"/bt-*.sh "$BINDIR"/bt-*.py 2>/dev/null || true
 
 # ---- Maid Watcher (optional daemon: calls, 2-device priority, battery) ----
 copy_one "$PKGDIR/watcher/maid-watcher" "$BINDIR/maid-watcher"
@@ -199,7 +204,7 @@ for f in "$PKGDIR"/systemd/*.service; do
   copy_one "$f" "$SYSDDIR/$(basename "$f")"
 done
 # sources maid-setup.sh needs later (repo layout absent once installed)
-copy_one "$PKGDIR/watcher/maid-watcher.desktop" "$SHAREDIR/maid-bt/maid-watcher.desktop"
+copy_one "$PKGDIR/watcher/maid-watcher.desktop" "$SHAREDIR/maid-bt/maid-watcher.desktop" $REWRITE
 copy_one "$PKGDIR/wireplumber/51-bt-no-suspend.conf" "$SHAREDIR/maid-bt/51-bt-no-suspend.conf"
 copy_one "$PKGDIR/watcher/config.example.json" "$SHAREDIR/maid-bt/config.example.json"
 
