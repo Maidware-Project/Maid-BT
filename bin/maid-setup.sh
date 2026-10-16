@@ -62,7 +62,8 @@ else
   MAC2=$(grep -oE 'BUDS_MAC="[^"]+"' "$CONF" 2>/dev/null | cut -d'"' -f2 || true)
   if [ -n "$MAC2" ]; then
     mkdir -p "$(dirname "$WCONF")"
-    python3 - "$MAC2" <<'EOF' > "$WCONF" || true
+    _tmp="$(mktemp)" || exit 1
+    if python3 - "$MAC2" <<'EOF' > "$_tmp"
 import json, sys
 mac = sys.argv[1]
 print(json.dumps({
@@ -76,7 +77,13 @@ print(json.dumps({
   "laptop": {"mode": "auto"}
 }, indent=2))
 EOF
-    say "seeded $WCONF from your earbuds"
+    then
+      mv "$_tmp" "$WCONF"
+      say "seeded $WCONF from your earbuds"
+    else
+      rm -f "$_tmp"
+      say "could not seed $WCONF (left untouched)"
+    fi
   else
     say "skipped watcher seed (no earbuds configured)"
   fi
