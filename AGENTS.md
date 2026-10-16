@@ -34,8 +34,7 @@ Bash-first Bluetooth earbuds switcher. Lowercase terse voice in docs.
   technical scope, no politics, stay neutral.
 - Commit style: short lowercase summaries with a prefix (`fix:`,
   `feat:`, `docs:`, `tests:`, `chore:`), one logical change each.
-  Sign off every commit (`git commit -s`); AI-assisted work adds an
-  `Assisted-by:` trailer naming the tool. Bug fixes cite `Fixes: #N`.
+  Sign off every commit (`git commit -s`). Bug fixes cite `Fixes: #N`.
 
 ## Verify
 
