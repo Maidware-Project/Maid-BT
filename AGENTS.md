@@ -45,6 +45,8 @@ Bash-first Bluetooth earbuds switcher. Lowercase terse voice in docs.
   `feat:`, `docs:`, `tests:`, `chore:`), one logical change each.
   Sign off every commit - the trailer is exactly `Signed-off-by: visa`,
   no email. Bug fixes cite `Fixes: #N`.
+- `watcher/` is mirrored from the maid-watcher repo and is the copy that
+  ships: after changing it, keep the two byte-identical (`diff -r`).
 
 ## Never
 
