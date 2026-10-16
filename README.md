@@ -1,10 +1,6 @@
-# Maid BT - a linux only seamless Bluetooth earbuds switcher
+# maid bt - bluetooth earbuds switching
 
-category: audio
-
-one single click switcher (PC / phone / off) with automatic audio routing
-for any earbuds + any wired fallback (speakers, DAC/AMP).
-this package - `install.sh` asks for your MAC and fallback sink.
+command-line helper. switch sound between pc, phone, or off with one command. helps route audio automatically and stops dual-connection earbuds from fighting your phone. install asks for your mac and fallback sink.
 
 ## quick start
 
