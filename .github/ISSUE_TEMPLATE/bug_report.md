@@ -21,10 +21,15 @@ title: "[bug] "
 ```
 maid-watcher bugreport
 ```
-<!-- run `maid-watcher bugreport`, paste the whole block below -->
+<!-- run `maid-watcher bugreport`, paste the whole block below. attaching logs/screenshots is mandatory if they exist. -->
 
 ## Extra logs (if audio died)
 
 ```
 journalctl --user -u buds-fallback -n 30 --no-pager
 ```
+<!-- attaching the relevant log output is mandatory when reporting bugs. -->
+
+---
+
+**note:** before filing, please read `AGENTS.md` in this repo - it's there for a reason.
