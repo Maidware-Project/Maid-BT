@@ -1,6 +1,6 @@
 # maid bt - bluetooth earbuds switching
 
-command-line helper. switch sound between pc, phone, or off with one command. helps route audio automatically and stops dual-connection earbuds from fighting your phone. install asks for your mac and fallback sink.
+command-line helper. seamless switching between pc, phone, or off with one command. routes audio automatically and stops dual-connection earbuds from fighting your phone. install asks for your mac and fallback sink.
 
 ## quick start
 
