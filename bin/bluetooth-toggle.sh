@@ -401,5 +401,5 @@ case "$ACTION" in
     elif is_buds_connected; then echo "buds";
     else echo "on"; fi
     ;;
-  *) echo "usage: $0 [on|off|release|toggle|status|porcelain]"; exit 2 ;;
+  *) echo "usage: $0 [on|off|release|radio|toggle|status|porcelain]"; exit 2 ;;
 esac

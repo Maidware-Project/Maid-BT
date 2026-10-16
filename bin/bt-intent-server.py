@@ -8,6 +8,7 @@
 #   GET /health?token=...        -> ok (connectivity test from MacroDroid)
 import hmac
 import os
+import shutil
 import subprocess
 import time
 import urllib.parse
@@ -15,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(os.environ.get("MAID_INTENT_PORT", "8899"))
 HOME = os.path.expanduser("~")
-TOGGLE = os.path.join(HOME, ".local/bin/bluetooth-toggle.sh")
+TOGGLE = shutil.which("bluetooth-toggle.sh") or "/usr/bin/bluetooth-toggle.sh"
 HANDS = os.path.join("/run/user", str(os.getuid()), "bt-hands-off")
 
 

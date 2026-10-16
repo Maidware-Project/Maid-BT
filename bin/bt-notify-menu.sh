@@ -17,12 +17,7 @@ RFKILL_BIN="$(command -v rfkill 2>/dev/null || { [ -x /usr/sbin/rfkill ] && echo
 POLL=2
 IDFILE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-menu-id"
 BUDS_MAC="AA:BB:CC:DD:EE:FF"
-# Fill via ~/.config/bluetooth-buds.conf (install.sh prompts for it)
-[ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
-command -v validate_conf >/dev/null 2>&1 && validate_conf
-NOTIF_ID=0
-[ -f "$IDFILE" ] && NOTIF_ID="$(cat "$IDFILE" 2>/dev/null || echo 0)"
-
+# audit-lib first: it defines validate_conf used below
 for _alib in "$_here/audit-lib.sh" "$HOME/.local/bin/audit-lib.sh" \
             "/usr/bin/audit-lib.sh"; do
   if [ -z "${AUDIT_LIB_LOADED:-}" ] && [ -f "$_alib" ]; then
@@ -31,6 +26,11 @@ for _alib in "$_here/audit-lib.sh" "$HOME/.local/bin/audit-lib.sh" \
   fi
 done
 unset _alib
+# Fill via ~/.config/bluetooth-buds.conf (install.sh prompts for it)
+[ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
+command -v validate_conf >/dev/null 2>&1 && validate_conf
+NOTIF_ID=0
+[ -f "$IDFILE" ] && NOTIF_ID="$(cat "$IDFILE" 2>/dev/null || echo 0)"
 command -v maid_audit >/dev/null 2>&1 || maid_audit() { :; }
 
 is_blocked() { "$RFKILL_BIN" list bluetooth 2>/dev/null | grep -qi "soft blocked: yes"; }
