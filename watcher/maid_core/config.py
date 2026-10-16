@@ -62,8 +62,11 @@ CONFIG_PATH = os.path.expanduser("~/.config/maid-watcher/config.json")
 def load(path=CONFIG_PATH):
     cfg = json.loads(json.dumps(DEFAULTS))
     if os.path.exists(path):
-        with open(path) as f:
-            user = json.load(f)
+        try:
+            with open(path) as f:
+                user = json.load(f)
+        except ValueError as e:
+            raise SystemExit(f"bad config {path}: {e} - fix it or remove the file")
         for key, val in user.items():
             if isinstance(val, dict) and isinstance(cfg.get(key), dict):
                 cfg[key].update(val)
