@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Maid BT to Phone
 Comment=Park PC audio, hand earbuds to the phone
-Exec=/home/EXAMPLEUSER/.local/bin/bluetooth-toggle.sh release
+Exec=@HOME@/.local/bin/bluetooth-toggle.sh release
 Icon=audio-headset-bluetooth
 Keywords=bluetooth;earbuds;phone;release;
 Terminal=false

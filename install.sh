@@ -150,10 +150,10 @@ copy_one() {
   if [ "$rewrite" = "1" ]; then
     # user install: fix the Exec placeholder to this $HOME.
     # escape & (sed replacement metachar) in $HOME
-    sed -e "s|/home/EXAMPLEUSER/|${HOME//&/\\&}|g" "$src" > "$tmp"
+    sed -e "s|@HOME@|${HOME//&/\\&}|g" "$src" > "$tmp"
   elif [ "$rewrite" = "2" ]; then
     # system package: bare command names, resolved via PATH.
-    sed -e "s|/home/EXAMPLEUSER/.local/bin/||g" "$src" > "$tmp"
+    sed -e "s|@HOME@/.local/bin/||g" "$src" > "$tmp"
   else
     cp -a "$src" "$tmp"
   fi

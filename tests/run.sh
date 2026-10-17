@@ -16,13 +16,14 @@ python3 -m py_compile "$PKGDIR"/watcher/maid-watcher "$PKGDIR"/watcher/maid_core
 ok "syntax"
 
 echo "== personal data =="
-# NOTE: watcher/maid-watcher.desktop carries an Exec=/home/EXAMPLEUSER/... path on
-# purpose (install.sh rewrites it, same convention as desktop/*.desktop).
-if grep -rn --exclude-dir=__pycache__ -iE "AA:BB|RemoteApp|ExampleBuds|Liberty|example-host|10\.0\.0|/home/EXAMPLEUSER/" \
-    "$PKGDIR/bin" "$PKGDIR/watcher/maid-watcher" "$PKGDIR"/watcher/maid_core \
-    "$PKGDIR/watcher/config.example.json" \
-    "$PKGDIR/README.md" "$PKGDIR/CHANGELOG.md" "$PKGDIR/install.sh" 2>/dev/null \
-    | grep -vE "s\\|/home/EXAMPLEUSER/"; then
+# every shipped file is scanned, the desktop Exec included: those carry a
+# @HOME@ placeholder that install.sh rewrites to this $HOME, so the repo
+# never names a machine's own paths.
+if grep -rn --exclude-dir=__pycache__ -iE "AA:BB|RemoteApp|ExampleBuds|Liberty|example-host|10\.0\.0|/(home|Users)/[^/[:space:]]+" \
+    "$PKGDIR/bin" "$PKGDIR/desktop" "$PKGDIR/plasmoid" \
+    "$PKGDIR/watcher/maid-watcher" "$PKGDIR"/watcher/maid_core \
+    "$PKGDIR/watcher/maid-watcher.desktop" "$PKGDIR/watcher/config.example.json" \
+    "$PKGDIR/README.md" "$PKGDIR/CHANGELOG.md" "$PKGDIR/install.sh" 2>/dev/null; then
   fail "personal string leaked"
 fi
 ok "no personal data"

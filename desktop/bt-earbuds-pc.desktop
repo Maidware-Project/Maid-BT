@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Maid BT to PC
 Comment=Connect earbuds and route audio to them
-Exec=/home/EXAMPLEUSER/.local/bin/bluetooth-toggle.sh on
+Exec=@HOME@/.local/bin/bluetooth-toggle.sh on
 Icon=bluetooth
 Keywords=bluetooth;earbuds;pc;connect;
 Terminal=false

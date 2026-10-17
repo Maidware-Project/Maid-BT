@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Maid Watcher
 Comment=Bluetooth earbuds connection/call/battery manager (Maid BT component)
-Exec=/home/EXAMPLEUSER/.local/bin/maid-watcher run
+Exec=@HOME@/.local/bin/maid-watcher run
 Icon=audio-headphones
 Keywords=bluetooth;earbuds;headset;maid;
 Terminal=false
