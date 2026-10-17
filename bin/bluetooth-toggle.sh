@@ -143,13 +143,24 @@ suspend_bluez_sink() {
   done
 }
 
+sink_exists() {
+  # stale pulse index or unplugged sink: park only onto something real
+  pactl list short sinks 2>/dev/null | awk '{print $2}' | grep -Fxq "$1"
+}
+
 park_on_fallback() {
-  pactl set-default-sink "$FALLBACK_SINK" 2>/dev/null || echo "warn: set-default-sink $FALLBACK_SINK failed"
-  move_bluez_to_fallback
-  suspend_bluez_sink
-  # streams may still be creating; one more pass after a beat
-  sleep 1
-  move_bluez_to_fallback
+  local fb="${FALLBACK_SINK:-}"
+  if sink_exists "$fb"; then
+    pactl set-default-sink "$fb" 2>/dev/null || echo "warn: set-default-sink $fb failed"
+    move_bluez_to_fallback
+    suspend_bluez_sink
+    # streams may still be creating; one more pass after a beat
+    sleep 1
+    move_bluez_to_fallback
+  else
+    echo "warn: fallback sink \"$fb\" not found - not parking (fix bluetooth-buds.conf: pactl list short sinks)"
+    suspend_bluez_sink
+  fi
 }
 
 switch_to_buds() {

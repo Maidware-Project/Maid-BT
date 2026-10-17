@@ -1,5 +1,14 @@
 # changelog
 
+## fallback sink honesty
+
+- the fallback sink is stored as a name, never a pulse index: indexes
+  are assigned per session and go stale, which used to make the park
+  fail silently (audio just stopped). the daemon now warns at start
+  when the config holds a bare number, checks the sink is really there
+  before parking, and logs it when it can't. the installer resolves a
+  typed index to the current name instead of writing it down.
+
 ## intent listener audit
 
 - full auth review of the port 8899 listener: token required on every

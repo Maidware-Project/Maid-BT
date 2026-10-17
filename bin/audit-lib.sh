@@ -24,6 +24,11 @@ validate_conf() {
     echo "bad BUDS_MAC in bluetooth-buds.conf - fix it or rerun install.sh" >&2; exit 2; }
   [[ "${FALLBACK_SINK:-}" =~ ^[A-Za-z0-9_.,:/+=@-]+$ ]] || {
     echo "bad FALLBACK_SINK in bluetooth-buds.conf - fix it or rerun install.sh" >&2; exit 2; }
+  # a bare number is a pulse index, not a sink name: indexes are assigned
+  # per session and go stale, so the park would fail silently later
+  if [[ "${FALLBACK_SINK:-}" =~ ^[0-9]+$ ]]; then
+    echo "warn: FALLBACK_SINK \"$FALLBACK_SINK\" is a pulse index - indexes go stale; use the sink name from: pactl list short sinks" >&2
+  fi
 }
 
 # need <cmd> [hint]: hard requirement with a clean error (no traceback,
