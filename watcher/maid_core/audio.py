@@ -424,16 +424,32 @@ def codec_of_profile(profile):
 
 
 def mpv_sockets():
-    """mpv IPC sockets to drive (user enables with input-ipc-server)."""
+    """mpv IPC sockets to drive (user enables with input-ipc-server).
+
+    Only real sockets owned by this user count: on a shared machine
+    anyone could otherwise plant /tmp/mpvsocket and receive the
+    commands sent through it. $XDG_RUNTIME_DIR is checked before /tmp.
+    """
     import os
+    import stat
     candidates = []
     env = os.environ.get("MPV_SOCKET", "")
     if env:
         candidates.append(env)
-    home = os.path.expanduser("~")
+    runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+    if runtime:
+        candidates.append(os.path.join(runtime, "mpv/socket"))
     candidates += ["/tmp/mpvsocket",
-                   os.path.join(home, ".config/mpv/socket")]
-    return [c for c in candidates if os.path.exists(c)]
+                   os.path.join(os.path.expanduser("~"), ".config/mpv/socket")]
+    found = []
+    for path in candidates:
+        try:
+            st = os.lstat(path)
+        except OSError:
+            continue
+        if stat.S_ISSOCK(st.st_mode) and st.st_uid == os.getuid():
+            found.append(path)
+    return found
 
 
 def set_mpv_delay(seconds):
