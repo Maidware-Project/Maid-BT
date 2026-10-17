@@ -63,6 +63,9 @@ grep -q "QUALITY_LOCK" "$PKGDIR/bin/buds-fallback.sh" || fail "quality lock miss
 grep -q "QUALITY_LOCK" "$PKGDIR/bin/bluetooth-toggle.sh" || fail "quality lock missing (toggle)"
 grep -q "QUALITY_LOCK" "$PKGDIR/bluetooth-buds.conf.example" || fail "quality lock undocumented"
 grep -q "52-bt-max-quality" "$PKGDIR/install.sh" || fail "installer skips max-quality"
+for u in "$PKGDIR"/systemd/*.service "$PKGDIR/watcher/maid-watcher.service"; do
+  grep -q "ReadWritePaths=%h/MaidLogs" "$u" || fail "audit dir not writable in $u"
+done
 ok "watcher extras"
 grep -q "fallback_grab" "$PKGDIR/watcher/config.example.json" || fail "grab config missing"
 grep -q "phones_up" "$PKGDIR/watcher/maid-watcher" || fail "grab logic missing"

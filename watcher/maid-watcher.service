@@ -12,9 +12,11 @@ RestartSec=10
 # leak fails loud (restart) instead of eating a 4 GB machine.
 MemoryMax=150M
 # Hardened like the Maid BT units; daemon only needs BT + audio + netlink.
+# The lone fs write is the MaidLogs audit file.
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
+ReadWritePaths=%h/MaidLogs
 PrivateTmp=true
 ProtectKernelTunables=true
 ProtectControlGroups=true
