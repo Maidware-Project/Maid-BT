@@ -7,11 +7,13 @@ PartOf=graphical-session.target
 ExecStart=%h/.local/bin/bt-notify-menu.sh
 Restart=always
 RestartSec=3
-# least privilege: D-Bus; allow writing under /run/user (notification cache)
+# least privilege: D-Bus; writes: notification cache under /run/user,
+# MaidLogs audit file
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=/run/user/%U
+ReadWritePaths=%h/MaidLogs
 PrivateTmp=true
 RestrictAddressFamilies=AF_UNIX AF_NETLINK
 

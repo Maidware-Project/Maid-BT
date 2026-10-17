@@ -8,6 +8,9 @@
   when the config holds a bare number, checks the sink is really there
   before parking, and logs it when it can't. the installer resolves a
   typed index to the current name instead of writing it down.
+- the systemd units carve out `~/MaidLogs` for the audit trail: it was
+  silently dead inside their read-only sandbox (daemon and notification
+  menu both).
 
 ## intent listener audit
 

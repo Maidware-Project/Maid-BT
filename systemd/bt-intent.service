@@ -7,11 +7,13 @@ Wants=network-online.target
 ExecStart=/usr/bin/python3 %h/.local/bin/bt-intent-server.py
 Restart=always
 RestartSec=3
-# least privilege: LAN TCP + D-Bus; allow writing hands-off marker under /run/user
+# least privilege: LAN TCP + D-Bus; writes: hands-off marker under
+# /run/user and the MaidLogs audit file
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=/run/user/%U
+ReadWritePaths=%h/MaidLogs
 PrivateTmp=true
 RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
 
