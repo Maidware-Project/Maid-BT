@@ -275,7 +275,7 @@ chmod +x /tmp/maidbt-g/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="testsink-fallback"\n' > /tmp/maidbt-g/.config/bluetooth-buds.conf
 export STUBSTATE=/tmp/maidbt-g/state
 export PATH="/tmp/maidbt-g/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-g
-echo "11 testsink" > /tmp/maidbt-g/state/sinks
+printf '11 testsink\n50 testsink-fallback\n' > /tmp/maidbt-g/state/sinks
 echo "testsink" > /tmp/maidbt-g/state/default
 HOME=/tmp/maidbt-g timeout 30 bash "$PKGDIR/bin/buds-fallback.sh" > /tmp/maidbt-g/daemon.log 2>&1 &
 DPID=$!
@@ -300,6 +300,50 @@ wait 2>/dev/null || true
 rm -rf /tmp/maidbt-g
 export PATH=$(echo "$PATH" | sed 's|/tmp/maidbt-g/stubs:||')
 unset STUBSTATE
+
+echo "== stale sink index fails loud =="
+rm -rf /tmp/maidbt-x; mkdir -p /tmp/maidbt-x/stubs /tmp/maidbt-x/.config /tmp/maidbt-x/state
+cat > /tmp/maidbt-x/stubs/bluetoothctl <<'EOF'
+#!/bin/bash
+case "$*" in
+  *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
+  *info*) printf 'Alias: Test Buds\n\tConnected: no\n' ;;
+  *connect*) echo "Failed to connect"; exit 1 ;;
+  *) exit 1 ;;
+esac
+exit 0
+EOF
+cat > /tmp/maidbt-x/stubs/pactl <<'EOF'
+#!/bin/bash
+S="${STUBSTATE:-/tmp}"
+case "$*" in
+  *short*sinks*) cat "$S/sinks" 2>/dev/null ;;
+  *short*sink-inputs*) : ;;
+  *info*) echo "Default Sink: $(cat "$S/default" 2>/dev/null)" ;;
+  *set-default-sink*) echo "set-default $2" >> "$S/calls" ;;
+  *suspend-sink*|*move-sink-input*|*short*cards*|*list*cards*) : ;;
+esac
+exit 0
+EOF
+chmod +x /tmp/maidbt-x/stubs/*
+# silence cross-boundary side effects: no real phone pings, no real popups.
+printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-x/stubs/kdeconnect-cli
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-x/stubs/notify-send
+chmod +x /tmp/maidbt-x/stubs/*
+printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="3543"\n' > /tmp/maidbt-x/.config/bluetooth-buds.conf
+echo "77 bluez_output.11_22_33_44_55_66.1" > /tmp/maidbt-x/state/sinks
+echo "bluez_output.11_22_33_44_55_66.1" > /tmp/maidbt-x/state/default
+STUBSTATE=/tmp/maidbt-x/state PATH="/tmp/maidbt-x/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-x \
+  HOME=/tmp/maidbt-x timeout 30 bash "$PKGDIR/bin/buds-fallback.sh" > /tmp/maidbt-x/daemon.log 2>&1 &
+XPID=$!
+sleep 9
+grep -q "is a pulse index" /tmp/maidbt-x/daemon.log || fail "stale index config not warned"
+grep -q 'fallback sink "3543" not found' /tmp/maidbt-x/daemon.log || fail "missing fallback not logged"
+[ ! -f /tmp/maidbt-x/state/calls ] || fail "parked blind onto a stale index"
+kill "$XPID" 2>/dev/null || true
+wait 2>/dev/null || true
+ok "stale sink index fails loud"
+rm -rf /tmp/maidbt-x
 
 echo "== quality lock pins LDAC =="
 rm -rf /tmp/maidbt-q; mkdir -p /tmp/maidbt-q/stubs /tmp/maidbt-q/.config /tmp/maidbt-q/state

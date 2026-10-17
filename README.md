@@ -138,6 +138,12 @@ that automatically; if one app stays dead, restart just that app
 - switch gap: reconnecting + rerouting takes a few seconds by nature.
   that's physics, not a bug.
 
+**the fallback sink must be a name.** `FALLBACK_SINK` in
+`~/.config/bluetooth-buds.conf` wants a NAME from `pactl list short
+sinks`, not the number on its left - numbers are per-session and go
+stale. the daemon warns about a numeric one at start and skips the
+park instead of failing silently.
+
 ## Linux Mint (incl. older releases)
 
 Mint is Ubuntu underneath, so the `apt` installer path handles it

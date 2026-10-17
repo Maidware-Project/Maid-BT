@@ -2,7 +2,7 @@
 # Copy to ~/.config/bluetooth-buds.conf and edit (install.sh can do it).
 # Find values with:
 #   bluetoothctl devices          # pick your earbuds MAC
-#   pactl list short sinks        # pick your fallback (speakers/DAC) sink
+#   pactl list short sinks        # fallback (speakers/DAC) NAME - not the index
 
 BUDS_MAC="AA:BB:CC:DD:EE:FF"
 FALLBACK_SINK=""
