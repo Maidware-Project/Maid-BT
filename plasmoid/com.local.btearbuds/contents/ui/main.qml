@@ -9,7 +9,7 @@ PlasmoidItem {
     id: root
 
     property string btState: "off"
-    property string toggle: "/home/visa/.local/bin/bluetooth-toggle.sh"
+    property string toggle: "@HOME@/.local/bin/bluetooth-toggle.sh"
 
     toolTipMainText: "BT Earbuds"
     toolTipSubText: stateText()

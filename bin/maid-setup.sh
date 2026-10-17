@@ -118,7 +118,7 @@ case "$REPLY" in [Yy]*)
       && say "watcher on (supervised)" || say "could not enable service"
   else
     mkdir -p "$HOME/.config/autostart"
-    sed -e "s|/home/visa|${HOME//&/\\&}|g" \
+    sed -e "s|@HOME@|${HOME//&/\\&}|g" \
       "$WDESK" \
       > "$HOME/.config/autostart/maid-watcher.desktop" 2>/dev/null \
       && say "watcher on (autostart)" || say "could not write autostart entry"

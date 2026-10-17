@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Maid BT On
 Comment=Power Bluetooth radio on without grabbing earbuds
-Exec=/home/visa/.local/bin/bluetooth-toggle.sh radio
+Exec=@HOME@/.local/bin/bluetooth-toggle.sh radio
 Icon=bluetooth
 Terminal=false
 Type=Application
