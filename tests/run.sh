@@ -19,11 +19,12 @@ echo "== personal data =="
 # every shipped file is scanned, the desktop Exec included: those carry a
 # @HOME@ placeholder that install.sh rewrites to this $HOME, so the repo
 # never names a machine's own paths.
-if grep -rn --exclude-dir=__pycache__ -iE "90:BF|SmartAction|soundcore|Liberty|Mothership|10\.0\.0|/(home|Users)/[^/[:space:]]+" \
+if grep -rn --exclude-dir=__pycache__ -iE "([0-9a-f]{2}:){5}[0-9a-f]{2}|/(home|Users)/[^/[:space:]]+|(10|192\.168|172\.(1[6-9]|2[0-9]|3[01]))\.[0-9]{1,3}\.[0-9]{1,3}" \
     "$PKGDIR/bin" "$PKGDIR/desktop" "$PKGDIR/plasmoid" \
     "$PKGDIR/watcher/maid-watcher" "$PKGDIR"/watcher/maid_core \
     "$PKGDIR/watcher/maid-watcher.desktop" "$PKGDIR/watcher/config.example.json" \
-    "$PKGDIR/README.md" "$PKGDIR/CHANGELOG.md" "$PKGDIR/install.sh" 2>/dev/null; then
+    "$PKGDIR/README.md" "$PKGDIR/CHANGELOG.md" "$PKGDIR/install.sh" 2>/dev/null \
+    | grep -v "AA:BB:CC:DD:EE:FF"; then
   fail "personal string leaked"
 fi
 ok "no personal data"
