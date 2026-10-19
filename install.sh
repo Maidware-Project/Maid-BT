@@ -48,6 +48,7 @@ if [ "$UNINST" = "1" ]; then
   rm -f "$SYSDDIR"/maid-watcher.service
   rm -f "$HOME"/.config/wireplumber/wireplumber.conf.d/51-bt-no-suspend.conf
   rm -f "$HOME"/.config/wireplumber/wireplumber.conf.d/52-bt-max-quality.conf
+  rm -f "$HOME"/.config/wireplumber/wireplumber.conf.d/53-bt-a2dp-only.conf
   rm -f "$SYSDDIR"/buds-fallback.service "$SYSDDIR"/bt-intent.service \
     "$SYSDDIR"/bt-menu.service
   rm -rf "$SHAREDIR/maid-bt" "$SHAREDIR/plasma/plasmoids/com.local.btearbuds"
@@ -206,6 +207,7 @@ done
 # sources maid-setup.sh needs later (repo layout absent once installed)
 copy_one "$PKGDIR/watcher/maid-watcher.desktop" "$SHAREDIR/maid-bt/maid-watcher.desktop" $REWRITE
 copy_one "$PKGDIR/wireplumber/51-bt-no-suspend.conf" "$SHAREDIR/maid-bt/51-bt-no-suspend.conf"
+copy_one "$PKGDIR/wireplumber/53-bt-a2dp-only.conf" "$SHAREDIR/maid-bt/53-bt-a2dp-only.conf"
 copy_one "$PKGDIR/watcher/config.example.json" "$SHAREDIR/maid-bt/config.example.json"
 
 copy_one "$PKGDIR/plasmoid/com.local.btearbuds/metadata.json" \
@@ -374,6 +376,26 @@ if [ "$QLOCK_ON" = "1" ]; then
   say "max-quality on - restart wireplumber to apply: systemctl --user restart wireplumber"
 else
   say "max-quality audio off"
+fi
+# A2DP-only: newer stacks try LE Audio transports first on dual-mode
+# buds when the adapter's ISO sockets are weak - those transports keep
+# failing and the buds go silent while classic A2DP works. Opt-in,
+# off by default.
+A2DP_ON=0
+if [ -t 0 ]; then
+  printf 'Lock buds to classic A2DP (fixes silent LE Audio buds)? [y/N]: '
+  read -r _wans4
+  case "$_wans4" in [Yy]*) A2DP_ON=1 ;; esac
+else
+  say "a2dp-only skipped (non-interactive; copy wireplumber/53-bt-a2dp-only.conf to ~/.config/wireplumber/wireplumber.conf.d/ to enable, then restart wireplumber)"
+fi
+if [ "$A2DP_ON" = "1" ]; then
+  mkdir -p "$HOME/.config/wireplumber/wireplumber.conf.d"
+  copy_one "$PKGDIR/wireplumber/53-bt-a2dp-only.conf" \
+    "$HOME/.config/wireplumber/wireplumber.conf.d/53-bt-a2dp-only.conf"
+  say "a2dp-only on - restart wireplumber to apply: systemctl --user restart wireplumber"
+else
+  say "a2dp-only off"
 fi
 command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 

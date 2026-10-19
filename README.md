@@ -132,6 +132,11 @@ that automatically; if one app stays dead, restart just that app
   LDAC after every switch. costs earbud battery; needs LDAC buds.
   the lock also rescues a card stuck on HSP/HFP with nobody on the
   mic (e.g. after a restart) - a live call mic is never touched.
+- fully silent dual-mode buds: newer stacks try LE Audio transports
+  first on buds that offer it, and without working ISO sockets those
+  transports fail over and over while classic A2DP would be fine.
+  fix is the optional a2dp-only config (installer offers it; locks
+  the buds to classic A2DP), then reconnect once.
 - lip-sync lag: bluetooth sound always trails video a bit (SBC/AAC
   ~0.2s, LDAC ~0.3s). nothing on the PC removes it - nudge it right
   in your player (VLC: J/K keys, mpv: `--audio-delay=-0.2`).

@@ -33,6 +33,7 @@ need bluetoothctl "bluez package"
 need pactl "pulseaudio-utils / libpulse package"
 RFKILL="$(command -v rfkill 2>/dev/null || { [ -x /usr/sbin/rfkill ] && echo /usr/sbin/rfkill; } || { [ -x /sbin/rfkill ] && echo /sbin/rfkill; } || echo rfkill)"
 ACTION="${1:-toggle}"
+while [ "${ACTION#-}" != "$ACTION" ]; do ACTION="${ACTION#-}"; done
 
 BUDS_MAC="AA:BB:CC:DD:EE:FF"
 FALLBACK_SINK=""
