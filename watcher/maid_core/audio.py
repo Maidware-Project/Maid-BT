@@ -80,6 +80,8 @@ def set_profile_a2dp(mac):
     """
     import time
     prev = active_profile(mac)
+    if (prev or "").startswith("a2dp"):
+        return True
     for profile in ("a2dp-sink", "a2dp_sink",
                     "a2dp-sink-aac", "a2dp-sink-sbc"):
         card = bluez_card_id(mac)
@@ -88,9 +90,13 @@ def set_profile_a2dp(mac):
         p = _run("wpctl", "set-profile", str(card), profile)
         if not (p and p.returncode == 0):
             continue
-        time.sleep(1)
-        if (active_profile(mac) or "").startswith("a2dp"):
-            return True
+        # Transport setup is not instant. Re-check patiently instead of
+        # switching to the next codec on top of a forming transport:
+        # profile churn is what wedges dual-mode cards (2026-10-19).
+        for _ in range(3):
+            time.sleep(2)
+            if (active_profile(mac) or "").startswith("a2dp"):
+                return True
     # PulseAudio fallback (Mint, or wpctl failing): underscore names.
     # Harmless on PipeWire too - pactl speaks to the same server.
     import subprocess
