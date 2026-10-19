@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# buds-fallback v2: seamless plug-and-play. Radio stays on; buds reconnect on
+# buds-fallback v2: plug and play. Radio stays on; buds reconnect on
 # case-open and audio follows automatically:
 #   buds appear -> auto-connect your earbuds, default sink to buds, notify
 #   buds gone   -> park default audio on fallback sink within seconds, notify,
@@ -61,7 +61,7 @@ AUDIO_REFRESH=120     # seconds between paired-device rescans
 : "${QUALITY_LOCK:=0}"       # pin A2DP to LDAC after every switch
 BATTERY_POLL=60       # seconds between battery checks
 BATT_COOLDOWN=180     # min seconds between codec switches (anti-flap)
-POWER_OFF_ON_LOST=0   # 0 = seamless mode: radio stays on, buds reconnect on case-open
+POWER_OFF_ON_LOST=0   # 0 = auto mode: radio stays on, buds reconnect on case-open
 BLOCK_ON_EXTERNAL_OFF=0 # 1 = also rfkill block when KDE tray powers off (sticky off)
 MARKER="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-toggle-manual"
 HANDS="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-hands-off"
@@ -555,7 +555,7 @@ while true; do
         fi
         connected_since=0
       fi
-      # seamless auto-connect with circuit breaker (anti-flap)
+      # auto-connect with circuit breaker (anti-flap)
       interval=$CONNECT_RETRY_EVERY
       [ "$lost_for" -ge "$RETRY_BACKOFF_AFTER" ] && interval=30
       next_allowed=$((last_attempt + interval))

@@ -2,7 +2,7 @@
 pkgname=maid-bt-git
 pkgver=0.4.r1.g0000000
 pkgrel=1
-pkgdesc="Seamless Bluetooth earbuds switcher for Linux (PC/phone/off, warm-link, watcher)"
+pkgdesc="Bluetooth earbuds switcher for Linux (PC/phone/off, warm-link, watcher)"
 arch=('any')
 url="https://github.com/Maidware-Project/Maid-BT"
 license=('MIT')

@@ -21,7 +21,7 @@ version="${VERSION:-0.0.0}"
 
 # metadata that does not change between builds
 name="maid-bt"
-desc="Seamless Bluetooth earbuds switcher for Linux (PC/phone/off, warm-link, watcher)"
+desc="Bluetooth earbuds switcher for Linux (PC/phone/off, warm-link, watcher)"
 homepage="https://github.com/Maidware-Project/Maid-BT"
 depends="python3 bluez"           # same name everywhere
 recommends=""                     # named differently per distro
