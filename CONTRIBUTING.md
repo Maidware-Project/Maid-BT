@@ -1,8 +1,8 @@
 # contributing
 
 small, reviewable changes only - one logical change per pull request.
-keep a cleanup and a behavior change in separate patches. read AGENTS.md
-first; it applies to humans and AI assistants alike. maintained by
+keep a cleanup and a behavior change in separate patches. read README.md
+first; it covers what the project is and how it builds. maintained by
 Maidware Project.
 
 ## commits
@@ -30,8 +30,8 @@ Maidware Project.
 
 ## know your patch
 
-understand every line you send, assistant-written ones included. if you
-can't say what a line does, don't send it.
+understand every line you send. if you can't
+say what a line does, don't send it.
 
 you need basic linux, and some patience for bluetooth. this repo moves
 people's audio around, so "should work" doesn't get merged.
