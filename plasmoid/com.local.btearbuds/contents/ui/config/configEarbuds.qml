@@ -14,10 +14,11 @@ KCM.SimpleKCM {
     property string watcherTool: "@HOME@/.local/bin/maid-watcher"
     property var values: ({})
     property var deviceModel: []
-    property var sinkNames: []
+    property var sinkItems: []
     property var sinkModel: []
     property bool customSink: false
     property string audioServer: ""
+    property string defaultSink: ""
     property string scanStatus: ""
     property bool ready: false
     property bool applying: false
@@ -36,7 +37,7 @@ KCM.SimpleKCM {
 
     function refreshAudio() {
         execSource.connectSource("pactl info");
-        execSource.connectSource("pactl list short sinks");
+        execSource.connectSource("pactl list sinks");
     }
 
     function refreshDevices() {
@@ -47,11 +48,30 @@ KCM.SimpleKCM {
     function buildSinkModel() {
         const current = sinkField.text.trim();
         const items = [];
-        if (current !== "" && sinkNames.indexOf(current) < 0)
-            items.push({ name: current + " (current)", value: current });
-        for (let i = 0; i < sinkNames.length; ++i)
-            items.push({ name: sinkNames[i], value: sinkNames[i] });
-        items.push({ name: "Custom…", value: "__custom__" });
+
+        // Keep the configured sink reachable even when the device is
+        // unplugged right now; otherwise editing would silently lose it.
+        let known = false;
+        for (let i = 0; i < sinkItems.length; ++i) {
+            if (sinkItems[i].value === current) {
+                known = true;
+                break;
+            }
+        }
+        if (current !== "" && !known)
+            items.push({ label: "Current: " + current, value: current });
+
+        const sorted = sinkItems.slice();
+        sorted.sort((a, b) => {
+            if (a.value === defaultSink)
+                return -1;
+            if (b.value === defaultSink)
+                return 1;
+            return a.label.localeCompare(b.label);
+        });
+        for (let i = 0; i < sorted.length; ++i)
+            items.push({ label: sorted[i].label, value: sorted[i].value });
+        items.push({ label: "Custom…", value: "__custom__" });
 
         let index = -1;
         for (let i = 0; i < items.length; ++i) {
@@ -150,14 +170,35 @@ KCM.SimpleKCM {
                 const match = out.match(/^Server Name:\s*(.*)$/m);
                 if (match)
                     page.audioServer = match[1].indexOf("PipeWire") >= 0 ? "PipeWire" : "PulseAudio";
-            } else if (sourceName === "pactl list short sinks") {
-                const names = [];
+                const def = out.match(/^Default Sink:\s*(.*)$/m);
+                if (def)
+                    page.defaultSink = def[1].trim();
+                page.buildSinkModel();
+            } else if (sourceName === "pactl list sinks") {
+                const items = [];
+                let name = "";
+                let description = "";
+                const flush = () => {
+                    if (name === "")
+                        return;
+                    items.push({ label: description || name, value: name });
+                    name = "";
+                    description = "";
+                };
                 out.split("\n").forEach(line => {
-                    const parts = line.trim().split(/\s+/);
-                    if (parts.length >= 2)
-                        names.push(parts[1]);
+                    if (/^\s*Sink #/.test(line)) {
+                        flush();
+                        return;
+                    }
+                    let match = line.match(/^\s*Name:\s*(.+)$/);
+                    if (match)
+                        name = match[1].trim();
+                    match = line.match(/^\s*Description:\s*(.+)$/);
+                    if (match)
+                        description = match[1].trim();
                 });
-                page.sinkNames = names;
+                flush();
+                page.sinkItems = items;
                 page.buildSinkModel();
             } else if (sourceName === page.watcherTool + " scan") {
                 const devices = [];
