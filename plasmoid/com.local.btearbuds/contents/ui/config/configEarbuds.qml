@@ -69,8 +69,10 @@ KCM.SimpleKCM {
                 return 1;
             return a.label.localeCompare(b.label);
         });
-        for (let i = 0; i < sorted.length; ++i)
-            items.push({ label: sorted[i].label, value: sorted[i].value });
+        for (let i = 0; i < sorted.length; ++i) {
+            const prefix = sorted[i].value === defaultSink ? "Default: " : "";
+            items.push({ label: prefix + sorted[i].label, value: sorted[i].value });
+        }
         items.push({ label: "Custom…", value: "__custom__" });
 
         let index = -1;
@@ -313,7 +315,7 @@ KCM.SimpleKCM {
                 id: sinkBox
                 Layout.fillWidth: true
                 model: page.sinkModel
-                textRole: "name"
+                textRole: "label"
                 valueRole: "value"
                 onActivated: {
                     const item = page.sinkModel[currentIndex];
@@ -326,6 +328,31 @@ KCM.SimpleKCM {
                         page.customSink = false;
                         sinkField.text = item.value;
                         page.changed();
+                    }
+                }
+
+                // Show the friendly name first; the raw pactl name stays
+                // underneath for people who know what they are looking for.
+                delegate: QQC2.ItemDelegate {
+                    id: sinkDelegate
+                    width: sinkBox.width
+                    highlighted: sinkBox.highlightedIndex === index
+                    contentItem: ColumnLayout {
+                        spacing: 0
+                        QQC2.Label {
+                            text: modelData.label
+                            font.bold: sinkBox.currentIndex === index
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        QQC2.Label {
+                            text: modelData.value
+                            visible: modelData.value !== modelData.label && modelData.value !== "__custom__"
+                            font: Kirigami.Theme.smallFont
+                            opacity: 0.6
+                            elide: Text.ElideMiddle
+                            Layout.fillWidth: true
+                        }
                     }
                 }
             }
