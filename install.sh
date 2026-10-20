@@ -242,6 +242,8 @@ copy_one "$PKGDIR/watcher/config.example.json" "$SHAREDIR/maid-bt/config.example
 
 # the kdeconnect early-login fix lives in Maid Helper's `kdeconnect`
 # doctor (maid-helper --only kdeconnect --fix); it is not shipped here.
+# clean a stale patch copy left by older installs
+if [ "$CHECK" = "0" ]; then rm -rf "$SHAREDIR/maid-bt/patches"; fi
 
 if [ -n "${KDE_PLASMA:-}" ] && [ "${KDE_PLASMA%%.*}" -lt 6 ] 2>/dev/null; then
   warn "Plasma $KDE_PLASMA detected; the BT Earbuds plasmoid needs Plasma 6 - skipping it"
