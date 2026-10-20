@@ -95,7 +95,8 @@ backs up anything it replaces. it downloads nothing - everything comes
 from your distro's own packages.
 
 then: pair + trust your earbuds (`bluetoothctl pair` + `trust`), add
-the "BT Earbuds" widget to your panel, log out and back in. if you use
+the "Maid BT" widget to your panel. if it does not appear yet, restart
+plasmashell; a full logout is not needed. if you use
 the phone remote, also open TCP port 8899 in your firewall.
 
 ## usage

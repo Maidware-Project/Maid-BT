@@ -246,7 +246,7 @@ copy_one "$PKGDIR/watcher/config.example.json" "$SHAREDIR/maid-bt/config.example
 if [ "$CHECK" = "0" ]; then rm -rf "$SHAREDIR/maid-bt/patches"; fi
 
 if [ -n "${KDE_PLASMA:-}" ] && [ "${KDE_PLASMA%%.*}" -lt 6 ] 2>/dev/null; then
-  warn "Plasma $KDE_PLASMA detected; the BT Earbuds plasmoid needs Plasma 6 - skipping it"
+  warn "Plasma $KDE_PLASMA detected; the Maid BT plasmoid needs Plasma 6 - skipping it"
 else
   copy_one "$PKGDIR/plasmoid/com.local.btearbuds/metadata.json" \
     "$SHAREDIR/plasma/plasmoids/com.local.btearbuds/metadata.json"
@@ -441,5 +441,5 @@ command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 --noincremental >/dev/
 say "done. Backups (if any): *.bak-${BACKUP_TS}"
 mkdir -p "$HOME/MaidLogs" 2>/dev/null || true
 say "logs live in ~/MaidLogs/ (visible folder) + journalctl --user -t maid-bt -t maid-watcher"
-say "Next: pair+trust earbuds, add the 'BT Earbuds' widget (Add Widgets), log out/in."
+say "Next: pair+trust earbuds, add the 'Maid BT' widget (Add Widgets). restart plasmashell only if it is not listed; no logout needed."
 say "Phone remote: see phone/README-macrodroid-tasker.md (needs ~/.config/bt-intent.token + open TCP 8899)."

@@ -145,4 +145,4 @@ case "$REPLY" in [Yy]*)
     && say "warm audio on - restart wireplumber to apply" || say "copy failed" ;;
 esac
 
-say "done. add the BT Earbuds widget, log out/in. test: bluetooth-toggle.sh status"
+say "done. add the Maid BT widget; restart plasmashell only if it is not listed. test: bluetooth-toggle.sh status"

@@ -1,5 +1,21 @@
 # changelog
 
+## redesign update
+
+- the panel popup is now a compact, native Plasma menu: a live status
+  header, native hover/selection backgrounds, and four clear choices:
+  This PC, Phone, Other devices, and Off. it sizes to its content and
+  leaves the popup's own translucent theme background alone, so light,
+  dark, and translucent themes all work.
+- "Other devices" replaces the old "Radio only" label: it powers the
+  Bluetooth radio on without grabbing the earbuds or moving audio, so a
+  controller, mouse, or keyboard can connect while the buds stay put.
+- hover explanations and a settings button to the existing configuration
+  dialog make the deeper options reachable from the menu.
+- the applet is now named Maid BT and describes itself in About as
+  "A Linux-only seamless Bluetooth earbuds switcher"; metadata is 1.1 and
+  the license is MIT.
+
 ## kdeconnectd early-login fix moved to Maid Helper
 
 - the version-specific patch no longer travels in this repo. Maid

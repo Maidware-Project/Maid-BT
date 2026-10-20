@@ -13,12 +13,12 @@
         "Category": "System Information",
         "Copyright": "Copyright (c) 2026 Maidware Project",
         "Icon": "bluetooth",
-        "Description": "One-tap earbuds switch: PC / phone / off",
+        "Description": "A Linux-only seamless Bluetooth earbuds switcher",
         "EnabledByDefault": true,
         "Id": "com.local.btearbuds",
         "License": "MIT",
-        "Name": "BT Earbuds",
-        "Version": "1.0",
+        "Name": "Maid BT",
+        "Version": "1.1",
         "Website": "https://maidware-project.github.io/"
     }
 }
