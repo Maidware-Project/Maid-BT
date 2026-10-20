@@ -1,5 +1,11 @@
 # changelog
 
+## gui wording
+
+- the applet describes itself with its gui parts now: "A Linux-only
+  seamless Bluetooth earbuds switcher - tray applet + helper window".
+  same wording on the repo description. nothing in behavior changed.
+
 ## Maid BT v1.1
 
 - applet: shows which side owns the audio ("Earbuds: PC · audio here" /
