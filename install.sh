@@ -210,12 +210,8 @@ copy_one "$PKGDIR/wireplumber/51-bt-no-suspend.conf" "$SHAREDIR/maid-bt/51-bt-no
 copy_one "$PKGDIR/wireplumber/53-bt-a2dp-only.conf" "$SHAREDIR/maid-bt/53-bt-a2dp-only.conf"
 copy_one "$PKGDIR/watcher/config.example.json" "$SHAREDIR/maid-bt/config.example.json"
 
-# the kdeconnect early-login fix (kernel 7.2.11 / Plasma 6.8) travels
-# with the suite: ~/.local/share/maid-bt/patches/kdeconnect-26.08.2/
-for f in "$PKGDIR"/patches/kdeconnect-26.08.2/*; do
-  [ -f "$f" ] || continue
-  copy_one "$f" "$SHAREDIR/maid-bt/patches/kdeconnect-26.08.2/$(basename "$f")"
-done
+# the kdeconnect early-login fix lives in Maid Helper's `kdeconnect`
+# doctor (maid-helper --only kdeconnect --fix); it is not shipped here.
 
 copy_one "$PKGDIR/plasmoid/com.local.btearbuds/metadata.json" \
   "$SHAREDIR/plasma/plasmoids/com.local.btearbuds/metadata.json"
