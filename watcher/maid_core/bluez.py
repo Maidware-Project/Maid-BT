@@ -31,6 +31,15 @@ class DeviceMonitor:
     def watch(self, mac):
         self._paths[mac_to_path(mac)] = mac
 
+    def unwatch(self, mac):
+        path = mac_to_path(mac)
+        if self._paths.get(path) == mac:
+            self._paths.pop(path, None)
+
+    def refresh(self):
+        """Rebind paths that may have changed (MAC edits, config reload)."""
+        self._paths = {mac_to_path(m): m for m in set(self._paths.values())}
+
     def _props_changed(self, iface, changed, invalidated=None, path=None):
         if iface != DEVICE_IFACE or "Connected" not in changed:
             return

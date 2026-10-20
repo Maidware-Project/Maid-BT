@@ -224,11 +224,69 @@ class Daemon:
 
     # -- periodic ---------------------------------------------------------
     def tick(self):
+        self._maybe_reload()
         self.battery.poll(list(self.devices.values()))
         self.fallback_grab()
         self.route_comms()
         self.bt_fallback_watch()
         return True
+
+    # ---- live config reload -------------------------------------------
+    # The applet's config pages write ~/.config/maid-watcher/config.json on
+    # every control change and on Apply. The daemon re-reads it on the next
+    # tick so settings take effect without a service restart.
+    def _conf_mtime(self):
+        try:
+            return os.path.getmtime(config_mod.CONFIG_PATH)
+        except OSError:
+            return None
+
+    def _maybe_reload(self):
+        mtime = self._conf_mtime()
+        if mtime is None or mtime == getattr(self, "_conf_seen", None):
+            return
+        first = not hasattr(self, "_conf_seen")
+        self._conf_seen = mtime
+        if first:
+            return
+        try:
+            cfg = config_mod.load()
+        except Exception as exc:  # bad JSON etc. - keep running on old cfg
+            notify.audit(f"config reload failed: {exc}")
+            return
+        self._apply_config(cfg)
+        notify.audit("config reloaded")
+
+    def _apply_config(self, cfg):
+        old_macs = set(self.devices)
+        self.devices = {d["mac"]: d for d in cfg["devices"]}
+        self.cfg = cfg
+        self.battery = BatteryWatch(cfg, self.monitor)
+
+        self.laptop = config_mod.laptop_mode(cfg)
+        rc = dict(cfg["reconnect"])
+        if self.laptop:
+            rc["initial_delay_s"] = max(rc["initial_delay_s"], 10)
+            rc["max_delay_s"] = max(rc["max_delay_s"], 300)
+            rc["give_up_after"] = min(rc.get("give_up_after", 10), 6)
+        self.rc = rc
+
+        for mac in old_macs - set(self.devices):
+            self.monitor.unwatch(mac)
+            self.retry.pop(mac, None)
+            self._wedged.pop(mac, None)
+        for mac in self.devices:
+            if mac not in old_macs:
+                self.monitor.watch(mac)
+                if self.monitor.is_connected(mac):
+                    dev = self.devices[mac]
+                    if dev.get("prefer_profile") == "a2dp":
+                        self._enforce_a2dp(mac)
+                elif self.devices[mac].get("auto_reconnect", True):
+                    self.retry[mac] = [0, time.time() + self.rc["initial_delay_s"]]
+                    GLib.timeout_add_seconds(self.rc["initial_delay_s"] + 1,
+                                             self._maybe_reconnect, mac)
+        self.monitor.refresh()
 
     def bt_fallback_watch(self):
         # WiFi dead → Bluetooth instead (opt-in). When no phone is
