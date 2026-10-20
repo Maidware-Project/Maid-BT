@@ -94,7 +94,7 @@ print("router unit passed")
 PYEOF2
 ok "comms router unit"
 mkdir -p /tmp/btstub
-printf '#!/bin/bash\necho "2: bnep0: <UP> mtu 1500"\necho "    inet 192.168.44.1/24 scope global bnep0"\n' > /tmp/btstub/ip
+printf '#!/bin/bash\necho "2: bnep0: <UP> mtu 1500"\necho "    inet 192.0.2.1/24 scope global bnep0"\n' > /tmp/btstub/ip
 chmod +x /tmp/btstub/ip
 PATH=/tmp/btstub:/usr/bin:/bin /usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF2' || fail "bnep detect failed"
 import os
