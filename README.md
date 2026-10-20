@@ -1,9 +1,6 @@
 # Maid BT v1.1 - bluetooth earbuds switching
 
 command-line helper. switching between pc, phone, or off with one command. routes audio automatically and stops dual-connection earbuds from fighting your phone. install asks for your mac and fallback sink. ships a plasma tray applet that shows where the sound is, and Maid BT Helper, a small GUI that checks the stack and applies safe fixes.
-
-![](screenshots/maid-bt.png)
-
 ## quick start
 
 ```sh
@@ -63,9 +60,6 @@ the installer offers a compact Plasma 6 tray applet: tiles for this PC,
 phone, other devices and off, codec + battery on the header, and one
 line that says where the sound is right now ("Earbuds: PC · audio here"
 vs "Earbuds: phone"). add it from the system tray once installed.
-
-![](screenshots/maid-bt-helper.png)
-
 also ships **Maid BT Helper**, a small Maidware GUI: same read-only
 checks, the safe subset of the shell's fixes, one-click LDAC pin
 (opt-in, reversible), and a shareable report with no device names and
