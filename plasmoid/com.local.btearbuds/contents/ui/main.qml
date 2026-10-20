@@ -217,7 +217,7 @@ PlasmoidItem {
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
                         highlighted: root.btState === "buds"
                         enabled: !root.busy
-                        PlasmaComponents.ToolTip.text: "Connect the earbuds and move audio to this PC."
+                        PlasmaComponents.ToolTip.text: "Connect earbuds to this PC."
                         PlasmaComponents.ToolTip.visible: hovered
                         onClicked: root.runAction("on")
 
@@ -257,7 +257,7 @@ PlasmoidItem {
                         Layout.fillWidth: true
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
                         enabled: !root.busy
-                        PlasmaComponents.ToolTip.text: "Release the earbuds to the phone; the PC stays hands-off."
+                        PlasmaComponents.ToolTip.text: "Release earbuds to the phone."
                         PlasmaComponents.ToolTip.visible: hovered
                         onClicked: root.runAction("release")
 
@@ -298,7 +298,7 @@ PlasmoidItem {
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
                         enabled: !root.busy
                         Accessible.description: "Power Bluetooth for a mouse, controller, or other accessory without moving earbud audio"
-                        PlasmaComponents.ToolTip.text: "Bluetooth on for another device; earbuds stay put."
+                        PlasmaComponents.ToolTip.text: "Bluetooth on for another device."
                         PlasmaComponents.ToolTip.visible: hovered
                         onClicked: root.runAction("radio")
 
@@ -339,7 +339,7 @@ PlasmoidItem {
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
                         highlighted: root.btState === "off"
                         enabled: !root.busy
-                        PlasmaComponents.ToolTip.text: "Turn Bluetooth off and park audio on the fallback sink."
+                        PlasmaComponents.ToolTip.text: "Turn Bluetooth off."
                         PlasmaComponents.ToolTip.visible: hovered
                         onClicked: root.runAction("off")
 

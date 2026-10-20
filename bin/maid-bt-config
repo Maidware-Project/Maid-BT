@@ -1,0 +1,347 @@
+#!/usr/bin/env python3
+"""Read/write Maid BT settings for the Plasma applet config pages.
+
+The applet's own settings live in two places:
+
+  ~/.config/bluetooth-buds.conf       shell variables for the toggle scripts
+  ~/.config/maid-watcher/config.json  the watcher's JSON policy
+
+This helper is the one writer for both. It is deliberately small and
+stdlib-only, so the config dialog does not need a Python Qt binding or a
+D-Bus service just to change a checkbox.
+
+Usage:
+  maid-bt-config get
+  maid-bt-config apply <url-encoded-json-object>
+
+`get` prints one flat JSON object; `apply` takes the same flat keys and
+writes both files atomically. Unknown keys are refused rather than
+silently ignored, so a typo in the dialog shows up as an error.
+"""
+import json
+import os
+import re
+import sys
+import tempfile
+from urllib.parse import unquote
+
+HOME = os.path.expanduser("~")
+SHELL_CONF = os.path.join(HOME, ".config", "bluetooth-buds.conf")
+WATCHER_CONF = os.path.join(HOME, ".config", "maid-watcher", "config.json")
+
+DEFAULTS = {
+    "devices": [],
+    "reconnect": {"initial_delay_s": 5, "max_delay_s": 120,
+                  "give_up_after": 10, "op_cooldown_s": 10},
+    "recover": {"adapter_cycle": True},
+    "calls": {"enabled": True, "pause_media": True, "mute_discord": True,
+              "max_call_mode_s": 300},
+    "battery": {"warn_percent": 25, "critical_percent": 12, "poll_s": 120},
+    "saver": {"enabled": False, "idle_minutes": 30},
+    "fallback_grab": {"enabled": False},
+    "bt_fallback": {"enabled": False},
+    "route_comms": {"enabled": True},
+    "laptop": {"mode": "auto"},
+}
+
+MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
+SINK_RE = re.compile(r"^[A-Za-z0-9_.,:/+=@-]+$")
+SHELL_KEYS = ("BUDS_MAC", "FALLBACK_SINK", "APP_CYCLE", "QUALITY_LOCK", "MULTIPOINT")
+
+
+def fail(msg, code=1):
+    print(msg)
+    sys.exit(code)
+
+
+def load_shell():
+    vals = {"BUDS_MAC": "", "FALLBACK_SINK": "",
+            "APP_CYCLE": "1", "QUALITY_LOCK": "0", "MULTIPOINT": "0"}
+    try:
+        with open(SHELL_CONF) as f:
+            lines = f.readlines()
+    except OSError:
+        return vals
+    for line in lines:
+        m = re.match(r"\s*([A-Z_]+)\s*=\s*(.*?)\s*$", line)
+        if not m or m.group(1) not in SHELL_KEYS:
+            continue
+        raw = m.group(2)
+        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'":
+            raw = raw[1:-1]
+        vals[m.group(1)] = raw
+    return vals
+
+
+def load_watcher():
+    cfg = json.loads(json.dumps(DEFAULTS))
+    try:
+        with open(WATCHER_CONF) as f:
+            user = json.load(f)
+    except OSError:
+        return cfg
+    except ValueError as exc:
+        fail("bad config %s: %s" % (WATCHER_CONF, exc))
+    for key, val in user.items():
+        if isinstance(val, dict) and isinstance(cfg.get(key), dict):
+            cfg[key].update(val)
+        else:
+            cfg[key] = val
+    cfg["devices"] = sorted(cfg.get("devices", []),
+                            key=lambda d: d.get("priority", 99))[:2]
+    return cfg
+
+
+def current():
+    shell = load_shell()
+    cfg = load_watcher()
+    dev = cfg["devices"][0] if cfg["devices"] else {}
+    return {
+        "mac": shell["BUDS_MAC"] or dev.get("mac", ""),
+        "name": dev.get("name", "My Earbuds"),
+        "short": dev.get("short", ""),
+        "auto_reconnect": dev.get("auto_reconnect", True),
+        "prefer_profile": dev.get("prefer_profile", "a2dp"),
+        "fallback_sink": shell["FALLBACK_SINK"],
+        "app_cycle": shell["APP_CYCLE"] != "0",
+        "quality_lock": shell["QUALITY_LOCK"] == "1",
+        "multipoint": shell["MULTIPOINT"] == "1",
+        "initial_delay_s": cfg["reconnect"]["initial_delay_s"],
+        "max_delay_s": cfg["reconnect"]["max_delay_s"],
+        "give_up_after": cfg["reconnect"]["give_up_after"],
+        "op_cooldown_s": cfg["reconnect"].get("op_cooldown_s", 10),
+        "adapter_cycle": cfg["recover"].get("adapter_cycle", True),
+        "calls_enabled": cfg["calls"]["enabled"],
+        "calls_pause_media": cfg["calls"]["pause_media"],
+        "calls_mute_discord": cfg["calls"]["mute_discord"],
+        "max_call_mode_s": cfg["calls"]["max_call_mode_s"],
+        "battery_warn_percent": cfg["battery"]["warn_percent"],
+        "battery_critical_percent": cfg["battery"]["critical_percent"],
+        "battery_poll_s": cfg["battery"]["poll_s"],
+        "saver_enabled": cfg["saver"]["enabled"],
+        "saver_idle_minutes": cfg["saver"]["idle_minutes"],
+        "laptop_mode": cfg["laptop"].get("mode", "auto"),
+        "fallback_grab": cfg["fallback_grab"]["enabled"],
+        "route_comms": cfg["route_comms"]["enabled"],
+        "bt_fallback": cfg["bt_fallback"]["enabled"],
+    }
+
+
+def as_bool(value, key):
+    if isinstance(value, bool):
+        return value
+    if value in (1, "1", "true", "True", "yes", "on"):
+        return True
+    if value in (0, "0", "false", "False", "no", "off"):
+        return False
+    fail("invalid boolean for %s: %r" % (key, value))
+
+
+def as_int(value, key, low, high):
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        fail("invalid number for %s: %r" % (key, value))
+    if not low <= n <= high:
+        fail("%s must be between %d and %d" % (key, low, high))
+    return n
+
+
+def as_choice(value, key, choices):
+    if value not in choices:
+        fail("%s must be one of: %s" % (key, ", ".join(choices)))
+    return value
+
+
+def safe_shell(value):
+    # MACs and sink names are validated before they get here; quoting is
+    # still kept so a future value cannot break out of the assignment.
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def render_shell(shell):
+    lines = []
+    try:
+        with open(SHELL_CONF) as f:
+            lines = f.readlines()
+    except OSError:
+        lines = ["# generated by maid-setup / maid-bt-config\n"]
+    seen = set()
+    out = []
+    for line in lines:
+        m = re.match(r"\s*([A-Z_]+)\s*=", line)
+        if m and m.group(1) in SHELL_KEYS:
+            key = m.group(1)
+            if key in seen:
+                continue
+            seen.add(key)
+            if key in ("APP_CYCLE", "QUALITY_LOCK", "MULTIPOINT"):
+                val = "1" if str(shell[key]) not in ("0", "", "false", "False") else "0"
+            else:
+                val = safe_shell(shell[key])
+            out.append("%s=%s\n" % (key, val))
+        else:
+            out.append(line)
+    for key in SHELL_KEYS:
+        if key in seen:
+            continue
+        if key in ("APP_CYCLE", "QUALITY_LOCK", "MULTIPOINT"):
+            val = "1" if str(shell[key]) not in ("0", "", "false", "False") else "0"
+        else:
+            val = safe_shell(shell[key])
+        out.append("%s=%s\n" % (key, val))
+    return "".join(out)
+
+
+def write_atomic(path, text, mode=0o600):
+    directory = os.path.dirname(path)
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".maid-bt-")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def apply(payload):
+    shell = load_shell()
+    cfg = load_watcher()
+    dev = cfg["devices"][0] if cfg["devices"] else {
+        "mac": shell["BUDS_MAC"] or "",
+        "name": "My Earbuds",
+        "priority": 1,
+    }
+
+    known = set(current().keys())
+    unknown = sorted(set(payload) - known)
+    if unknown:
+        fail("unknown setting(s): %s" % ", ".join(unknown))
+
+    if "mac" in payload:
+        mac = str(payload["mac"]).strip()
+        if mac and not MAC_RE.match(mac):
+            fail("invalid MAC address: %s" % mac)
+        shell["BUDS_MAC"] = mac
+        dev["mac"] = mac
+    if "name" in payload:
+        dev["name"] = str(payload["name"]).strip() or "My Earbuds"
+    if "short" in payload:
+        dev["short"] = str(payload["short"]).strip()
+    if "fallback_sink" in payload:
+        sink = str(payload["fallback_sink"]).strip()
+        if sink and not SINK_RE.match(sink):
+            fail("invalid fallback sink name: %s" % sink)
+        shell["FALLBACK_SINK"] = sink
+    if "app_cycle" in payload:
+        shell["APP_CYCLE"] = "1" if as_bool(payload["app_cycle"], "app_cycle") else "0"
+    if "quality_lock" in payload:
+        shell["QUALITY_LOCK"] = "1" if as_bool(payload["quality_lock"], "quality_lock") else "0"
+    if "multipoint" in payload:
+        shell["MULTIPOINT"] = "1" if as_bool(payload["multipoint"], "multipoint") else "0"
+    if "auto_reconnect" in payload:
+        dev["auto_reconnect"] = as_bool(payload["auto_reconnect"], "auto_reconnect")
+    if "prefer_profile" in payload:
+        dev["prefer_profile"] = as_choice(payload["prefer_profile"], "prefer_profile",
+                                          ("a2dp", "default"))
+
+    def put(section, key, value):
+        cfg[section][key] = value
+
+    if "initial_delay_s" in payload:
+        put("reconnect", "initial_delay_s",
+            as_int(payload["initial_delay_s"], "initial_delay_s", 1, 600))
+    if "max_delay_s" in payload:
+        put("reconnect", "max_delay_s",
+            as_int(payload["max_delay_s"], "max_delay_s", 1, 3600))
+    if "give_up_after" in payload:
+        put("reconnect", "give_up_after",
+            as_int(payload["give_up_after"], "give_up_after", 1, 100))
+    if "op_cooldown_s" in payload:
+        put("reconnect", "op_cooldown_s",
+            as_int(payload["op_cooldown_s"], "op_cooldown_s", 1, 300))
+    if "adapter_cycle" in payload:
+        put("recover", "adapter_cycle",
+            as_bool(payload["adapter_cycle"], "adapter_cycle"))
+
+    if "calls_enabled" in payload:
+        put("calls", "enabled", as_bool(payload["calls_enabled"], "calls_enabled"))
+    if "calls_pause_media" in payload:
+        put("calls", "pause_media",
+            as_bool(payload["calls_pause_media"], "calls_pause_media"))
+    if "calls_mute_discord" in payload:
+        put("calls", "mute_discord",
+            as_bool(payload["calls_mute_discord"], "calls_mute_discord"))
+    if "max_call_mode_s" in payload:
+        put("calls", "max_call_mode_s",
+            as_int(payload["max_call_mode_s"], "max_call_mode_s", 30, 7200))
+
+    if "battery_warn_percent" in payload:
+        put("battery", "warn_percent",
+            as_int(payload["battery_warn_percent"], "battery_warn_percent", 1, 100))
+    if "battery_critical_percent" in payload:
+        put("battery", "critical_percent",
+            as_int(payload["battery_critical_percent"], "battery_critical_percent", 1, 100))
+    if "battery_poll_s" in payload:
+        put("battery", "poll_s",
+            as_int(payload["battery_poll_s"], "battery_poll_s", 30, 3600))
+    if "saver_enabled" in payload:
+        put("saver", "enabled", as_bool(payload["saver_enabled"], "saver_enabled"))
+    if "saver_idle_minutes" in payload:
+        put("saver", "idle_minutes",
+            as_int(payload["saver_idle_minutes"], "saver_idle_minutes", 1, 1440))
+    if "laptop_mode" in payload:
+        put("laptop", "mode", as_choice(payload["laptop_mode"], "laptop_mode",
+                                        ("auto", "on", "off")))
+    if "fallback_grab" in payload:
+        put("fallback_grab", "enabled",
+            as_bool(payload["fallback_grab"], "fallback_grab"))
+    if "route_comms" in payload:
+        put("route_comms", "enabled",
+            as_bool(payload["route_comms"], "route_comms"))
+    if "bt_fallback" in payload:
+        put("bt_fallback", "enabled",
+            as_bool(payload["bt_fallback"], "bt_fallback"))
+
+    if cfg["battery"]["critical_percent"] > cfg["battery"]["warn_percent"]:
+        fail("critical battery percent cannot be higher than the warning percent")
+
+    if not cfg["devices"]:
+        cfg["devices"] = [dev]
+    else:
+        cfg["devices"][0] = dev
+
+    write_atomic(SHELL_CONF, render_shell(shell))
+    write_atomic(WATCHER_CONF, json.dumps(cfg, indent=2) + "\n")
+    print("ok")
+
+
+def main():
+    if len(sys.argv) < 2:
+        fail("usage: maid-bt-config get | apply <url-encoded-json>", 2)
+    cmd = sys.argv[1]
+    if cmd == "get":
+        print(json.dumps(current(), sort_keys=True))
+        return
+    if cmd == "apply":
+        if len(sys.argv) != 3:
+            fail("usage: maid-bt-config apply <url-encoded-json>", 2)
+        try:
+            payload = json.loads(unquote(sys.argv[2]))
+        except ValueError as exc:
+            fail("invalid settings payload: %s" % exc, 2)
+        if not isinstance(payload, dict):
+            fail("settings payload must be a JSON object", 2)
+        apply(payload)
+        return
+    fail("unknown command: %s" % cmd, 2)
+
+
+if __name__ == "__main__":
+    main()

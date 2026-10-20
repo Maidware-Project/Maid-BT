@@ -490,6 +490,52 @@ grep -q "$TOK" /tmp/maidbt-i/srv.log && fail "token leaked into logs"
 ok "intent server auth"
 rm -rf /tmp/maidbt-i
 
+echo "== settings helper =="
+rm -rf /tmp/maidbt-c; mkdir -p /tmp/maidbt-c/.config
+printf '%s\n' '# keep this comment' \
+  'BUDS_MAC="AA:BB:CC:DD:EE:FF"' 'FALLBACK_SINK=""' \
+  'APP_CYCLE=1' 'QUALITY_LOCK=0' 'MULTIPOINT=0' \
+  > /tmp/maidbt-c/.config/bluetooth-buds.conf
+python3 - "$PKGDIR/bin/maid-bt-config" <<'PYEOF' || fail "settings helper failed"
+import json, os, stat, subprocess, sys, urllib.parse
+tool = sys.argv[1]
+home = "/tmp/maidbt-c"
+env = dict(os.environ, HOME=home)
+def run(*args):
+    return subprocess.run([tool, *args], env=env, text=True, capture_output=True)
+r = run("get")
+assert r.returncode == 0, r.stderr
+base = json.loads(r.stdout)
+assert base["app_cycle"] is True and base["mac"] == "AA:BB:CC:DD:EE:FF"
+payload = {
+    "mac": "11:22:33:44:55:66", "name": "Test Buds", "short": "Buds",
+    "fallback_sink": "alsa_output.test", "app_cycle": False,
+    "quality_lock": True, "multipoint": False,
+    "battery_warn_percent": 30, "battery_critical_percent": 10,
+}
+r = run("apply", urllib.parse.quote(json.dumps(payload)))
+assert r.returncode == 0, (r.stdout, r.stderr)
+conf = open(home + "/.config/bluetooth-buds.conf").read()
+assert "# keep this comment" in conf
+assert "APP_CYCLE=0" in conf and "QUALITY_LOCK=1" in conf and "MULTIPOINT=0" in conf
+current = json.loads(run("get").stdout)
+assert current["mac"] == payload["mac"] and current["battery_warn_percent"] == 30
+assert current["app_cycle"] is False and current["quality_lock"] is True
+assert stat.S_IMODE(os.stat(home + "/.config/bluetooth-buds.conf").st_mode) == 0o600
+before = conf
+r = run("apply", urllib.parse.quote(json.dumps({"mac": "not-a-mac"})))
+assert r.returncode != 0
+assert open(home + "/.config/bluetooth-buds.conf").read() == before, "bad MAC still wrote"
+r = run("apply", urllib.parse.quote(json.dumps({"battery_warn_percent": 10,
+                                                  "battery_critical_percent": 20})))
+assert r.returncode != 0
+r = run("apply", urllib.parse.quote(json.dumps({"no_such_key": 1})))
+assert r.returncode != 0
+print("settings helper passed")
+PYEOF
+ok "settings helper"
+rm -rf /tmp/maidbt-c
+
 echo "== cleanup =="
 rm -rf /tmp/maidbt-t
 ok "cleanup"

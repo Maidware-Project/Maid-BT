@@ -1,4 +1,4 @@
-# maid bt - bluetooth earbuds switching
+# Maid BT v1.0 - bluetooth earbuds switching
 
 command-line helper. switching between pc, phone, or off with one command. routes audio automatically and stops dual-connection earbuds from fighting your phone. install asks for your mac and fallback sink.
 
@@ -44,7 +44,10 @@ what it does, in plain words:
   some systems switching quality crashes the desktop.
 - any headset - if a *different* bluetooth headset connects, it gets
   sound automatically. yours always win when they appear.
-- tray widget + launcher icons - buttons for PC / phone / off.
+- tray widget + launcher icons - buttons for PC / phone / off. open
+  the applet's Configure dialog for Earbuds and Behavior pages covering
+  the MAC, fallback speakers, retry timings, calls, battery warnings,
+  saver, laptop mode, mic routing, and the fallback toggles.
 - **Maid Watcher** (optional) - when a phone call comes in, it pauses
   your music and mutes Discord, then restores everything on hangup.
   also reconnects up to 2 earbuds in priority order and warns you at

@@ -42,7 +42,7 @@ if [ "$UNINST" = "1" ]; then
   rm -f "$BINDIR"/bluetooth-toggle.sh "$BINDIR"/buds-fallback.sh \
     "$BINDIR"/buds-on.sh "$BINDIR"/buds-off.sh "$BINDIR"/buds-release.sh \
     "$BINDIR"/bt-intent-server.py "$BINDIR"/bt-notify-menu.sh
-  rm -f "$BINDIR"/maid-watcher
+  rm -f "$BINDIR"/maid-watcher "$BINDIR"/maid-bt-config
   rm -rf "$BINDIR"/maid_core
   rm -f "$HOME"/.config/autostart/maid-watcher.desktop
   rm -f "$SYSDDIR"/maid-watcher.service
@@ -209,7 +209,7 @@ for f in "$PKGDIR"/bin/*; do
   [ -f "$f" ] || continue
   copy_one "$f" "$BINDIR/$(basename "$f")"
 done
-[ "$CHECK" = "0" ] && chmod +x "$BINDIR"/bluetooth-toggle.sh "$BINDIR"/maid-setup.sh "$BINDIR"/buds-*.sh "$BINDIR"/bt-*.sh "$BINDIR"/bt-*.py 2>/dev/null || true
+[ "$CHECK" = "0" ] && chmod +x "$BINDIR"/bluetooth-toggle.sh "$BINDIR"/maid-setup.sh "$BINDIR"/maid-bt-config "$BINDIR"/buds-*.sh "$BINDIR"/bt-*.sh "$BINDIR"/bt-*.py 2>/dev/null || true
 
 # ---- Maid Watcher (optional daemon: calls, 2-device priority, battery) ----
 copy_one "$PKGDIR/watcher/maid-watcher" "$BINDIR/maid-watcher"
@@ -252,6 +252,13 @@ else
     "$SHAREDIR/plasma/plasmoids/com.local.btearbuds/metadata.json"
   copy_one "$PKGDIR/plasmoid/com.local.btearbuds/contents/ui/main.qml" \
     "$SHAREDIR/plasma/plasmoids/com.local.btearbuds/contents/ui/main.qml" $REWRITE
+  # config pages are discovered at contents/config/config.qml
+  for f in "$PKGDIR"/plasmoid/com.local.btearbuds/contents/config/*.qml \
+           "$PKGDIR"/plasmoid/com.local.btearbuds/contents/ui/config/*.qml; do
+    [ -f "$f" ] || continue
+    rel="${f#"$PKGDIR/plasmoid/com.local.btearbuds/"}"
+    copy_one "$f" "$SHAREDIR/plasma/plasmoids/com.local.btearbuds/$rel" $REWRITE
+  done
 fi
 
 for f in "$PKGDIR"/desktop/*.desktop; do

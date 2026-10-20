@@ -1,6 +1,41 @@
 # changelog
 
-## redesign update
+## Maid BT v1.0
+
+- first stable release. the applet is a compact Plasma 6 tray menu for
+  moving earbuds between this PC, the phone, other devices, and off.
+- the Configure dialog now has Earbuds and Behavior pages instead of
+  only Keyboard Shortcuts and About. Earbuds covers paired-device
+  selection, MAC, name, fallback speakers picked from the running audio
+  server (PipeWire or PulseAudio), auto-reconnect, preferred profile,
+  app pause/resume, LDAC lock, and multipoint. Behavior covers retry
+  timings, adapter recovery, calls, battery warnings, idle saver,
+  laptop mode, mic routing, fallback grab, and BT fallback.
+- `maid-bt-config` writes settings directly and atomically, with MAC,
+  sink and range validation, so users never edit
+  `bluetooth-buds.conf` or `config.json` by hand.
+- panels no longer clip the action tooltips; the strings are shorter.
+- metadata is 1.0 (first stable release).
+
+## development notes
+
+### settings pages
+
+- the applet's Configure dialog now has real Earbuds and Behavior pages
+  instead of only Keyboard Shortcuts and About. Earbuds covers MAC,
+  display name, fallback speakers, auto-reconnect, preferred profile,
+  app pause/resume, LDAC lock, and multipoint. Behavior covers retry
+  timings, adapter recovery, calls, battery warnings, idle saver,
+  laptop mode, mic routing, fallback grab, and BT fallback.
+- changes are written by `maid-bt-config` to
+  `~/.config/bluetooth-buds.conf` and
+  `~/.config/maid-watcher/config.json` atomically, with validation
+  (MAC, sink name, ranges) so the dialog cannot leave a broken config.
+- the config pages save as you change a value; the dialog's Apply/OK
+  also flushes the current values. Reload re-reads the files.
+- settings pages are part of the v1.0 release.
+
+### redesign update
 
 - the panel popup is now a compact, native Plasma menu: a live status
   header, native hover/selection backgrounds, and four clear choices:
@@ -13,8 +48,9 @@
 - hover explanations and a settings button to the existing configuration
   dialog make the deeper options reachable from the menu.
 - the applet is now named Maid BT and describes itself in About as
-  "A Linux-only seamless Bluetooth earbuds switcher"; metadata is 1.1 and
-  the license is MIT.
+  "A Linux-only seamless Bluetooth earbuds switcher"; metadata was 1.1
+  during the redesign and is 1.0 for the first stable release. the
+  license is MIT.
 
 ## kdeconnectd early-login fix moved to Maid Helper
 
