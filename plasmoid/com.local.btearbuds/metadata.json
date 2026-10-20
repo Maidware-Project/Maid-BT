@@ -6,16 +6,19 @@
     "KPlugin": {
         "Authors": [
             {
-                "Name": "visa"
+                "Name": "Maidware Project"
             }
         ],
+        "BugReportUrl": "mailto:maidwareproject@proton.me",
         "Category": "System Information",
+        "Copyright": "Copyright (c) 2026 Maidware Project",
         "Icon": "bluetooth",
         "Description": "One-tap earbuds switch: PC / phone / off",
         "EnabledByDefault": true,
         "Id": "com.local.btearbuds",
         "License": "GPL-2.0+",
         "Name": "BT Earbuds",
-        "Version": "1.0"
+        "Version": "1.0",
+        "Website": "https://maidware-project.github.io/"
     }
 }
