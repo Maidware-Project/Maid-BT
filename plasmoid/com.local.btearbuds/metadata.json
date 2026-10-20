@@ -16,7 +16,7 @@
         "Description": "One-tap earbuds switch: PC / phone / off",
         "EnabledByDefault": true,
         "Id": "com.local.btearbuds",
-        "License": "GPL-2.0+",
+        "License": "MIT",
         "Name": "BT Earbuds",
         "Version": "1.0",
         "Website": "https://maidware-project.github.io/"
