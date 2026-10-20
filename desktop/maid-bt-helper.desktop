@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Maid BT Helper
+Comment=Diagnose Bluetooth, apply safe fixes, and save a support report
+Exec=@HOME@/.local/bin/maid-bt-helper
+Icon=preferences-system-bluetooth
+Terminal=false
+Type=Application
+Categories=System;Settings;
+Keywords=bluetooth;earbuds;fix;doctor;report;logs;troubleshoot;
+StartupWMClass=maid-helper

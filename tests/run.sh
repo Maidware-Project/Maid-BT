@@ -193,10 +193,33 @@ chmod +x /tmp/maidbt-p/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-p/.config/bluetooth-buds.conf
 state=$(PATH="/tmp/maidbt-p/stubs:$PATH" HOME=/tmp/maidbt-p bash "$PKGDIR/bin/bluetooth-toggle.sh" porcelain 2>/dev/null || true)
 case "$state" in
-  off|on|buds) ok "porcelain -> $state" ;;
-  *) fail "porcelain garbage (stub adapter, expected off|on|buds): '$state'" ;;
+  off|on|buds|phone) ok "porcelain -> $state" ;;
+  *) fail "porcelain garbage (stub adapter, expected off|on|buds|phone): '$state'" ;;
 esac
 rm -rf /tmp/maidbt-p
+
+echo "== porcelain knows phone vs PC =="
+rm -rf /tmp/maidbt-ph && mkdir -p /tmp/maidbt-ph/stubs /tmp/maidbt-ph/.config
+cat > /tmp/maidbt-ph/stubs/bluetoothctl <<'EOF'
+#!/bin/bash
+case "$*" in
+  *show*) echo "Controller AA:BB:CC:DD:EE:FF test"; echo "Powered: yes" ;;
+  *info*) echo "Device 11:22:33:44:55:66 (public)"; echo "Connected: yes" ;;
+  *) exit 1 ;;
+esac
+EOF
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-ph/stubs/pactl
+chmod +x /tmp/maidbt-ph/stubs/*
+printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-ph/.config/bluetooth-buds.conf
+printf '%s 1200\n' "$(date +%s)" > /tmp/maidbt-ph/bt-hands-off
+printf 'phone\n' > /tmp/maidbt-ph/bt-hands-mode
+state=$(XDG_RUNTIME_DIR=/tmp/maidbt-ph PATH="/tmp/maidbt-ph/stubs:$PATH" HOME=/tmp/maidbt-ph bash "$PKGDIR/bin/bluetooth-toggle.sh" porcelain 2>/dev/null || true)
+[ "$state" = "phone" ] || fail "release state should be phone (got '$state')"
+printf 'radio\n' > /tmp/maidbt-ph/bt-hands-mode
+state=$(XDG_RUNTIME_DIR=/tmp/maidbt-ph PATH="/tmp/maidbt-ph/stubs:$PATH" HOME=/tmp/maidbt-ph bash "$PKGDIR/bin/bluetooth-toggle.sh" porcelain 2>/dev/null || true)
+[ "$state" = "buds" ] || fail "radio-only state should stay buds (got '$state')"
+rm -rf /tmp/maidbt-ph
+ok "porcelain distinguishes phone from PC"
 
 echo "== unconfigured daemon refuses =="
 # buds-fallback checks `need bluetoothctl` / `need pactl` before it reads its

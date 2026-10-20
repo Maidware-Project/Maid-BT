@@ -1,0 +1,27 @@
+#!/bin/sh
+# Maid BT Helper: native Bluetooth troubleshooting for Maid BT.
+# It is the Maid Helper GUI in Bluetooth-only mode; no terminal is opened.
+# The actual doctor lives in Maid Helper's bluetooth module (mod-bluetooth.sh),
+# so there is one implementation of the checks, fixes, and report format.
+set -u
+for gui in "$HOME/.local/bin/maid-helper-gui" /usr/bin/maid-helper-gui; do
+  if [ -x "$gui" ]; then
+    exec "$gui" --only bluetooth "$@"
+  fi
+done
+gui=$(command -v maid-helper-gui 2>/dev/null || true)
+if [ -n "$gui" ]; then
+  exec "$gui" --only bluetooth "$@"
+fi
+
+msg="Maid BT Helper needs the Maid Helper native GUI (maid-helper-gui). Install Maid Helper first, or reinstall the suite."
+if command -v kdialog >/dev/null 2>&1; then
+  exec kdialog --title "Maid BT Helper" --error "$msg"
+fi
+if command -v zenity >/dev/null 2>&1; then
+  exec zenity --error --title="Maid BT Helper" --text="$msg"
+fi
+if command -v notify-send >/dev/null 2>&1; then
+  notify-send -i dialog-error "Maid BT Helper" "$msg"
+fi
+exit 1

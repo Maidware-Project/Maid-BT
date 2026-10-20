@@ -10,22 +10,28 @@ PlasmoidItem {
 
     property string btState: "off"
     property bool busy: false
-    readonly property int popupWidth: Math.max(Kirigami.Units.gridUnit * 20, 340)
+    readonly property int popupWidth: Math.max(Kirigami.Units.gridUnit * 22, 380)
     property string toggle: "@HOME@/.local/bin/bluetooth-toggle.sh"
 
     function stateText() {
         if (btState === "buds")
-            return "Earbuds on PC";
+            return "Earbuds: PC";
+
+        if (btState === "phone")
+            return "Earbuds: phone";
 
         if (btState === "on")
-            return "Bluetooth on, buds away";
+            return "Bluetooth on";
 
         return "Bluetooth off";
     }
 
     function stateDetail() {
         if (btState === "buds")
-            return "audio is playing here";
+            return "audio here";
+
+        if (btState === "phone")
+            return "on speakers";
 
         if (btState === "on")
             return "ready to connect";
@@ -34,8 +40,14 @@ PlasmoidItem {
     }
 
     function stateIcon() {
-        // symbolic icons follow the panel color scheme (white on dark panels)
-        return btState === "off" ? "preferences-system-bluetooth-inactive-symbolic" : "preferences-system-bluetooth-activated-symbolic";
+        // symbolic glyphs recolor with the theme and match the panel style
+        if (root.btState === "off")
+            return "bluetooth-disabled-symbolic";
+
+        if (root.btState === "on")
+            return "bluetooth-disconnected-symbolic";
+
+        return "bluetooth-active-symbolic";
     }
 
     function refresh() {
@@ -63,7 +75,7 @@ PlasmoidItem {
         onNewData: (sourceName, data) => {
             if (sourceName.indexOf("porcelain") !== -1) {
                 var t = String(data["stdout"] || "").trim();
-                if (t === "off" || t === "on" || t === "buds")
+                if (t === "off" || t === "on" || t === "buds" || t === "phone")
                     root.btState = t;
 
             }
@@ -74,7 +86,7 @@ PlasmoidItem {
     Timer {
         id: poll
 
-        interval: 3000
+        interval: 2000
         running: true
         repeat: true
         onTriggered: root.refresh()
@@ -83,7 +95,7 @@ PlasmoidItem {
     Timer {
         id: refreshSoon
 
-        interval: 2500
+        interval: 1100
         repeat: false
         onTriggered: {
             root.busy = false;
@@ -158,7 +170,7 @@ PlasmoidItem {
                                 height: width
                                 radius: width / 2
                                 color: {
-                                    if (root.btState === "buds")
+                                    if (root.btState === "buds" || root.btState === "phone")
                                         return Kirigami.Theme.positiveTextColor;
 
                                     if (root.btState === "on")
@@ -211,7 +223,7 @@ PlasmoidItem {
                         id: pcTile
 
                         text: "This PC"
-                        icon.name: "computer"
+                        icon.name: "computer-symbolic"
                         display: PlasmaComponents.AbstractButton.TextUnderIcon
                         Layout.fillWidth: true
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
@@ -252,10 +264,11 @@ PlasmoidItem {
                         id: phoneTile
 
                         text: "Phone"
-                        icon.name: "smartphone"
+                        icon.name: "smartphone-symbolic"
                         display: PlasmaComponents.AbstractButton.TextUnderIcon
                         Layout.fillWidth: true
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
+                        highlighted: root.btState === "phone"
                         enabled: !root.busy
                         PlasmaComponents.ToolTip.text: "Release earbuds to the phone."
                         PlasmaComponents.ToolTip.visible: hovered
@@ -292,7 +305,7 @@ PlasmoidItem {
                         id: radioTile
 
                         text: "Other devices"
-                        icon.name: "preferences-system-bluetooth"
+                        icon.name: "bluetooth-symbolic"
                         display: PlasmaComponents.AbstractButton.TextUnderIcon
                         Layout.fillWidth: true
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
@@ -333,7 +346,7 @@ PlasmoidItem {
                         id: offTile
 
                         text: "Off"
-                        icon.name: "preferences-system-bluetooth-inactive-symbolic"
+                        icon.name: "bluetooth-disabled-symbolic"
                         display: PlasmaComponents.AbstractButton.TextUnderIcon
                         Layout.fillWidth: true
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
@@ -378,6 +391,12 @@ PlasmoidItem {
                     font: Kirigami.Theme.smallFont
                     opacity: 0.7
                     horizontalAlignment: Text.AlignHCenter
+                    Layout.fillWidth: true
+                }
+
+                // breathing room under the tile grid
+                Item {
+                    implicitHeight: Kirigami.Units.mediumSpacing
                     Layout.fillWidth: true
                 }
 

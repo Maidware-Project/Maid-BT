@@ -42,10 +42,11 @@ if [ "$UNINST" = "1" ]; then
   rm -f "$BINDIR"/bluetooth-toggle.sh "$BINDIR"/buds-fallback.sh \
     "$BINDIR"/buds-on.sh "$BINDIR"/buds-off.sh "$BINDIR"/buds-release.sh \
     "$BINDIR"/bt-intent-server.py "$BINDIR"/bt-notify-menu.sh
-  rm -f "$BINDIR"/maid-watcher "$BINDIR"/maid-bt-config
+  rm -f "$BINDIR"/maid-watcher "$BINDIR"/maid-bt-config "$BINDIR"/maid-bt-helper
   rm -rf "$BINDIR"/maid_core
   rm -f "$HOME"/.config/autostart/maid-watcher.desktop
   rm -f "$SYSDDIR"/maid-watcher.service
+  rm -f "$SHAREDIR"/maid-bt/52-bt-max-quality.conf
   rm -f "$HOME"/.config/wireplumber/wireplumber.conf.d/51-bt-no-suspend.conf
   rm -f "$HOME"/.config/wireplumber/wireplumber.conf.d/52-bt-max-quality.conf
   rm -f "$HOME"/.config/wireplumber/wireplumber.conf.d/53-bt-a2dp-only.conf
@@ -54,7 +55,7 @@ if [ "$UNINST" = "1" ]; then
   rm -rf "$SHAREDIR/maid-bt" "$SHAREDIR/plasma/plasmoids/com.local.btearbuds"
   rm -f "$SHAREDIR"/applications/bt-earbuds-pc.desktop \
     "$SHAREDIR"/applications/bt-earbuds-phone.desktop "$SHAREDIR"/applications/bt-off.desktop \
-    "$SHAREDIR"/applications/bt-on.desktop
+    "$SHAREDIR"/applications/bt-on.desktop "$SHAREDIR"/applications/maid-bt-helper.desktop
   if [ "$PURGE" = "1" ]; then
     rm -f "$HOME"/.config/bluetooth-buds.conf "$HOME"/.config/bluetooth-buds.conf.example "$HOME"/.config/bt-intent.token
     rm -rf "$HOME"/.config/maid-watcher
@@ -209,7 +210,7 @@ for f in "$PKGDIR"/bin/*; do
   [ -f "$f" ] || continue
   copy_one "$f" "$BINDIR/$(basename "$f")"
 done
-[ "$CHECK" = "0" ] && chmod +x "$BINDIR"/bluetooth-toggle.sh "$BINDIR"/maid-setup.sh "$BINDIR"/maid-bt-config "$BINDIR"/buds-*.sh "$BINDIR"/bt-*.sh "$BINDIR"/bt-*.py 2>/dev/null || true
+[ "$CHECK" = "0" ] && chmod +x "$BINDIR"/bluetooth-toggle.sh "$BINDIR"/maid-setup.sh "$BINDIR"/maid-bt-config "$BINDIR"/maid-bt-helper "$BINDIR"/buds-*.sh "$BINDIR"/bt-*.sh "$BINDIR"/bt-*.py 2>/dev/null || true
 
 # ---- Maid Watcher (optional daemon: calls, 2-device priority, battery) ----
 copy_one "$PKGDIR/watcher/maid-watcher" "$BINDIR/maid-watcher"
@@ -237,6 +238,7 @@ done
 # sources maid-setup.sh needs later (repo layout absent once installed)
 copy_one "$PKGDIR/watcher/maid-watcher.desktop" "$SHAREDIR/maid-bt/maid-watcher.desktop" $REWRITE
 copy_one "$PKGDIR/wireplumber/51-bt-no-suspend.conf" "$SHAREDIR/maid-bt/51-bt-no-suspend.conf"
+copy_one "$PKGDIR/wireplumber/52-bt-max-quality.conf" "$SHAREDIR/maid-bt/52-bt-max-quality.conf"
 copy_one "$PKGDIR/wireplumber/53-bt-a2dp-only.conf" "$SHAREDIR/maid-bt/53-bt-a2dp-only.conf"
 copy_one "$PKGDIR/watcher/config.example.json" "$SHAREDIR/maid-bt/config.example.json"
 

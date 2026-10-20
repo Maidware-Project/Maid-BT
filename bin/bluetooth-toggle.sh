@@ -52,9 +52,20 @@ SINK_WAIT=15         # seconds to wait for bluez sink to appear
 MARKER="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-toggle-manual"
 mark_manual() { touch "$MARKER" 2>/dev/null || true; }
 HANDS="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-hands-off"
+HANDS_MODE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-hands-mode"
 HANDS_SECS=1200  # release-to-phone window (20 min); explicit `on` clears it early
 MULTIPOINT_SECS=28800  # dual-connection buds share all day; explicit `on` cancels
-clear_hands() { rm -f "$HANDS" 2>/dev/null || true; }
+clear_hands() { rm -f "$HANDS" "$HANDS_MODE" 2>/dev/null || true; }
+hands_active() {
+  [ -f "$HANDS" ] || return 1
+  local since dur now
+  read -r since dur _ < "$HANDS" 2>/dev/null || return 1
+  [ -n "$since" ] || return 1
+  now=$(date +%s)
+  [ "$now" -ge "$since" ] 2>/dev/null || return 1
+  dur="${dur:-$HANDS_SECS}"
+  [ "$((now - since))" -lt "$dur" ]
+}
 CYCLE_RESUME=""
 
 _mpris_players() { qdbus6 2>/dev/null | grep '^org.mpris.MediaPlayer2\.' | sort -u; }
@@ -315,6 +326,7 @@ do_release() {
   else
     date +%s > "$HANDS" 2>/dev/null || true
   fi
+  printf '%s\n' phone > "$HANDS_MODE" 2>/dev/null || true
   if is_buds_connected; then
     echo "Link stays warm for instant switch-back."
   else
@@ -345,6 +357,7 @@ do_radio() {
   fi
   # long hands-off window so the daemon won't grab the buds
   printf '%s %s\n' "$(date +%s)" "28800" > "$HANDS" 2>/dev/null || true
+  printf '%s\n' radio > "$HANDS_MODE" 2>/dev/null || true
   systemctl --user start buds-fallback.service 2>/dev/null || true
   echo "Radio ON (buds untouched, daemon hands-off 8h; '$0 on' cancels)."
   notify "Bluetooth on" "Radio on for other devices - buds stay put." normal bluetooth
@@ -408,9 +421,14 @@ case "$ACTION" in
     if is_blocked || ! is_powered; then do_on; else do_off; fi
     ;;
   porcelain)
-    # machine-readable state for the tray widget: off|on|buds
+    # machine-readable state for the tray widget: off|on|buds|phone
     if is_blocked || ! is_powered; then echo "off";
-    elif is_buds_connected; then echo "buds";
+    elif is_buds_connected; then
+      if hands_active && [ "$(cat "$HANDS_MODE" 2>/dev/null || echo phone)" = "phone" ]; then
+        echo "phone"
+      else
+        echo "buds"
+      fi
     else echo "on"; fi
     ;;
   *) echo "usage: $0 [on|off|release|radio|toggle|status|porcelain]"; exit 2 ;;
