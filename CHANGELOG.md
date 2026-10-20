@@ -1,5 +1,23 @@
 # changelog
 
+## Maid BT v1.1
+
+- applet: shows which side owns the audio ("Earbuds: PC · audio here" /
+  "Earbuds: phone"), a wider popup so nothing clips, and symbolic Breeze
+  icons on the header and tiles.
+- Maid BT Helper GUI: checks, safe fixes, one-click LDAC pin
+  (reversible), shareable report. installed as the "Maid BT Helper"
+  launcher next to the shell.
+- live settings: `maid-bt-config apply` takes battery saver and laptop
+  mode on the spot (saver = idle park timer, laptop mode = reconnect
+  aggressiveness) - no re-run of the watcher needed.
+- watcher: re-reads its config on change and applies it live without a
+  restart; switch-triggered unwatch/refresh drops stale reconnection
+  attempts after phone-side moves.
+- sound quality stays stock by default: the max-quality pin is an
+  explicit opt-in (installer or helper GUI), and the shell ships with
+  no codec forced.
+
 ## Maid BT v1.0
 
 - first stable release. the applet is a compact Plasma 6 tray menu for

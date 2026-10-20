@@ -1,6 +1,8 @@
-# Maid BT v1.0 - bluetooth earbuds switching
+# Maid BT v1.1 - bluetooth earbuds switching
 
-command-line helper. switching between pc, phone, or off with one command. routes audio automatically and stops dual-connection earbuds from fighting your phone. install asks for your mac and fallback sink.
+command-line helper. switching between pc, phone, or off with one command. routes audio automatically and stops dual-connection earbuds from fighting your phone. install asks for your mac and fallback sink. ships a plasma tray applet that shows where the sound is, and Maid BT Helper, a small GUI that checks the stack and applies safe fixes.
+
+![](screenshots/maid-bt.png)
 
 ## quick start
 
@@ -14,9 +16,9 @@ bluetooth-toggle.sh on         # sound moves to your earbuds
 
 those manage *devices* (pairing, mice, keyboards). Maid BT manages the
 *earbuds workflow*: one click moves you PC → phone → off, sound follows
-automatically, dual-connection buds stop fighting the phone, and LDAC
-stays enforced instead of silently decaying to SBC. keep your bluetooth
-manager for pairing; use this for daily switching.
+automatically, dual-connection buds stop fighting the phone, and quality
+stays at your buds' stock settings unless you opt into the LDAC lock.
+keep your bluetooth manager for pairing; use this for daily switching.
 
 tested daily on openSUSE Tumbleweed (KDE Plasma, PipeWire, LDAC
 earbuds). installer covers Arch, Debian/Ubuntu (incl. Mint), Fedora.
@@ -54,6 +56,20 @@ what it does, in plain words:
   low battery. works on any init system.
 - every switch can also ping your phone over KDE Connect (skipped
   quietly if you don't have it paired).
+
+## plasma applet + Maid BT Helper
+
+the installer offers a compact Plasma 6 tray applet: tiles for this PC,
+phone, other devices and off, codec + battery on the header, and one
+line that says where the sound is right now ("Earbuds: PC · audio here"
+vs "Earbuds: phone"). add it from the system tray once installed.
+
+![](screenshots/maid-bt-helper.png)
+
+also ships **Maid BT Helper**, a small Maidware GUI: same read-only
+checks, the safe subset of the shell's fixes, one-click LDAC pin
+(opt-in, reversible), and a shareable report with no device names and
+no MAC addresses - what you paste when filing a bug.
 
 ## layout
 

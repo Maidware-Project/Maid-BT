@@ -26,6 +26,7 @@ from gi.repository import GLib
 
 from maid_core import config as config_mod
 from maid_core import notify
+from maid_core.battery import BatteryWatch
 from maid_core.bluez import DeviceMonitor
 from maid_core import audio
 from maid_core import media
@@ -254,8 +255,11 @@ class Daemon:
         except Exception as exc:  # bad JSON etc. - keep running on old cfg
             notify.audit(f"config reload failed: {exc}")
             return
-        self._apply_config(cfg)
-        notify.audit("config reloaded")
+        try:
+            self._apply_config(cfg)
+            notify.audit("config reloaded")
+        except Exception as exc:  # a bad apply must not kill the tick loop
+            notify.audit(f"config apply failed: {exc}")
 
     def _apply_config(self, cfg):
         old_macs = set(self.devices)
