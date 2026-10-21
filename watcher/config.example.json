@@ -41,5 +41,11 @@
   },
   "bt_fallback": {
     "enabled": false
+  },
+  "case_detect": {
+    "enabled": true,
+    "probe_s": 8,
+    "recheck_s": 120,
+    "_case_detect": "Docked-in-charging-case recognition. probe_s = one passive BlueZ discovery window in seconds (advertising = out of case; radio-silent the whole window = docked). recheck_s = lid-open recheck cadence while docked. The buds normally self-connect on case-open; the recheck is the backstop for when they join the phone first."
   }
 }

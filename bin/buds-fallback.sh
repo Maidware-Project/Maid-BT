@@ -54,17 +54,20 @@ FAIL_BACKOFF=30       # quiet period after a failed connect (anti-flap)
 FLAP_WINDOW=15        # a connection dying this fast counts as a flap
 FLAP_BACKOFF=120      # quiet period after a flap (anti-flap)
 AUDIO_REFRESH=120     # seconds between paired-device rescans
+DOCK_FAILS_LIMIT=6    # silent buds connects before docked stand-down (~min 2)
 # opt-in knobs below keep conf values when set (defaults apply first,
 # so the conf sourced above wins). BATTERY_BOOST was silently stuck
 # off before this: the plain assignment clobbered the conf value.
 : "${BATTERY_BOOST:=0}"      # match A2DP codec to buds battery (saves power)
 : "${QUALITY_LOCK:=0}"       # pin A2DP to LDAC after every switch
+: "${SMART_FALLBACK:=0}"     # dock: park on the output used before the buds
 BATTERY_POLL=60       # seconds between battery checks
 BATT_COOLDOWN=180     # min seconds between codec switches (anti-flap)
 POWER_OFF_ON_LOST=0   # 0 = auto mode: radio stays on, buds reconnect on case-open
 BLOCK_ON_EXTERNAL_OFF=0 # 1 = also rfkill block when KDE tray powers off (sticky off)
 MARKER="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-toggle-manual"
 HANDS="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-hands-off"
+PREV_SINK="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-prev-sink"
 HANDS_SECS=1200  # release-to-phone window; explicit `on` clears it early
 
 # release-to-phone active? marker holds "epoch [seconds]" (default HANDS_SECS)
@@ -95,6 +98,9 @@ connected_since=0
 last_batt_check=0
 last_codec_switch=0
 last_audio_refresh=0
+connect_fails=0   # consecutive failed buds connects (dock stand-down meter)
+buds_docked=0     # 1 = presumed in charging case: stop paging, wait for wake
+last_repark=0     # throttles the loose-stream corral while parked
 PAIRED_AUDIO=""
 prev_powered=""
 prev_connected=""
@@ -120,6 +126,31 @@ notify() {
 current_bluez_sinks() { pactl list short sinks 2>/dev/null | grep -i "bluez" | awk '{print $2}'; }
 all_sink_names() { pactl list short sinks 2>/dev/null | awk '{print $2}'; }
 default_sink_name() { pactl info 2>/dev/null | sed -n 's/^Default Sink: //p'; }
+
+remember_prev_sink() {
+  # note which output was default before the buds grabbed audio, so a
+  # dock-away can hand streams back to it (SMART_FALLBACK). Remembered
+  # at grab time only; bluez sinks never qualify (the buds cannot park
+  # on themselves and another headset's reappearance re-routes anyway).
+  local prev
+  prev=$(default_sink_name)
+  case "$prev" in ""|*bluez*) return 0 ;; esac
+  sink_exists "$prev" && printf '%s\n' "$prev" > "$PREV_SINK" 2>/dev/null
+  return 0
+}
+
+park_target() {
+  # smart fallback: remembered previous output when available (and
+  # enabled), else the configured FALLBACK_SINK
+  if [ "${SMART_FALLBACK:-0}" = "1" ] && [ -f "$PREV_SINK" ]; then
+    local prev=""
+    prev=$(cat "$PREV_SINK" 2>/dev/null)
+    if [ -n "$prev" ] && sink_exists "$prev"; then
+      echo "$prev"; return 0
+    fi
+  fi
+  echo "${FALLBACK_SINK:-}"
+}
 
 bt_alias() {
   # friendly name for a bluez sink (MAC embedded in the node name)
@@ -188,7 +219,8 @@ sink_exists() {
 }
 
 park_on_fallback() {
-  local fb="${FALLBACK_SINK:-}"
+  local fb
+  fb=$(park_target)
   if sink_exists "$fb"; then
     pactl set-default-sink "$fb" 2>/dev/null || log "set-default-sink \"$fb\" failed"
     move_bluez_to_fallback
@@ -224,6 +256,7 @@ switch_to_buds_nowait() {
   done
   sink="$(bluez_sink)"
   if [ -n "$sink" ]; then
+    remember_prev_sink
     pactl set-default-sink "$sink" 2>/dev/null || true
     pactl suspend-sink "$sink" 0 2>/dev/null || true
     pactl list short sink-inputs 2>/dev/null | awk '{print $1}' | while read -r sid; do
@@ -437,6 +470,9 @@ while true; do
     lost_for=0
     did_fallback=0
     last_attempt=0
+    connect_fails=0
+    buds_docked=0
+    last_repark=0
     if hands_off; then
       log "hands-off active, skipping auto-connect"
     elif ! manual_recent; then
@@ -486,6 +522,8 @@ while true; do
       log "buds connected"
       maid_audit maid-bt "buds connected, routing audio"
       connected_since=$now
+      connect_fails=0
+      buds_docked=0
       media_cycle_start
       switch_to_buds_nowait
       media_cycle_end
@@ -560,13 +598,15 @@ while true; do
       [ "$lost_for" -ge "$RETRY_BACKOFF_AFTER" ] && interval=30
       next_allowed=$((last_attempt + interval))
       [ "$cooldown_until" -gt "$next_allowed" ] && next_allowed=$cooldown_until
-      if ! hands_off && [ "$now" -ge "$next_allowed" ]; then
+      if ! hands_off && [ "$buds_docked" = "0" ] && [ "$now" -ge "$next_allowed" ]; then
         last_attempt=$now
         try_connect_once
         is_connected && connected=1
         if [ "$connected" = "1" ]; then
           lost_for=0
           cooldown_until=0
+          connect_fails=0
+          buds_docked=0
           log "buds connected (via retry)"
           media_cycle_start
           switch_to_buds_nowait
@@ -578,13 +618,28 @@ while true; do
           did_fallback=0
         else
           cooldown_until=$((now + FAIL_BACKOFF))
+          connect_fails=$((connect_fails + 1))
+          if [ "$connect_fails" -ge "$DOCK_FAILS_LIMIT" ]; then
+            # buds never advertise, never answer pages across many
+            # slots: they are docked (or dead), not "away". Stand down
+            # from retries; any connect or adapter-on event re-arms.
+            buds_docked=1
+            log "buds silent through $connect_fails connects - presumed in case, standing down"
+            maid_audit maid-bt "buds presumed docked in case, standing down from retries"
+            notify "Earbuds in case" "Silent since you docked them - standing down. Take them out to reconnect." normal bluetooth
+          fi
           try_audio_sweep || true
         fi
       fi
       if [ "$connected" = "0" ] && [ "$lost_for" -ge "$GRACE" ] && [ "$did_fallback" = "0" ]; then
-        log "buds lost (${lost_for}s) -> default to $FALLBACK_SINK"
-        maid_audit maid-bt "buds lost, parked on fallback"
+        park_via=$(park_target)
+        log "buds lost (${lost_for}s) -> default to ${park_via:-unknown}"
+        maid_audit maid-bt "buds lost, parked on ${park_via:-fallback}"
+        # pause/resume around the move like the connect path: without
+        # it Chromium/Electron web-audio stalls and the music stops
+        media_cycle_start
         park_on_fallback
+        media_cycle_end
         if [ "$POWER_OFF_ON_LOST" = "1" ]; then
           if other_device_connected; then
             log "other BT device connected, leaving radio on"
@@ -606,7 +661,12 @@ while true; do
         fi
         did_fallback=1
       elif [ "$did_fallback" = "1" ]; then
-        move_bluez_to_fallback
+        # loose-stream corral: once parked, refresh it every few
+        # seconds instead of pactl spawns every single second
+        if [ $((now - last_repark)) -ge 5 ]; then
+          move_bluez_to_fallback
+          last_repark=$now
+        fi
       fi
     else
       # powered off and disconnected: make sure audio parked (once)

@@ -13,6 +13,7 @@ DEFAULTS = {
     "saver": {"enabled": False, "idle_minutes": 30},
     "fallback_grab": {"enabled": False},
     "bt_fallback": {"enabled": False},
+    "case_detect": {"enabled": True, "probe_s": 8, "recheck_s": 120},
     "route_comms": {"enabled": True},
     "laptop": {"mode": "auto"},
 }

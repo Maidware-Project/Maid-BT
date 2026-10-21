@@ -13,4 +13,10 @@ ConfigModel {
         icon: "preferences-system"
         source: "config/configBehavior.qml"
     }
+
+    ConfigCategory {
+        name: i18n("Equalizer")
+        icon: "audio-equalizer"
+        source: "config/configEQ.qml"
+    }
 }

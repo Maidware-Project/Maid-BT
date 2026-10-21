@@ -9,6 +9,8 @@ Usage:
   maid-watcher run      start daemon
   maid-watcher status   show managed devices, connection, battery
   maid-watcher scan     list nearby BT audio devices for config
+  maid-watcher model [NAME]  check a name against the model database
+                        (no NAME: all configured devices)
   maid-watcher bugreport [--full]  diagnostics bundle for bug reports
   maid-watcher route-mic [SOURCE]  move chat-app mics to SOURCE
                         (default: default source) to free the BT mic
@@ -25,9 +27,11 @@ from dbus.mainloop.glib import DBusGMainLoop
 from gi.repository import GLib
 
 from maid_core import config as config_mod
+from maid_core import models
 from maid_core import notify
 from maid_core.battery import BatteryWatch
 from maid_core.bluez import DeviceMonitor
+from maid_core.case import DockProbe
 from maid_core import audio
 from maid_core import media
 from maid_core.calls import CallWatcher
@@ -56,12 +60,9 @@ class Daemon:
         self.retry = {}  # mac -> [fails, next_try]
         self._last_op = {}  # (mac, kind) -> last BT op timestamp
         self._wedged = {}  # mac -> consecutive failed enforces
-        rc = dict(self.cfg.get("reconnect", {}))
-        if getattr(self, "laptop", False):
-            rc["initial_delay_s"] = max(rc.get("initial_delay_s", 5), 10)
-            rc["max_delay_s"] = max(rc.get("max_delay_s", 120), 300)
-            rc["give_up_after"] = min(rc.get("give_up_after", 10), 6)
-        self.rc = rc
+        self._docked = set()  # macs recognized docked (in charging case)
+        self._dock_next = {}  # mac -> epoch of next docked recheck
+        self.quirks = {}  # mac -> models.lookup() result (info only)
         self.call_muted = []
         self.call_paused = []
         self.call_timer = None
@@ -70,7 +71,6 @@ class Daemon:
                                        self.on_call_start, self.on_call_end)
         else:
             self.watcher = None
-        from maid_core.battery import BatteryWatch
         self.battery = BatteryWatch(cfg, self.monitor)
 
     # -- connection management -----------------------------------------
@@ -78,15 +78,27 @@ class Daemon:
         dev = self.devices.get(mac, {})
         name = dev.get("name", mac)
         if connected:
+            if mac in self._docked:
+                self._docked.discard(mac)
+                self._dock_next.pop(mac, None)
+                notify.audit(f"case state cleared: {name} connected again")
             notify.audit(f"connected: {name}")
             notify.send("Earbuds connected", name)
+            hit = models.lookup(name)
+            if hit["brand"]:
+                self.quirks[mac] = hit
+                notify.audit(f"model db: {name} -> {hit['brand']} "
+                             f"{hit['model']} ["
+                             f"{', '.join(hit['quirks']) or 'no quirks'}]")
             self.retry.pop(mac, None)
             if dev.get("prefer_profile") == "a2dp":
                 GLib.timeout_add_seconds(2, self._enforce_a2dp, mac)
             GLib.timeout_add_seconds(4, self._route_after_connect)
         else:
             notify.audit(f"disconnected: {name}")
-            notify.send("Earbuds disconnected", name)
+            # no popup here: buds-fallback.sh already fires the one
+            # "Earbuds disconnected / audio parked" notice - two daemons
+            # popping duplicates reads like a glitch
             if dev.get("auto_reconnect", True):
                 delay = self.rc["initial_delay_s"]
                 self.retry[mac] = [0, time.time() + delay]
@@ -164,24 +176,12 @@ class Daemon:
                                      self._maybe_reconnect, mac)
             return False
         if fails >= rc["give_up_after"]:
-            # Safety valve, not abandonment: stop hammering BlueZ (and the
-            # phone that may be holding the link) and tell the user to
-            # reconnect manually. Any new disconnect event restarts the
-            # cycle. Tune via reconnect.give_up_after / max_delay_s.
-            name = self.devices.get(mac, {}).get("name", mac)
-
-            def _retry_now(_key, _mac=mac):
-                self.retry[_mac] = [0, time.time()]
-                GLib.timeout_add_seconds(1, self._maybe_reconnect, _mac)
-
-            notify.audit(f"reconnect gave up: {name}")
-            notify.send("Giving up reconnect",
-                        f"{name} - tap to retry, or reconnect manually",
-                        "critical",
-                        actions=[("retry", "Reconnect now")],
-                        on_action=_retry_now,
-                        session_bus=self.session_bus)
+            # Safety valve, not abandonment: stop hammering BlueZ. The
+            # dock probe now decides what happened: buds in the charging
+            # case stand down quietly; anything else keeps the manual
+            # retry notification. Any new disconnect restarts the cycle.
             self.retry.pop(mac, None)
+            self._dock_check(mac)
             return False
         self.monitor.connect(mac)
         delay = min(rc["initial_delay_s"] * (2 ** (fails + 1)),
@@ -189,6 +189,84 @@ class Daemon:
         self.retry[mac] = [fails + 1, time.time() + delay]
         GLib.timeout_add_seconds(delay, self._maybe_reconnect, mac)
         return False
+
+    # -- charging-case recognition --------------------------------------
+    # A closed charging case powers the buds down: they never advertise
+    # and never answer pages. Opening the lid, they advertise within
+    # seconds. One passive, MAC-filtered discovery window therefore
+    # tells "docked" from "lost" - without a single connect attempt.
+    def _dock_check(self, mac):
+        """Dock probe in a background thread; verdict lands on the loop."""
+        import threading
+        window = self.cfg.get("case_detect", {}).get("probe_s", 8)
+
+        def worker():
+            verdict = None
+            try:
+                verdict = DockProbe(mac).visible(window_s=window)
+            except Exception as exc:  # noqa: BLE001 - never kill the loop
+                notify.audit(f"dock probe error: {exc}")
+            GLib.idle_add(self._dock_verdict, mac, verdict)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _dock_verdict(self, mac, verdict):
+        if self.monitor.is_connected(mac):
+            return False  # live again: beats any verdict
+        dev = self.devices.get(mac, {})
+        name = dev.get("name", mac)
+        if verdict is True:
+            if mac not in self._docked:
+                self._docked.add(mac)
+                self._dock_next[mac] = 0.0
+                notify.audit(f"buds docked: {name} "
+                             "(in charging case, standing down)")
+                notify.send(f"{config_mod.short_name(dev)} is in its case",
+                            "Standing down. They reconnect on their own "
+                            "when you take them out.")
+            return False
+        if verdict is False and mac in self._docked:
+            # was docked, now advertising: the case opened. Fast resume.
+            self._docked.discard(mac)
+            self._dock_next.pop(mac, None)
+            notify.audit(f"case opened: {name} advertising again, "
+                         "reconnecting")
+            self.retry[mac] = [0, time.time()]
+            GLib.timeout_add_seconds(1, self._maybe_reconnect, mac)
+            return False
+        # False (out of the case but still refusing to connect) or None
+        # (could not scan - adapter off/not ready): keep the manual
+        # retry UX; never claim docked off an unknown probe.
+        def _retry_now(_key, _mac=mac):
+            self.retry[_mac] = [0, time.time()]
+            GLib.timeout_add_seconds(1, self._maybe_reconnect, _mac)
+
+        notify.audit(f"reconnect gave up: {name}")
+        notify.send("Giving up reconnect",
+                    f"{name} - tap to retry, or reconnect manually",
+                    "critical",
+                    actions=[("retry", "Reconnect now")],
+                    on_action=_retry_now,
+                    session_bus=self.session_bus)
+        return False
+
+    def case_rewatch(self):
+        """Docked devices: slow lid-open recheck, self-connect backstop
+        for when buds wake up and join the phone instead of this PC."""
+        cd = self.cfg.get("case_detect", {})
+        if not cd.get("enabled", True) or not self._docked:
+            return
+        interval = cd.get("recheck_s", 120)
+        window = cd.get("probe_s", 8)
+        now = time.time()
+        for mac in list(self._docked):
+            if self.monitor.is_connected(mac):
+                self._docked.discard(mac)
+                continue
+            if now < self._dock_next.get(mac, 0):
+                continue
+            self._dock_next[mac] = now + interval + window
+            self._dock_check(mac)
 
     # -- call mode --------------------------------------------------------
     def on_call_start(self, info):
@@ -227,6 +305,7 @@ class Daemon:
     def tick(self):
         self._maybe_reload()
         self.battery.poll(list(self.devices.values()))
+        self.case_rewatch()
         self.fallback_grab()
         self.route_comms()
         self.bt_fallback_watch()
@@ -279,6 +358,9 @@ class Daemon:
             self.monitor.unwatch(mac)
             self.retry.pop(mac, None)
             self._wedged.pop(mac, None)
+            self._docked.discard(mac)
+            self._dock_next.pop(mac, None)
+            self.quirks.pop(mac, None)
         for mac in self.devices:
             if mac not in old_macs:
                 self.monitor.watch(mac)
@@ -286,7 +368,9 @@ class Daemon:
                     dev = self.devices[mac]
                     if dev.get("prefer_profile") == "a2dp":
                         self._enforce_a2dp(mac)
-                elif self.devices[mac].get("auto_reconnect", True):
+                elif self.devices[mac].get("auto_reconnect", True) \
+                        and mac not in self._docked \
+                        and mac not in self.retry:
                     self.retry[mac] = [0, time.time() + self.rc["initial_delay_s"]]
                     GLib.timeout_add_seconds(self.rc["initial_delay_s"] + 1,
                                              self._maybe_reconnect, mac)
@@ -395,7 +479,8 @@ class Daemon:
         for mac, dev in self.devices.items():
             if dev.get("auto_reconnect", True) \
                     and not self.monitor.is_connected(mac) \
-                    and mac not in self.retry:
+                    and mac not in self.retry \
+                    and mac not in self._docked:
                 notify.audit(f"fallback grab (no phone up): "
                              f"{dev.get('name', mac)}")
                 notify.send("Phone away",
@@ -415,7 +500,8 @@ class Daemon:
             if self.monitor.is_connected(mac):
                 if dev.get("prefer_profile") == "a2dp":
                     self._enforce_a2dp(mac)
-            elif dev.get("auto_reconnect", True):
+            elif dev.get("auto_reconnect", True) \
+                    and mac not in self._docked:
                 delay = self.rc["initial_delay_s"]
                 self.retry[mac] = [0, time.time() + delay]
                 GLib.timeout_add_seconds(delay + 1, self._maybe_reconnect,
@@ -442,15 +528,62 @@ def cmd_status(cfg):
         print(f"  mic held by: "
               f"{', '.join(a if a != '?' else n for a, n in holders) or 'nobody'}")
         print(f"  battery:   {mon.battery_percent(mac)}%")
+        if mon.is_connected(mac):
+            print("  case:      n/a (connected)")
+        elif cfg.get("case_detect", {}).get("enabled", True):
+            try:
+                live = DockProbe(mac).visible(
+                    window_s=cfg.get("case_detect", {}).get("probe_s", 8))
+            except Exception:
+                live = None
+            state = {True: "out of case (advertising)",
+                     False: "in charging case (silent)",
+                     None: "unknown (scan unavailable)"}[live]
+            print("  case:      " + state)
     if not cfg["devices"]:
         print("no devices configured - copy config.example.json to "
               "~/.config/maid-watcher/config.json")
 
 
+def cmd_model(name=None):
+    """Look a device name up in the maid_core models database."""
+    if name:
+        hits = [(name, models.lookup(name))]
+    else:
+        cfg = config_mod.load()
+        hits = [(d.get("name", d["mac"]), models.lookup(d.get("name", "")))
+                for d in cfg["devices"]]
+        if not hits:
+            print("no configured devices - pass a name: "
+                  "maid-watcher model 'Sony WF-1000XM5'")
+            return
+    for shown, hit in hits:
+        if hit["brand"]:
+            quirks = ", ".join(hit["quirks"]) or "none"
+            print(f"{shown} -> {hit['brand']} {hit['model']}  quirks: {quirks}")
+        else:
+            print(f"{shown} -> not in the model database "
+                  "(generic A2DP support applies)")
+
+
 def cmd_scan():
+    """List nearby BT audio devices. One passive discovery window first:
+    bluetoothctl devices only reports devices BlueZ already knows, so
+    fresh in-box earbuds would be invisible without a scan."""
+    import subprocess
+    import time as _time
     print("Scanning (make devices discoverable)...")
-    for mac, name in DeviceMonitor.scan_audio_devices():
-        print(f"  {mac}  {name}")
+    proc = None
+    try:
+        proc = subprocess.Popen(["bluetoothctl", "scan", "on"],
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL)
+        _time.sleep(8)
+        for mac, name in DeviceMonitor.scan_audio_devices():
+            print(f"  {mac}  {name}")
+    finally:
+        if proc and proc.poll() is None:
+            proc.terminate()
 
 
 def _sh(*args, timeout=10):
@@ -515,6 +648,8 @@ def main():
         cmd_status(cfg)
     elif sys.argv[1] == "scan":
         cmd_scan()
+    elif sys.argv[1] == "model":
+        cmd_model(" ".join(sys.argv[2:]) or None)
     elif sys.argv[1] == "bugreport":
         cmd_bugreport(cfg, full="--full" in sys.argv)
     elif sys.argv[1] == "route-mic":

@@ -1,5 +1,36 @@
 # changelog
 
+## Maid BT v1.1 (this release)
+
+- dock-aware goes: earbuds inside their charging case go silent (closed
+  case powers them off). maid-watcher probes instead of retrying blindly,
+  buds-fallback stands down after repeated silent connects, and any
+  reconnect re-arms. no more retry storms while the buds are parked.
+- smart fallback: "when the buds dock, hand audio to the output used
+  before them" (GUI checkbox; falls back to the configured fallback
+  speakers when that output is gone). music keeps playing through the
+  move now - the pause/resume cycle covers the dock transition, so
+  Chromium/Electron apps no longer stall.
+- soundcore device control (Liberty 5 family): battery + ANC mode +
+  10-band EQ written into the buds' own memory from Maid BT. The wire
+  protocol facts come from the GPL OpenSCQ30 project; Maid BT speaks it
+  through our own clean-room Python implementation (MIT) - credit and
+  details in the About page and README.
+- new settings window: gear opens "Maid BT Settings" with exactly the
+  Maidware pages (Earbuds / Behavior / Equalizer / About) - no Plasma
+  stock "Keyboard Shortcuts" page. Plasma's own dialog still exists in
+  the right-click menu and now includes the Equalizer page too.
+- model database: full Soundcore family (Q/Life/Space/headphone series
+  with device codes), multipoint/codec/case/home-ecosystem quirks for
+  ~40 brands; `maid-watcher model "NAME"` CLI; docs/DEVICE-SUPPORT.md
+  (generated) lists what is natively supported on Linux.
+- bluetooth stability: WirePlumber quality/A2DP-only guards deployed
+  with the service, reconnect back-off refinements, battery monitor and
+  call watcher cleanups,Toggle actions now survive missing rfkill in
+  the systemd user PATH.
+- maid-setup notes the model database quirks (multipoint/LDAC hints)
+  into the generated config.
+
 ## gui wording
 
 - the applet describes itself with its gui parts now: "A Linux-only

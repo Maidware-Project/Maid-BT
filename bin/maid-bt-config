@@ -46,7 +46,8 @@ DEFAULTS = {
 
 MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 SINK_RE = re.compile(r"^[A-Za-z0-9_.,:/+=@-]+$")
-SHELL_KEYS = ("BUDS_MAC", "FALLBACK_SINK", "APP_CYCLE", "QUALITY_LOCK", "MULTIPOINT")
+SHELL_KEYS = ("BUDS_MAC", "FALLBACK_SINK", "APP_CYCLE", "QUALITY_LOCK",
+              "MULTIPOINT", "SMART_FALLBACK")
 
 
 def fail(msg, code=1):
@@ -56,7 +57,8 @@ def fail(msg, code=1):
 
 def load_shell():
     vals = {"BUDS_MAC": "", "FALLBACK_SINK": "",
-            "APP_CYCLE": "1", "QUALITY_LOCK": "0", "MULTIPOINT": "0"}
+            "APP_CYCLE": "1", "QUALITY_LOCK": "0", "MULTIPOINT": "0",
+            "SMART_FALLBACK": "0"}
     try:
         with open(SHELL_CONF) as f:
             lines = f.readlines()
@@ -106,6 +108,7 @@ def current():
         "app_cycle": shell["APP_CYCLE"] != "0",
         "quality_lock": shell["QUALITY_LOCK"] == "1",
         "multipoint": shell["MULTIPOINT"] == "1",
+        "smart_fallback": shell["SMART_FALLBACK"] == "1",
         "initial_delay_s": cfg["reconnect"]["initial_delay_s"],
         "max_delay_s": cfg["reconnect"]["max_delay_s"],
         "give_up_after": cfg["reconnect"]["give_up_after"],
@@ -175,7 +178,8 @@ def render_shell(shell):
             if key in seen:
                 continue
             seen.add(key)
-            if key in ("APP_CYCLE", "QUALITY_LOCK", "MULTIPOINT"):
+            if key in ("APP_CYCLE", "QUALITY_LOCK", "MULTIPOINT",
+                       "SMART_FALLBACK"):
                 val = "1" if str(shell[key]) not in ("0", "", "false", "False") else "0"
             else:
                 val = safe_shell(shell[key])
@@ -185,7 +189,8 @@ def render_shell(shell):
     for key in SHELL_KEYS:
         if key in seen:
             continue
-        if key in ("APP_CYCLE", "QUALITY_LOCK", "MULTIPOINT"):
+        if key in ("APP_CYCLE", "QUALITY_LOCK", "MULTIPOINT",
+                   "SMART_FALLBACK"):
             val = "1" if str(shell[key]) not in ("0", "", "false", "False") else "0"
         else:
             val = safe_shell(shell[key])
@@ -245,6 +250,8 @@ def apply(payload):
         shell["QUALITY_LOCK"] = "1" if as_bool(payload["quality_lock"], "quality_lock") else "0"
     if "multipoint" in payload:
         shell["MULTIPOINT"] = "1" if as_bool(payload["multipoint"], "multipoint") else "0"
+    if "smart_fallback" in payload:
+        shell["SMART_FALLBACK"] = "1" if as_bool(payload["smart_fallback"], "smart_fallback") else "0"
     if "auto_reconnect" in payload:
         dev["auto_reconnect"] = as_bool(payload["auto_reconnect"], "auto_reconnect")
     if "prefer_profile" in payload:
@@ -319,6 +326,21 @@ def apply(payload):
 
     write_atomic(SHELL_CONF, render_shell(shell))
     write_atomic(WATCHER_CONF, json.dumps(cfg, indent=2) + "\n")
+
+    # Shell-key settings (buds MAC, fallback/smart-fallback, switch
+    # flags) are read once at buds-fallback start: restart it so a
+    # checkbox takes effect without a manual step. Best effort - on
+    # autostart installs the unit does not exist and stays untouched.
+    import subprocess
+    try:
+        if subprocess.run(["systemctl", "--user", "is-active", "--quiet",
+                           "buds-fallback.service"],
+                          capture_output=True, timeout=10).returncode == 0:
+            subprocess.run(["systemctl", "--user", "restart",
+                            "buds-fallback.service"],
+                           capture_output=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        pass
     print("ok")
 
 

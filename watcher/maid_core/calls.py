@@ -30,7 +30,6 @@ def phone_paths(bus):
     """D-Bus object paths of paired phones."""
     paths = []
     try:
-        obj = bus.get_object(KDECONNECT, "/modules/kdeconnect")
         # enumerate via daemon device list
         daemon = bus.get_object(KDECONNECT, "/org/kde/kdeconnect/daemon")
         iface = dbus.Interface(daemon, "org.kde.kdeconnect.daemon")

@@ -10,3 +10,7 @@ FALLBACK_SINK=""
 # Opt out of auto-connecting other paired headsets with: AUDIO_PRIORITY=0
 # Pin LDAC after every switch (needs LDAC headset) with: QUALITY_LOCK=1
 # Dual-connection buds (phone+PC at once, PC stops fighting) with: MULTIPOINT=1
+# Dock away: hand audio to the output that was default before the buds
+#   grabbed it (wired headphones, second headset...) instead of
+#   FALLBACK_SINK; when that output is gone FALLBACK_SINK is used.
+#   Opt in with: SMART_FALLBACK=1

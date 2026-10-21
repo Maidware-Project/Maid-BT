@@ -1,4 +1,6 @@
 """Battery polling + idle saver for managed earbuds."""
+import time
+
 from . import notify
 
 
@@ -38,7 +40,6 @@ class BatteryWatch:
                     self.crit_warned.discard(mac)
             # idle saver (opt-in): disconnect after N quiet minutes
             if self.saver.get("enabled"):
-                import time
                 if audio.earbuds_active(mac):
                     self.idle_since.pop(mac, None)
                 else:

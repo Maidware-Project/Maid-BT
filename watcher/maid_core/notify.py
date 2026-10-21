@@ -56,6 +56,11 @@ def send(summary, body="", urgency="normal", actions=None,
                                    {"urgency": dbus.Byte(urg)}, 15000)
                 if on_action:
                     _action_handlers[int(nid)] = on_action
+                    # ids only grow: prune stale entries so a long
+                    # session cannot grow this dict forever
+                    if len(_action_handlers) > 16:
+                        for k in sorted(_action_handlers)[:-16]:
+                            _action_handlers.pop(k, None)
                 return int(nid)
         except Exception:
             pass

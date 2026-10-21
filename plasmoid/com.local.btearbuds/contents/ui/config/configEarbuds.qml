@@ -100,6 +100,7 @@ KCM.SimpleKCM {
         appCycle.checked = values.app_cycle !== false;
         qualityLock.checked = values.quality_lock === true;
         multipoint.checked = values.multipoint === true;
+        smartFb.checked = values.smart_fallback === true;
         buildSinkModel();
         ready = true;
     }
@@ -114,7 +115,8 @@ KCM.SimpleKCM {
             "prefer_profile": profileBox.currentIndex === 1 ? "default" : "a2dp",
             "app_cycle": appCycle.checked,
             "quality_lock": qualityLock.checked,
-            "multipoint": multipoint.checked
+            "multipoint": multipoint.checked,
+            "smart_fallback": smartFb.checked
         };
     }
 
@@ -417,6 +419,12 @@ KCM.SimpleKCM {
         QQC2.CheckBox {
             id: multipoint
             text: "Multipoint: let the phone and PC share the earbuds"
+            onToggled: page.changed()
+        }
+
+        QQC2.CheckBox {
+            id: smartFb
+            text: "When the buds dock, hand audio to the output used before them"
             onToggled: page.changed()
         }
 

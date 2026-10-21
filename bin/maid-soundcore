@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""maid-soundcore - read settings and drive Soundcore gear from Maid BT.
+
+Works over the Soundcore vendor RFCOMM protocol (Bluetooth Classic).
+The wire facts come from the GPL OpenSCQ30 project's protocol
+documentation (https://github.com/Oppzippy/OpenSCQ30); the
+implementation in maid_core.soundcore.py is a clean-room port, MIT
+licensed like the rest of Maidware, with credit to OpenSCQ30.
+
+The buds must be powered on, within range, and paired (or connected)
+for the control channel. Values written here are stored inside the
+buds themselves - the same memory the Soundcore app uses - so they
+survive undocking.
+
+Usage:
+  maid-soundcore info [--json]   battery + current ANC/EQ state
+  maid-soundcore anc <mode> [ncmode] [strength]
+                                 modes: normal transparency vocal noise
+                                 ncmode (noise only): manual adaptive
+                                 strength (noise+manual): 0-5
+  maid-soundcore eq <preset>     flat bass-boost bass-reduce vocal
+                                 treble-boost treble-reduce
+  maid-soundcore eq custom <v0>...<v9>
+                                 ten dB values, -12..12, e.g.
+                                 "3 4 1 -1 -3 0 2 3 1 -1"
+Exit codes: 0 ok, 1 refused/unsupported (message on stderr).
+"""
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# presets: 10 bands (31/62/125/250/500Hz, 1/2/4/8/16kHz), dB*10 values
+PRESETS = {
+    "flat": [0] * 10,
+    "bass-boost": [90, 80, 70, 40, 20, 0, 0, 0, 0, 0],
+    "bass-reduce": [-90, -80, -60, -30, -10, 0, 0, 0, 0, 0],
+    "vocal": [0, -20, -30, -10, 10, 30, 40, 30, 10, 0],
+    "treble-boost": [0, 0, 0, 0, 0, 10, 30, 50, 70, 80],
+    "treble-reduce": [0, 0, 0, 0, 0, -10, -30, -50, -70, -80],
+}
+
+
+def _short_state(st, eq=None):
+    anc = st["anc"]
+    return {
+        "battery": {"left": st["battery_left"],
+                    "right": st["battery_right"],
+                    "case": st["battery_case"]},
+        "charging": {"left": st["charging_left"],
+                     "right": st["charging_right"]},
+        "anc": anc,
+        "eq": eq if eq is not None else st["eq_left"],
+        "eq_left": st["eq_left"],
+        "eq_right": st["eq_right"],
+        "ldac": st["ldac"],
+        "dual_connection": st["dual_connection"],
+        "wearing_detection": st["wearing_detection"],
+        "gaming_mode": st["gaming_mode"],
+        "firmware": st["firmware"],
+        "serial": st["serial"],
+    }
+
+
+def main():
+    args = sys.argv[1:]
+    if not args:
+        print(__doc__)
+        return 2
+    cmd = args[0]
+
+    # resolve the configured buds from the shell config the other tools use
+    mac = ""
+    conf = os.path.expanduser("~/.config/bluetooth-buds.conf")
+    try:
+        with open(conf) as f:
+            for line in f:
+                if line.startswith("BUDS_MAC="):
+                    mac = line.split("=", 1)[1].strip().strip('"')
+                    break
+    except OSError:
+        pass
+    if not mac:
+        print("no BUDS_MAC in %s (setup first) aborting" % conf,
+              file=sys.stderr)
+        return 1
+
+    from maid_core import soundcore
+
+    with soundcore.Device(mac) as dev:
+        if cmd == "info":
+            pass  # state already fetched on open
+        elif cmd == "anc":
+            if len(args) < 2:
+                print("anc needs a mode: normal transparency vocal noise",
+                      file=sys.stderr)
+                return 1
+            mode = args[1]
+            ncmode = args[2] if len(args) > 2 else None
+            strength = args[3] if len(args) > 3 else None
+            dev.set_anc(mode, ncmode, strength)
+        elif cmd == "eq":
+            if len(args) < 2:
+                print("eq needs a preset (flat bass-boost bass-reduce "
+                      "vocal treble-boost treble-reduce) or 'custom' + "
+                      "10 dB values", file=sys.stderr)
+                return 1
+            if args[1] == "custom":
+                if len(args) != 12:
+                    print("custom EQ needs 10 values, e.g. "
+                          "'eq custom 3 4 1 -1 -3 0 2 3 1 -1'",
+                          file=sys.stderr)
+                    return 1
+                vols = [int(round(float(v) * 10)) for v in args[2:]]
+                for v in vols:
+                    if not -120 <= v <= 120:
+                        print("band values must be -12..12 dB (%r)" % v,
+                              file=sys.stderr)
+                        return 1
+            else:
+                preset = PRESETS.get(args[1])
+                if preset is None:
+                    print("unknown preset %r (try: %s)"
+                          % (args[1], " ".join(PRESETS)), file=sys.stderr)
+                    return 1
+                vols = preset[:10]
+            dev.set_eq(vols)
+        else:
+            print("unknown command %r - see maid-soundcore --help" % cmd,
+                  file=sys.stderr)
+            return 2
+        st = dev.state
+
+    out = _short_state(st)
+    if "--json" in args:
+        print(json.dumps(out, indent=1))
+    else:
+        rounder = lambda p: "-" if p is None else "%+d dB" % p
+        batt = out["battery"]
+        anc = out["anc"]
+        print("battery: L %d%% / R %d%% / case %d%%" % (
+            batt["left"], batt["right"], batt["case"]))
+        if "ambient" in anc:
+            line = "mode: %s" % anc["ambient"]
+            if anc["ambient"] == "noise":
+                line += " (%s, manual %d/5)" % (anc["nc_mode"],
+                                                anc["nc_manual_strength"])
+            if anc["ambient"] == "transparency":
+                line += " (%s)" % anc["transparency"]
+            print(line)
+        print("eq:   " + " ".join("-" if v is None
+                                  else "%+d dB" % v
+                                  for v in out["eq"]))
+        print("firmware: %s" % out["firmware"])
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

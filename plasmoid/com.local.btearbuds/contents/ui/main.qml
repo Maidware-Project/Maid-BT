@@ -13,6 +13,21 @@ PlasmoidItem {
     readonly property int popupWidth: Math.max(Kirigami.Units.gridUnit * 22, 380)
     property string toggle: "@HOME@/.local/bin/bluetooth-toggle.sh"
 
+    Loader {
+        id: settingsWinLoader
+        asynchronous: true
+        active: false
+        source: "btSettingsWindow.qml"
+        onLoaded: item.open()
+    }
+
+    function openSettings() {
+        if (!settingsWinLoader.active)
+            settingsWinLoader.active = true;
+        else if (settingsWinLoader.item)
+            settingsWinLoader.item.open();
+    }
+
     function stateText() {
         if (btState === "buds")
             return "Earbuds: PC";
@@ -201,7 +216,7 @@ PlasmoidItem {
                         PlasmaComponents.ToolTip.visible: hovered
                         onClicked: {
                             root.expanded = false;
-                            Plasmoid.internalAction("configure").trigger();
+                            root.openSettings();
                         }
                     }
 

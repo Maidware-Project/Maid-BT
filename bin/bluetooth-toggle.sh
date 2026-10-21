@@ -160,8 +160,35 @@ sink_exists() {
   pactl list short sinks 2>/dev/null | awk '{print $2}' | grep -Fxq "$1"
 }
 
+PREV_SINK="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-prev-sink"
+
+default_sink_name() { pactl info 2>/dev/null | sed -n 's/^Default Sink: //p'; }
+
+remember_prev_sink() {
+  # see buds-fallback.sh (SMART_FALLBACK): which output was default
+  # before the buds grabbed audio, so a dock-away can hand it back
+  local prev
+  prev=$(default_sink_name)
+  case "$prev" in ""|*bluez*) return 0 ;; esac
+  sink_exists "$prev" && printf '%s\n' "$prev" > "$PREV_SINK" 2>/dev/null
+  return 0
+}
+
+smart_park_target() {
+  : "${SMART_FALLBACK:=0}"
+  if [ "$SMART_FALLBACK" = "1" ] && [ -f "$PREV_SINK" ]; then
+    local prev
+    prev=$(cat "$PREV_SINK" 2>/dev/null)
+    if [ -n "$prev" ] && sink_exists "$prev"; then
+      echo "$prev"; return 0
+    fi
+  fi
+  echo "${FALLBACK_SINK:-}"
+}
+
 park_on_fallback() {
-  local fb="${FALLBACK_SINK:-}"
+  local fb
+  fb=$(smart_park_target)
   if sink_exists "$fb"; then
     pactl set-default-sink "$fb" 2>/dev/null || echo "warn: set-default-sink $fb failed"
     move_bluez_to_fallback
@@ -193,6 +220,7 @@ switch_to_buds() {
   done
   sink="$(bluez_sink)"
   if [ -n "$sink" ]; then
+    remember_prev_sink
     pactl set-default-sink "$sink" 2>/dev/null && \
       echo "Default sink -> $sink" || echo "warn: set-default-sink $sink failed"
     pactl suspend-sink "$sink" 0 2>/dev/null || true
