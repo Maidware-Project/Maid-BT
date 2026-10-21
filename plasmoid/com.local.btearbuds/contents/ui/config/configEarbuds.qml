@@ -2,11 +2,12 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import org.kde.kcmutils as KCM
 import org.kde.plasma.plasma5support as P5Support
 
-KCM.SimpleKCM {
+// Host-agnostic root: see configEQ.qml for why this is not KCM.SimpleKCM.
+Kirigami.ScrollablePage {
     id: page
+
 
     // install.sh rewrites @HOME@; a system install leaves a bare
     // command name that resolves through PATH.
@@ -240,6 +241,9 @@ KCM.SimpleKCM {
     }
 
     Kirigami.FormLayout {
+        // bind to the page root so the form fills the pane instead of
+        // being centered as a floating column (see configEQ.qml)
+        width: page.width
         QQC2.Label {
             text: "Your earbuds"
             font.bold: true

@@ -368,7 +368,13 @@ def _connect_rfcomm(mac, uuid, timeout=8.0):
         sink["tick"] = sink.get("tick", 0) + 1
         return True
 
-    deadline = GLib.timeout_add(int(timeout * 1000), mainloop.quit)
+    fired = {"deadline": False}
+
+    def _deadline():
+        fired["deadline"] = True
+        mainloop.quit()
+
+    deadline = GLib.timeout_add(int(timeout * 1000), _deadline)
     # dbus-python + GLib: call ConnectProfile from inside the running loop
     # (a thread calling into the shared connection is not thread-safe)
     GLib.idle_add(trigger)
@@ -376,9 +382,17 @@ def _connect_rfcomm(mac, uuid, timeout=8.0):
     try:
         mainloop.run()
     finally:
-        for src in (deadline, tick):
+        # spent sources self-remove (GLib), so removing them prints
+        # "Source ID N was not found" warnings on every run: only remove
+        # sources that are still armed
+        if sink.get("fd") is None:
+            if not fired["deadline"]:
+                try:
+                    GLib.source_remove(deadline)
+                except Exception:  # noqa: BLE001
+                    pass
             try:
-                GLib.source_remove(src)
+                GLib.source_remove(tick)
             except Exception:  # noqa: BLE001
                 pass
         try:
@@ -406,8 +420,21 @@ class Device:
         self.state = None
 
     def open(self):
-        if self._sock is not None:
-            return self
+        if self._sock is None:
+            import time
+            try:
+                self._open_once()
+            except Exception:
+                # the buds often still hold the previous control session
+                # (a GUI refresh or an apply that just ran); one settle +
+                # retry clears most transient unreads. Real outages fail
+                # after this too - that is honest.
+                time.sleep(1.0)
+                self.close()
+                self._open_once()
+        return self
+
+    def _open_once(self):
         uuid = find_profile_uuid(self.mac)
         self._sock = _connect_rfcomm(self.mac, uuid, self.timeout)
         self._reader = FrameReader()

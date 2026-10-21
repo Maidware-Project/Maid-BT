@@ -109,12 +109,21 @@ Window {
                 Connections {
                     target: btWindow
                     function onCurrentChanged() {
-                        pageLoader.source =
-                            btWindow.entries[btWindow.current].source || "";
-                        if (btWindow.entries[btWindow.current].source === "")
+                        const entry = btWindow.entries[btWindow.current];
+                        if (entry.source === "") {
+                            // unload the file page, then mount the inline
+                            // About pane
+                            pageLoader.source = "";
                             pageLoader.sourceComponent = aboutPane;
-                        else
-                            pageLoader.sourceComponent = undefined;
+                        } else {
+                            // Loader: "if source and sourceComponent are
+                            // both set, the one set last is used". The old
+                            // code assigned source, then assigned
+                            // sourceComponent = undefined - which counts as
+                            // set-last and destroyed the page it had just
+                            // created, leaving every page silently blank.
+                            pageLoader.source = entry.source;
+                        }
                     }
                 }
 
@@ -122,15 +131,17 @@ Window {
                     id: aboutPane
 
                     Flickable {
+                        id: aboutFlick
                         contentWidth: width
-                        contentHeight: aboutCol.height + applyPadding * 2
+                        contentHeight: aboutCol.height
+                                      + aboutFlick.applyPadding * 2
                         property int applyPadding: Kirigami.Units.gridUnit
 
                         ColumnLayout {
                             id: aboutCol
-                            x: parent.applyPadding
-                            y: parent.applyPadding
-                            width: parent.width - parent.applyPadding * 2
+                            x: aboutFlick.applyPadding
+                            y: aboutFlick.applyPadding
+                            width: aboutFlick.width - aboutFlick.applyPadding * 2
                             spacing: Kirigami.Units.gridUnit
 
                             RowLayout {

@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import org.kde.kcmutils as KCM
 import org.kde.plasma.plasma5support as P5Support
 
 // Equalizer + device controls for soundcore gear (Liberty 5 family).
@@ -10,7 +9,11 @@ import org.kde.plasma.plasma5support as P5Support
 // Soundcore app keeps - so settings stick when the buds are undocked.
 // Control availability is driven by the model database (device-control
 // quirk), not by name strings.
-KCM.SimpleKCM {
+// Host-agnostic root: Kirigami.ScrollablePage works both inside the
+// stock Plasma config dialog (PageRow) and inside Maid BT's own
+// standalone settings window. KCM.SimpleKCM renders blank in that
+// plain-Window context, which is why hosts were broken in 1.0.2.
+Kirigami.ScrollablePage {
     id: page
 
     // install.sh rewrites @HOME@; a system install leaves a bare
@@ -43,7 +46,8 @@ KCM.SimpleKCM {
 
     function checkSupport() {
         supported = false;
-        const n = String(values.short || values.name || "").trim();
+        // full alias first (it is the DB key), short name as fallback
+        const n = String(values.name || values.short || "").trim();
         if (n === "") {
             statusText = "Pick your earbuds on the Earbuds page first.";
             return;
@@ -80,13 +84,15 @@ KCM.SimpleKCM {
         execSource.connectSource(soundTool + " eq custom " + dB.join(" "));
     }
 
-    function parseState(out) {
+    function parseState(out, err) {
         let st;
         try {
             st = JSON.parse(out);
         } catch (e) {
             statusText = "Could not read the buds' state.";
-            detailText = out;
+            detailText = err !== "" || out !== ""
+                ? (err || out)
+                : "No response from the buds. Press Refresh to retry.";
             busy = false;
             return;
         }
@@ -136,13 +142,13 @@ KCM.SimpleKCM {
                 page.supported = out.indexOf("device-control") >= 0;
                 if (!page.supported) {
                     page.busy = false;
-                    page.statusText = out.indexOf("quirks") !== -1
-                        ? "EQ + device controls: supported on Soundcore models with the device-control quirk."
-                        : ((err || " ") && "Could not reach the model database.");
+                    page.statusText = out.indexOf("not in the model database") !== -1
+                        ? "This model is not in Maid BT's database yet - tell Maidware the name so it can be added."
+                        : "Could not reach the model database.";
                 }
             } else if (src === page.soundTool + " info --json") {
                 page.busy = false;
-                page.parseState(out);
+                page.parseState(out, err);
             } else if (src.indexOf(" anc ") !== -1
                        || src.indexOf(" eq ") !== -1) {
                 if (err !== "" || out === "") {
@@ -158,6 +164,10 @@ KCM.SimpleKCM {
     }
 
     Kirigami.FormLayout {
+        // bind to the page root, not the contentItem: ScrollablePage
+        // centers narrower children, which pushed the whole form into a
+        // floating column instead of filling the pane
+        width: page.width
         wideMode: false
 
         RowLayout {
@@ -257,7 +267,10 @@ KCM.SimpleKCM {
                 value: page.deviceState && page.deviceState.anc
                        ? page.deviceState.anc.nc_manual_strength : 5
                 Layout.fillWidth: true
-                onReleased: page.applyAnc("noise manual " + Math.round(value))
+                // QQC2.Slider has no onReleased signal; fire once on press
+                // end (applies the settled position, not dragging spam).
+                onPressedChanged: if (!pressed)
+                    page.applyAnc("noise manual " + Math.round(value))
             }
             QQC2.Label {
                 text: strengthSlider.value + "/5"

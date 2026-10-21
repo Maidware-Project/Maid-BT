@@ -236,10 +236,18 @@ def lookup(name):
     hit = table.get(raw)
     if hit:
         return _shaped(hit)
-    # containment: "soundcore liberty 5 by anker" ~ "soundcore liberty 5"
+    # containment both ways: "soundcore liberty 5 by anker" matches the
+    # full key, and a short alias like "liberty 5" resolves to the
+    # model entry it names (shortest containing key is the closest hit)
     best, bestlen = None, 0
     for key, val in table.items():
         if key and key in raw and len(key) > bestlen:
+            best, bestlen = val, len(key)
+    if best:
+        return _shaped(best)
+    best, bestlen = None, 0
+    for key, val in table.items():
+        if key and raw in key and (best == None or len(key) < bestlen):
             best, bestlen = val, len(key)
     if best:
         return _shaped(best)
