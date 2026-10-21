@@ -56,8 +56,6 @@ def _short_state(st, eq=None):
         "eq_right": st["eq_right"],
         "ldac": st["ldac"],
         "dual_connection": st["dual_connection"],
-        "wearing_detection": st["wearing_detection"],
-        "gaming_mode": st["gaming_mode"],
         "firmware": st["firmware"],
         "serial": st["serial"],
     }

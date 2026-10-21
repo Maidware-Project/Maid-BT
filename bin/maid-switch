@@ -1,0 +1,57 @@
+#!/bin/bash
+# maid-switch: one-tap audio-host switch for multipoint buds (PC <-> phone).
+#
+# The verbs map onto Maid BT's own bluetooth-toggle.sh semantics, so the
+# applet menu, the internet intent server and KDE Connect all agree:
+#   maid-switch pc      buds + audio on the PC (cancels hands-off)
+#   maid-switch phone   park PC audio, hand the buds to the phone
+#   maid-switch status  popup with who owns the buds now (no bus change)
+#
+# Designed to be triggered over KDE Connect (phone -> PC) or wired to
+# global shortcuts; desktop notifications make remote taps visible.
+set -u
+TOGGLE="$HOME/.local/bin/bluetooth-toggle.sh"
+[ -x "$TOGGLE" ] || TOGGLE="bluetooth-toggle.sh"
+HANDS="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-hands-off"
+HANDS_MODE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-hands-mode"
+
+notify() {
+  command -v notify-send >/dev/null 2>&1 || return 0
+  notify-send "Maid BT" "$1" -i bluetooth \
+    --app-name="Maid BT" 2>/dev/null || true
+}
+
+case "${1:-}" in
+  pc)
+    rm -f "$HANDS" "$HANDS_MODE" 2>/dev/null || true
+    out=$("$TOGGLE" on 2>&1 | tail -n 1)
+    notify "Audio: PC - earbuds grabbed"
+    echo "maid-switch: PC ($out)"
+    ;;
+  phone)
+    out=$("$TOGGLE" release 2>&1 | tail -n 1)
+    # if release did not stamp a long hands-off (non-multipoint buds),
+    # give the same 4h window the phone intent server uses
+    if ! [ -s "$HANDS" ] || [ "$(wc -w < "$HANDS")" -lt 2 ]; then
+      printf '%s %s\n' "$(date +%s)" "14400" > "$HANDS" 2>/dev/null || true
+    fi
+    printf 'phone\n' > "$HANDS_MODE" 2>/dev/null || true
+    notify "Audio: phone - PC parked"
+    echo "maid-switch: phone ($out)"
+    ;;
+  status)
+    state=$("$TOGGLE" porcelain 2>/dev/null || true)
+    case "$state" in
+      buds) notify "Earbuds: audio on this PC" ;;
+      phone) notify "Earbuds: audio on the phone" ;;
+      on) notify "Earbuds: not connected (Bluetooth on)" ;;
+      off) notify "Bluetooth off" ;;
+      *) notify "Earbuds: unknown ($state)" ;;
+    esac
+    echo "maid-switch: $state"
+    ;;
+  *)
+    echo "usage: maid-switch [pc|phone|status]" >&2
+    exit 2
+    ;;
+esac

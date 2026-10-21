@@ -26,10 +26,19 @@ garbage-in-garbage-out.
 """
 import socket
 import struct
-import threading
 
 import dbus
 import dbus.service
+
+try:
+    from dbus.mainloop.glib import DBusGMainLoop
+
+    # Profile export/NewConnection needs an main-loop-attached connection;
+    # this must be set BEFORE the first SystemBus() is created.
+    DBusGMainLoop(set_as_default=True)
+except Exception:  # noqa: BLE001 - no gi/dbus plugs available: fail loud later
+    pass
+
 from gi.repository import GLib
 
 MARKER_OUT = bytes((0x08, 0xEE, 0x00, 0x00, 0x00))
@@ -307,12 +316,12 @@ class _Profile(dbus.service.Object):
         pass  # we unregister explicitly; nothing to release
 
     @dbus.service.method(PROFILE_IFACE, in_signature="oha{sv}",
-                         out_signature="s")
+                         out_signature="")
     def NewConnection(self, device, fd, properties):
-        if str(device).lower() != self._want_path.lower():
-            return "reject"  # not our buds
+        # BlueZ dials back over the profile's own UUID (per-model SPP), so
+        # anything arriving here is our buds; keep the handler void per
+        # the Profile1 D-Bus docs.
         self._sink["fd"] = fd.take()
-        return ""
 
     @dbus.service.method(PROFILE_IFACE, in_signature="s", out_signature="")
     def RequestDisconnection(self, device):
@@ -346,28 +355,32 @@ def _connect_rfcomm(mac, uuid, timeout=8.0):
                              "org.bluez.Device1")
         try:
             dev.ConnectProfile(uuid)
-        except Exception as exc:  # noqa: BLE001 - any failure: poll fd
+        except Exception as exc:  # noqa: BLE001 - any failure: keep waiting
             sink.setdefault("error", str(exc))
 
     def watch():
-        if sink.get("fd") is not None or sink.get("done_tick", 0) > 20:
+        if sink.get("fd") is not None:
             mainloop.quit()
             return False
-        sink["done_tick"] = sink.get("done_tick", 0) + 1
+        if sink.get("error") and sink.get("tick", 0) > 20:
+            mainloop.quit()
+            return False
+        sink["tick"] = sink.get("tick", 0) + 1
         return True
 
-    mainloop_idle = GLib.timeout_add(int(timeout * 1000),
-                                     mainloop.quit)
-    threading.Thread(target=trigger, daemon=True).start()
-    tick = GLib.timeout_add(200, watch)
+    deadline = GLib.timeout_add(int(timeout * 1000), mainloop.quit)
+    # dbus-python + GLib: call ConnectProfile from inside the running loop
+    # (a thread calling into the shared connection is not thread-safe)
+    GLib.idle_add(trigger)
+    tick = GLib.timeout_add(100, watch)
     try:
         mainloop.run()
     finally:
-        try:
-            GLib.source_remove(tick)
-            GLib.source_remove(mainloop_idle)
-        except Exception:  # noqa: BLE001
-            pass
+        for src in (deadline, tick):
+            try:
+                GLib.source_remove(src)
+            except Exception:  # noqa: BLE001
+                pass
         try:
             manager.UnregisterProfile(path)
         except Exception:  # noqa: BLE001

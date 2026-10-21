@@ -416,6 +416,7 @@ try_connect_once() {
   fi
 }
 
+a2dp_tick=0
 log "start (buds=$BUDS_MAC fallback=$FALLBACK_SINK grace=$GRACE power_off=$POWER_OFF_ON_LOST)"
 
 while true; do
@@ -423,6 +424,15 @@ while true; do
   now=$(date +%s)
   is_powered && powered=1
   is_connected && connected=1
+
+  # A2DP watchdog: if a transport died while we were not looking, PipeWire
+  # leaves the card on the "off" profile (buds silent until disturbed).
+  # ensure_a2dp only runs inside ops; this keeps a stray re-acquire alive.
+  # RATE-LIMITED: every 12th tick (~12s at POLL=1) while connected.
+  if [ "$connected" = "1" ]; then
+    a2dp_tick=$(( (a2dp_tick + 1) % 12 ))
+    [ "$a2dp_tick" = "1" ] && ensure_a2dp
+  fi
 
   # init prev on first loop (no notify for steady state)
   if [ -z "$prev_powered" ]; then

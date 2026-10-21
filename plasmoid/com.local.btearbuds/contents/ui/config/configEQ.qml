@@ -346,9 +346,9 @@ KCM.SimpleKCM {
         QQC2.Label {
             visible: page.supported
             text: "EQ curve values live in the earbuds' own memory. "
-                  "Custom curves here do NOT switch between the buds' "
-                  "hearaware presets automatically - fine tune again in "
-                  "the Soundcore app only if you need its extra presets."
+                  + "Custom curves here do NOT switch between the buds' "
+                  + "hearaware presets automatically - fine tune again in "
+                  + "the Soundcore app only if you need its extra presets."
             font: Kirigami.Theme.smallFont
             opacity: 0.7
             Layout.fillWidth: true
