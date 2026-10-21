@@ -24,8 +24,11 @@ service UUID, discovered from the device at connect time
 cannot recognise fail loud with the raw bytes count rather than
 garbage-in-garbage-out.
 """
+import fcntl
+import os
 import socket
 import struct
+import time
 
 import dbus
 import dbus.service
@@ -328,6 +331,44 @@ class _Profile(dbus.service.Object):
         pass
 
 
+def _control_lock_path():
+    """Per-user lock file shared by every Maid BT process."""
+    base = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
+    folder = os.path.join(base, "maid-bt")
+    try:
+        os.makedirs(folder, mode=0o700, exist_ok=True)
+    except OSError:
+        folder = "/tmp"
+    return os.path.join(folder, "soundcore-control.lock")
+
+
+def _take_control_lock(timeout):
+    """Serialise RFCOMM sessions.
+
+    BlueZ lets one process register a profile UUID at a time, and the
+    buds accept one control session at a time. Two directions (the
+    settings window reading EQ while the device page reads battery)
+    used to race: the loser got "org.bluez.Error.NotPermitted: UUID
+    already registered". A file lock makes the second caller wait its
+    turn instead of failing.
+    """
+    fd = os.open(_control_lock_path(), os.O_CREAT | os.O_RDWR, 0o600)
+    end = time.time() + timeout
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            os.ftruncate(fd, 0)
+            os.write(fd, str(os.getpid()).encode())
+            return fd
+        except BlockingIOError:
+            if time.time() >= end:
+                os.close(fd)
+                raise RuntimeError(
+                    "the buds' control channel is busy (another Maid BT "
+                    "action is still running); try again in a moment")
+            time.sleep(0.1)
+
+
 def _connect_rfcomm(mac, uuid, timeout=8.0):
     """Open the device's RFCOMM socket the BlueZ-supported way.
 
@@ -343,68 +384,115 @@ def _connect_rfcomm(mac, uuid, timeout=8.0):
     profile = _Profile(bus, path, sink, want)
     manager = dbus.Interface(bus.get_object("org.bluez", "/org/bluez"),
                              PROFILE_MANAGER)
-    manager.RegisterProfile(
-        path, uuid,
-        {"Name": dbus.String("Maid BT soundcore controller"),
-         "Role": dbus.String("Client"),
-         "RequireAuthentication": dbus.Boolean(False),
-         "RequireAuthorization": dbus.Boolean(False)})
+    props = {"Name": dbus.String("Maid BT soundcore controller"),
+             "Role": dbus.String("Client"),
+             "RequireAuthentication": dbus.Boolean(False),
+             "RequireAuthorization": dbus.Boolean(False)}
+    registered = False
+    fired = {"deadline": False}
+    deadline = None
+    tick = None
 
     def trigger():
         dev = dbus.Interface(bus.get_object("org.bluez", want),
                              "org.bluez.Device1")
+        # Do not wait for ConnectProfile's reply: BlueZ often never sends
+        # one for SPP client profiles, but it dials the profile back over
+        # NewConnection almost immediately. A synchronous call blocked the
+        # GLib loop for the whole timeout (25s reads in the settings UI).
+        def failed(exc):
+            sink.setdefault("error", str(exc))
+
         try:
-            dev.ConnectProfile(uuid)
+            dev.ConnectProfile(uuid, reply_handler=lambda: None,
+                               error_handler=failed, timeout=timeout)
         except Exception as exc:  # noqa: BLE001 - any failure: keep waiting
             sink.setdefault("error", str(exc))
 
     def watch():
         if sink.get("fd") is not None:
+            sink["tick_done"] = True
             mainloop.quit()
             return False
         if sink.get("error") and sink.get("tick", 0) > 20:
+            sink["tick_done"] = True
             mainloop.quit()
             return False
         sink["tick"] = sink.get("tick", 0) + 1
         return True
 
-    fired = {"deadline": False}
-
     def _deadline():
         fired["deadline"] = True
         mainloop.quit()
 
-    deadline = GLib.timeout_add(int(timeout * 1000), _deadline)
-    # dbus-python + GLib: call ConnectProfile from inside the running loop
-    # (a thread calling into the shared connection is not thread-safe)
-    GLib.idle_add(trigger)
-    tick = GLib.timeout_add(100, watch)
     try:
+        # BlueZ releases a profile asynchronously. The previous CLI
+        # process may have closed its connection a moment ago, or a
+        # concurrent reader may still be tearing down: retry the
+        # registration briefly instead of failing the whole read.
+        for attempt in range(6):
+            try:
+                manager.RegisterProfile(path, uuid, props)
+                registered = True
+                break
+            except dbus.exceptions.DBusException as exc:
+                name = getattr(exc, "get_dbus_name", lambda: "")()
+                if (name == "org.bluez.Error.NotPermitted"
+                        and "already registered" in str(exc)):
+                    if attempt == 0:
+                        # clear a registration left by this same process
+                        # (a failed first pass in Device.open's retry)
+                        try:
+                            manager.UnregisterProfile(path)
+                        except Exception:  # noqa: BLE001
+                            pass
+                    time.sleep(0.3 * (attempt + 1))
+                    continue
+                raise
+        if not registered:
+            raise RuntimeError(
+                "the soundcore control profile is still held by another "
+                "process; close other Maid BT windows and retry")
+
+        deadline = GLib.timeout_add(int(timeout * 1000), _deadline)
+        # dbus-python + GLib: call ConnectProfile from inside the running
+        # loop (a thread calling into the shared connection is not safe)
+        GLib.idle_add(trigger)
+        tick = GLib.timeout_add(100, watch)
         mainloop.run()
     finally:
         # spent sources self-remove (GLib), so removing them prints
         # "Source ID N was not found" warnings on every run: only remove
         # sources that are still armed
-        if sink.get("fd") is None:
-            if not fired["deadline"]:
-                try:
-                    GLib.source_remove(deadline)
-                except Exception:  # noqa: BLE001
-                    pass
+        if deadline is not None and not fired["deadline"]:
+            try:
+                GLib.source_remove(deadline)
+            except Exception:  # noqa: BLE001
+                pass
+        if tick is not None and fired["deadline"] and not sink.get("tick_done"):
             try:
                 GLib.source_remove(tick)
             except Exception:  # noqa: BLE001
                 pass
+        if registered:
+            # give BlueZ a moment to finish releasing the profile; without
+            # this, the next (retry) call sees "UUID already registered"
+            for _ in range(4):
+                try:
+                    manager.UnregisterProfile(path)
+                    break
+                except Exception:  # noqa: BLE001
+                    time.sleep(0.2)
         try:
-            manager.UnregisterProfile(path)
+            profile.remove_from_connection()
         except Exception:  # noqa: BLE001
             pass
-        profile.remove_from_connection()
+
     if sink.get("fd") is None:
+        detail = sink.get("error")
         raise RuntimeError(
-            "control channel %s did not open within %.0fs%s: %s"
-            % (uuid, timeout, " (%s)" % sink["error"]
-               if "error" in sink else "") or "buds never dialed back")
+            "control channel %s did not open within %.0fs%s"
+            % (uuid, timeout, ": " + detail if detail else ""))
     return socket.socket(fileno=sink["fd"], family=socket.AF_BLUETOOTH,
                          type=socket.SOCK_STREAM,
                          proto=socket.BTPROTO_RFCOMM)
@@ -417,21 +505,29 @@ class Device:
         self.mac = str(mac).upper()
         self.timeout = timeout
         self._sock = None
+        self._lock_fd = None
         self.state = None
 
     def open(self):
-        if self._sock is None:
-            import time
+        if self._sock is not None:
+            return self
+        if self._lock_fd is None:
+            self._lock_fd = _take_control_lock(self.timeout + 2)
+        try:
             try:
                 self._open_once()
             except Exception:
                 # the buds often still hold the previous control session
                 # (a GUI refresh or an apply that just ran); one settle +
                 # retry clears most transient unreads. Real outages fail
-                # after this too - that is honest.
+                # after this too - that is honest. Keep the file lock
+                # across the retry so no other process can slip in.
                 time.sleep(1.0)
-                self.close()
+                self._close_socket()
                 self._open_once()
+        except Exception:
+            self._release_lock()
+            raise
         return self
 
     def _open_once(self):
@@ -441,13 +537,29 @@ class Device:
         self._wait_state()
         return self
 
-    def close(self):
+    def _close_socket(self):
         if self._sock is not None:
             try:
                 self._sock.close()
             except OSError:
                 pass
             self._sock = None
+
+    def _release_lock(self):
+        if self._lock_fd is not None:
+            try:
+                fcntl.flock(self._lock_fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
+            try:
+                os.close(self._lock_fd)
+            except OSError:
+                pass
+            self._lock_fd = None
+
+    def close(self):
+        self._close_socket()
+        self._release_lock()
 
     def __enter__(self):
         return self.open()
