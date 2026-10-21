@@ -166,4 +166,84 @@ case "$REPLY" in [Yy]*)
     && say "warm audio on - restart wireplumber to apply" || say "copy failed" ;;
 esac
 
+# ---- 4. KDE Connect switching commands ----
+# merge the maid-switch commands into each paired device's "run
+# command" list. Maid BT only ADDS its three bluetooth commands to the
+# list: the current value is read, the union of it and ours is
+# written back - a user's own commands are never removed, and anything
+# that fails to parse as JSON is left untouched.
+KREAD="$(command -v kreadconfig6 || true)"
+KWRITE="$(command -v kwriteconfig6 || true)"
+KDEDIR="$HOME/.config/kdeconnect"
+if [ -n "$KREAD" ] && [ -n "$KWRITE" ] && [ -d "$KDEDIR" ]; then
+  KSWITCH="$(command -v maid-switch || echo "$HOME/.local/bin/maid-switch")"
+  python3 - "$KDEDIR" "$KSWITCH" "$KREAD" "$KWRITE" <<'PYSETUP'
+import json, os, re, subprocess, sys
+
+kdedir, kswitch, kread, kwrite = sys.argv[1:5]
+COMMANDS = {
+    "maid_pc":     {"name": "Earbuds: audio on PC",
+                    "command": kswitch + " pc"},
+    "maid_phone":  {"name": "Earbuds: audio on phone",
+                    "command": kswitch + " phone"},
+    "maid_status": {"name": "Earbuds: who has audio?",
+                    "command": kswitch + " status"},
+}
+try:
+    trusted = open(os.path.join(kdedir, "trusted_devices")).read()
+except OSError:
+    sys.exit(0)
+ids = re.findall(r"^\[([0-9a-f]{32})\]", trusted, re.M)
+for dev in ids:
+    devdir = os.path.join(kdedir, dev)
+    rcdir = os.path.join(devdir, "kdeconnect_runcommand")
+    try:
+        out = subprocess.run(
+            [kread, "--file", "config", "--group", "General",
+             "--key", "commands"],
+            cwd=rcdir if os.path.isdir(rcdir) else devdir,
+            capture_output=True, text=True, check=False)
+    except OSError:
+        continue
+    raw = (out.stdout or "").strip()
+    if raw:
+        try:
+            current = json.loads(raw)
+        except ValueError:
+            print("  %s: existing commands not JSON - left untouched"
+                  % dev[:8])
+            continue
+        if not isinstance(current, dict):
+            print("  %s: commands is not an object - left untouched"
+                  % dev[:8])
+            continue
+    else:
+        current = {}
+    missing = {k: v for k, v in COMMANDS.items() if k not in current}
+    if missing:
+        merged = dict(current)
+        merged.update(missing)
+        os.makedirs(rcdir, exist_ok=True)
+        if not os.path.exists(os.path.join(rcdir, "config")):
+            with open(os.path.join(rcdir, "config"), "w",
+                      encoding="utf-8") as f:
+                f.write("[General]\n")
+        subprocess.run(
+            [kwrite, "--file", "config", "--group", "General",
+             "--key", "commands", json.dumps(merged)],
+            cwd=rcdir, check=False)
+        print("  %s: + %s" % (dev[:8], ", ".join(sorted(missing))))
+    else:
+        print("  %s: switching commands already present" % dev[:8])
+    subprocess.run(
+        [kwrite, "--file", "config", "--group", "Plugins",
+         "--key", "kdeconnect_runcommandEnabled", "true"],
+        cwd=devdir, check=False)
+print("KDE Connect: ready - the phone lists the switching commands "
+      "when KDE Connect reconnects (restart kdeconnectd to apply now).")
+PYSETUP
+else
+  say "kdeconnect desktop tools not found - command setup skipped"
+fi
+
 say "done. add the Maid BT widget; restart plasmashell only if it is not listed. test: bluetooth-toggle.sh status"

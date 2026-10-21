@@ -24,10 +24,37 @@
   with device codes), multipoint/codec/case/home-ecosystem quirks for
   ~40 brands; `maid-watcher model "NAME"` CLI; docs/DEVICE-SUPPORT.md
   (generated) lists what is natively supported on Linux.
+- phone switching from KDE Connect: the paired device's "run command"
+  list gets three bluetooth commands ("Earbuds: audio on PC", "Earbuds:
+  audio on phone", "Earbuds: who has audio") backed by bin/maid-switch
+  (pc|phone|status), calling the same release/on machinery as the
+  applet. existing personal commands in that list are preserved and
+  Maid BT config snapshots live in ~/.config/kdeconnect-cmd-backup-*.
+- soundcore device control is live end-to-end: real reads (battery/
+  firmware/dual connection) and writes (ANC modes, NC strength, preset
+  and custom EQ curves) verified against a Liberty 5 on the wire; the
+  settings window shows the curve that is actually on the buds and a
+  failed read says so honestly instead of showing stale zeros.
+- model database lookup understands short aliases ("Liberty 5"
+  resolves to "soundcore Liberty 5") - the EQ page no longer shows
+  "not supported" for buds whose configured name is the short form.
 - bluetooth stability: WirePlumber quality/A2DP-only guards deployed
-  with the service, reconnect back-off refinements, battery monitor and
-  call watcher cleanups,Toggle actions now survive missing rfkill in
-  the systemd user PATH.
+  with the service, reconnect back-off refinements, battery monitor
+  and call watcher cleanups. Toggle actions now survive missing rfkill
+  in the systemd user PATH.
+- default codec ladder drops LDAC (wireplumber/52-bt-max-quality.conf
+  = [aac sbc_xq sbc]): adapters with the Realtek LDAC stall lose
+  packets until quality collapses, so AAC and SBC-XQ are offered
+  instead. the max-quality pin stays an explicit opt-in (helper GUI).
+- a2dp watchdog in buds-fallback: while buds are connected, a dead
+  transport is re-asserted every ~12 ticks instead of leaving the card
+  stuck at profile "off" with silence until a manual profile flip.
+- settings window fixes: pages hosted in Maid BT's own window render
+  correctly again (the switch handler destroyed each freshly-loaded
+  page via sourceComponent's last-set-wins rule), page roots use
+  host-agnostic ScrollablePage, the EQ strength slider applies on
+  release, and the About pane no longer logs undefined-assignment
+  errors.
 - maid-setup notes the model database quirks (multipoint/LDAC hints)
   into the generated config.
 
