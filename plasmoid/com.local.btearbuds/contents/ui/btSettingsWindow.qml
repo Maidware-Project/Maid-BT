@@ -157,7 +157,7 @@ Window {
                             }
 
                             QQC2.Label {
-                                text: "A Linux-only seamless Bluetooth "
+                                text: "A Linux-only Bluetooth "
                                       + "earbuds switcher: reconnects, "
                                       + "switches audio, guards calls and "
                                       + "keeps the buds alive in the "

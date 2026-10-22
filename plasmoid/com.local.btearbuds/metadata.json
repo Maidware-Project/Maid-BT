@@ -13,7 +13,7 @@
         "Category": "System Information",
         "Copyright": "Copyright (c) 2026 Maidware Project",
         "Icon": "bluetooth",
-        "Description": "A Linux-only seamless Bluetooth earbuds switcher - tray applet + helper window",
+        "Description": "A Linux-only Bluetooth earbuds switcher - tray applet + helper window",
         "EnabledByDefault": true,
         "Id": "com.local.btearbuds",
         "License": "MIT",

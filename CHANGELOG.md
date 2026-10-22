@@ -61,7 +61,7 @@
 ## gui wording
 
 - the applet describes itself with its gui parts now: "A Linux-only
-  seamless Bluetooth earbuds switcher - tray applet + helper window".
+  Bluetooth earbuds switcher - tray applet + helper window".
   same wording on the repo description. nothing in behavior changed.
 
 ## Maid BT v1.1
@@ -130,7 +130,7 @@
 - hover explanations and a settings button to the existing configuration
   dialog make the deeper options reachable from the menu.
 - the applet is now named Maid BT and describes itself in About as
-  "A Linux-only seamless Bluetooth earbuds switcher"; metadata was 1.1
+  "A Linux-only Bluetooth earbuds switcher"; metadata was 1.1
   during the redesign and is 1.0 for the first stable release. the
   license is MIT.
 
