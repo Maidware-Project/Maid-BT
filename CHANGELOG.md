@@ -42,6 +42,13 @@
   with the service, reconnect back-off refinements, battery monitor
   and call watcher cleanups. Toggle actions now survive missing rfkill
   in the systemd user PATH.
+- applet state no longer flickers: the porcelain readout collects
+  bluetoothctl's output before matching instead of piping into
+  `grep -q`. grep exited on the first match, bluetoothctl took
+  SIGPIPE, and pipefail turned a good read into "off"/"on" while the
+  earbuds were connected. the same race could make a real fallback
+  sink look missing during a park. regression test uses a chatty fake
+  adapter.
 - default codec ladder drops LDAC (wireplumber/52-bt-max-quality.conf
   = [aac sbc_xq sbc]): adapters with the Realtek LDAC stall lose
   packets until quality collapses, so AAC and SBC-XQ are offered

@@ -221,6 +221,30 @@ state=$(XDG_RUNTIME_DIR=/tmp/maidbt-ph PATH="/tmp/maidbt-ph/stubs:$PATH" HOME=/t
 rm -rf /tmp/maidbt-ph
 ok "porcelain distinguishes phone from PC"
 
+echo "== porcelain steady with noisy adapter =="
+# `grep -q` exits at the first match. a real bluetoothctl keeps writing its
+# device tree afterwards, takes SIGPIPE, and pipefail used to turn a match
+# into a failure: the applet then flickered between off, on and buds while
+# the earbuds stayed connected. the fake adapter is deliberately chatty.
+rm -rf /tmp/maidbt-noise && mkdir -p /tmp/maidbt-noise/stubs /tmp/maidbt-noise/.config
+cat > /tmp/maidbt-noise/stubs/bluetoothctl <<'EOF'
+#!/bin/bash
+case "$*" in
+  *show*) echo "Controller AA:BB:CC:DD:EE:FF test"; echo "Powered: yes"; seq 1 20000 ;;
+  *info*) echo "Device 11:22:33:44:55:66 (public)"; echo "Connected: yes"; seq 1 20000 ;;
+  *) exit 1 ;;
+esac
+EOF
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-noise/stubs/pactl
+chmod +x /tmp/maidbt-noise/stubs/*
+printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-noise/.config/bluetooth-buds.conf
+for i in 1 2 3 4 5; do
+  state=$(PATH="/tmp/maidbt-noise/stubs:$PATH" HOME=/tmp/maidbt-noise bash "$PKGDIR/bin/bluetooth-toggle.sh" porcelain 2>/dev/null || true)
+  [ "$state" = "buds" ] || fail "noisy adapter state should stay buds (got '$state' on run $i)"
+done
+rm -rf /tmp/maidbt-noise
+ok "porcelain steady with noisy adapter"
+
 echo "== unconfigured daemon refuses =="
 # buds-fallback checks `need bluetoothctl` / `need pactl` before it reads its
 # config, so without stubs this test passes or fails on whatever the host has

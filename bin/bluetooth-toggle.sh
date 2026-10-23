@@ -119,9 +119,25 @@ notify() {
   fi
 }
 
-is_blocked() { $RFKILL list bluetooth 2>/dev/null | grep -qi "soft blocked: yes"; }
-is_powered() { bluetoothctl show 2>/dev/null | grep -qi "powered: yes"; }
-is_buds_connected() { bluetoothctl info "$BUDS_MAC" 2>/dev/null | grep -q "Connected: yes"; }
+# collect output first: with pipefail, `grep -q` exits on the first match,
+# the producer gets SIGPIPE, and the pipeline reports failure even though
+# the line matched. that made porcelain flicker between off/on/buds while
+# the adapter was steadily connected.
+is_blocked() {
+  local out
+  out=$($RFKILL list bluetooth 2>/dev/null) || true
+  grep -qi "soft blocked: yes" <<< "$out"
+}
+is_powered() {
+  local out
+  out=$(bluetoothctl show 2>/dev/null) || true
+  grep -qi "powered: yes" <<< "$out"
+}
+is_buds_connected() {
+  local out
+  out=$(bluetoothctl info "$BUDS_MAC" 2>/dev/null) || true
+  grep -q "Connected: yes" <<< "$out"
+}
 
 bluez_sink() {
   pactl list short sinks 2>/dev/null | grep -i "bluez" | awk '{print $2}' | head -n 1
@@ -156,8 +172,12 @@ suspend_bluez_sink() {
 }
 
 sink_exists() {
-  # stale pulse index or unplugged sink: park only onto something real
-  pactl list short sinks 2>/dev/null | awk '{print $2}' | grep -Fxq "$1"
+  # stale pulse index or unplugged sink: park only onto something real.
+  # awk consumes the whole list; grep -q could exit early here and trip
+  # pipefail against pactl, making a real sink look missing.
+  local out
+  out=$(pactl list short sinks 2>/dev/null) || true
+  awk -v want="$1" '$2 == want { found = 1 } END { exit !found }' <<< "$out"
 }
 
 PREV_SINK="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-prev-sink"
@@ -286,9 +306,10 @@ connect_buds() {
   fi
 
   echo "Connecting to earbuds ($BUDS_MAC)..."
-  local waited=0 ok=0
+  local waited=0 ok=0 out
   while [ "$waited" -lt "$CONNECT_TIMEOUT" ]; do
-    if bluetoothctl connect "$BUDS_MAC" 2>&1 | grep -qiE "connection successful|already connected"; then
+    out=$(bluetoothctl connect "$BUDS_MAC" 2>&1) || true
+    if grep -qiE "connection successful|already connected" <<< "$out"; then
       ok=1
       break
     fi
