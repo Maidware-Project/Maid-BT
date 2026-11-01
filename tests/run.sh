@@ -583,6 +583,19 @@ PYEOF
 ok "settings helper"
 rm -rf /tmp/maidbt-c
 
+echo "== third-party contract =="
+# sleeve (github.com/jieke238y34/sleeve) calls bluetooth-toggle.sh
+# on|off|release from its settings. those names are the promise other
+# apps build on: dispatch must answer all three, the usage line must
+# keep them, and the pairing must stay documented.
+grep -q 'on) do_on' "$PKGDIR/bin/bluetooth-toggle.sh" || fail "on action missing"
+grep -q 'off) do_off' "$PKGDIR/bin/bluetooth-toggle.sh" || fail "off action missing"
+grep -q 'release) do_release' "$PKGDIR/bin/bluetooth-toggle.sh" || fail "release action missing"
+grep -q 'porcelain)' "$PKGDIR/bin/bluetooth-toggle.sh" || fail "porcelain readout missing"
+grep -q 'on|off|release' "$PKGDIR/bin/bluetooth-toggle.sh" || fail "usage line drops contract actions"
+grep -q "jieke238y34/sleeve" "$PKGDIR/README.md" || fail "Sleeve pairing not documented"
+ok "third-party contract"
+
 echo "== cleanup =="
 rm -rf /tmp/maidbt-t
 ok "cleanup"
