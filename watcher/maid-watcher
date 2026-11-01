@@ -545,14 +545,69 @@ def cmd_status(cfg):
               "~/.config/maid-watcher/config.json")
 
 
+def _bluez_alias(mac):
+    """Live device name from BlueZ for a configured MAC, or "".
+    bluetoothctl only; silent when BlueZ is down or the buds are away."""
+    if not mac:
+        return ""
+    import subprocess
+    try:
+        p = subprocess.run(["bluetoothctl", "info", mac],
+                           capture_output=True, text=True, timeout=6,
+                           check=False)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    for line in p.stdout.splitlines():
+        line = line.strip()
+        # Alias: is the buds' real advertised name; the leading
+        # "Device <mac> (public)" line has none, and letterboxed
+        # "(public)"/"(random)" tokens are not names
+        if line.startswith("Alias:"):
+            return line.split(":", 1)[1].strip()
+        if line.startswith("Device ") and mac.lower() in line.lower():
+            parts = line.split(None, 2)
+            if len(parts) == 3 and not parts[2].startswith("("):
+                return parts[2].strip()
+    return ""
+
+
 def cmd_model(name=None):
-    """Look a device name up in the maid_core models database."""
+    """Look a device name up in the maid_core models database.
+
+    Stored names can be placeholders ("My Earbuds") while the buds
+    announce their real model name over Bluetooth. when a stored name
+    does not resolve, the live BlueZ alias for the same MAC gets a
+    lookup instead - that is the auto-recognize path the Equalizer
+    page rides on."""
     if name:
-        hits = [(name, models.lookup(name))]
+        hit = models.lookup(name)
+        shown = name
+        if not hit["brand"]:
+            mac = ""
+            for d in config_mod.load()["devices"]:
+                if name.lower() in {d.get("name", "").lower(),
+                                    d.get("short", "").lower(),
+                                    d.get("mac", "").lower()}:
+                    mac = d.get("mac", "")
+                    break
+            live = _bluez_alias(mac)
+            if live and live.lower() != name.lower():
+                hit2 = models.lookup(live)
+                if hit2["brand"]:
+                    hit, shown = hit2, live
+        hits = [(shown, hit)]
     else:
-        cfg = config_mod.load()
-        hits = [(d.get("name", d["mac"]), models.lookup(d.get("name", "")))
-                for d in cfg["devices"]]
+        hits = []
+        for d in config_mod.load()["devices"]:
+            shown = d.get("name", d["mac"])
+            hit = models.lookup(d.get("name", ""))
+            if not hit["brand"]:
+                live = _bluez_alias(d.get("mac", ""))
+                if live and live.lower() != shown.lower():
+                    hit2 = models.lookup(live)
+                    if hit2["brand"]:
+                        shown, hit = live, hit2
+            hits.append((shown, hit))
         if not hits:
             print("no configured devices - pass a name: "
                   "maid-watcher model 'Sony WF-1000XM5'")

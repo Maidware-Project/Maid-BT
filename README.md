@@ -51,6 +51,15 @@ what it does, in plain words:
   your music and mutes Discord, then restores everything on hangup.
   also reconnects up to 2 earbuds in priority order and warns you at
   low battery. works on any init system.
+- volume memory - the buds' level is remembered while they play and
+  handed back on the next arrival, so a reconnect (or unlock, or
+  reboot) never comes back too quiet. a fresh pairing keeps the buds'
+  own default: nothing is guessed.
+- controller respect - a bluetooth gamepad (dualsense and friends)
+  never counts as a headset. their speaker caps are known, but the
+  audio stream never moves onto a controller, and the radio follows
+  the everyday switch while wired pads (inputplumber / joycond) are
+  untouched.
 - every switch can also ping your phone over KDE Connect (skipped
   quietly if you don't have it paired).
 

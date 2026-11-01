@@ -139,6 +139,17 @@ is_buds_connected() {
   grep -q "Connected: yes" <<< "$out"
 }
 
+rfkill_action() {
+  # rfkill talks to /dev/rfkill: unprivileged calls fail everywhere.
+  # when some other app (or the KDE tray) left the radio blocked, a
+  # plain retry can never recover it, so escalate through pkexec and
+  # let the desktop ask once - a tap actually turns Bluetooth back on.
+  local op="$1"
+  $RFKILL "$op" bluetooth >/dev/null 2>&1 && return 0
+  command -v pkexec >/dev/null 2>&1 || return 1
+  pkexec $RFKILL "$op" bluetooth >/dev/null 2>&1
+}
+
 bluez_sink() {
   pactl list short sinks 2>/dev/null | grep -i "bluez" | awk '{print $2}' | head -n 1
 }
@@ -180,6 +191,43 @@ sink_exists() {
   awk -v want="$1" '$2 == want { found = 1 } END { exit !found }' <<< "$out"
 }
 
+# --- volume resume: return to the last state if found ------------------
+# a fresh A2DP path starts at the adapter default and buds come back too
+# quiet. the level is remembered while they play (same state file as the
+# watcher) and restored on connect, so users never re-raise it by hand.
+VOL_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/maid-bt/earbuds-volume"
+
+buds_volume_pct() {
+  # first channel's percent of the buds' sink, plain integer, else ""
+  # (pactl prints "Volume: front-left: 23760 / 36% / -8.69 dB")
+  local sink
+  sink=$(bluez_sink); [ -n "$sink" ] || return 0
+  pactl get-sink-volume "$sink" 2>/dev/null | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+%$/) { sub(/%/, "", $i); print $i; exit } }'
+}
+
+remember_buds_volume() {
+  local pct now
+  pct=$(buds_volume_pct)
+  case "$pct" in ''|*[!0-9]*) return 0 ;; esac
+  if [ -f "$VOL_STATE" ]; then
+    now=$(tail -n 1 "$VOL_STATE" 2>/dev/null)
+    [ "$now" = "$pct" ] && return 0
+  else
+    mkdir -p "${VOL_STATE%/*}" 2>/dev/null || return 0
+  fi
+  printf '%s\n' "$pct" > "$VOL_STATE" 2>/dev/null || true
+}
+
+restore_buds_volume() {
+  local sink saved
+  [ -f "$VOL_STATE" ] || return 0
+  saved=$(tail -n 1 "$VOL_STATE" 2>/dev/null)
+  case "$saved" in ''|*[!0-9]*) return 0 ;; esac
+  sink=$(bluez_sink); [ -n "$sink" ] || return 0
+  pactl set-sink-volume "$sink" "${saved}%" >/dev/null 2>&1 || true
+  maid_audit maid-bt "earbuds volume restored to ${saved}% (last state)"
+}
+
 PREV_SINK="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-prev-sink"
 
 default_sink_name() { pactl info 2>/dev/null | sed -n 's/^Default Sink: //p'; }
@@ -211,6 +259,7 @@ park_on_fallback() {
   fb=$(smart_park_target)
   if sink_exists "$fb"; then
     pactl set-default-sink "$fb" 2>/dev/null || echo "warn: set-default-sink $fb failed"
+    remember_buds_volume
     move_bluez_to_fallback
     suspend_bluez_sink
     # streams may still be creating; one more pass after a beat
@@ -330,7 +379,7 @@ connect_buds() {
 
 do_on() {
   clear_hands  # explicit on cancels any release-to-phone window
-  $RFKILL unblock bluetooth 2>&1
+  rfkill_action unblock || true  # failure surfaces through is_powered below
   sleep 1
   bluetoothctl power on 2>&1 | tail -n 1
   if ! is_powered; then
@@ -344,6 +393,7 @@ do_on() {
   if connect_buds; then
     media_cycle_start
     switch_to_buds || true
+    restore_buds_volume
     media_cycle_end
     maid_audit maid-bt "action=on buds connected, audio moved"
     notify "Bluetooth on" "Connected to earbuds." normal bluetooth
@@ -395,7 +445,7 @@ do_release() {
 do_radio() {
   # radio only: power on for other devices, touch nothing else.
   # daemon stays hands-off 8h so it won't grab the buds.
-  $RFKILL unblock bluetooth 2>&1
+  rfkill_action unblock || true  # failure surfaces through is_powered below
   sleep 1
   bluetoothctl power on 2>&1 | tail -n 1
   if ! is_powered; then
@@ -433,7 +483,7 @@ do_off() {
 
   # 3. power down + block (persists via systemd-rfkill)
   bluetoothctl power off 2>&1 | tail -n 1
-  $RFKILL block bluetooth 2>&1
+  rfkill_action block || true  # is_blocked below reports failure honestly
   sleep 1
   if is_blocked; then
     echo "Bluetooth OFF (buds disconnected, audio on fallback, radio blocked)."

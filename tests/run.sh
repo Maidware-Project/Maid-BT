@@ -189,6 +189,10 @@ case "$*" in
 esac
 EOF
 printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-p/stubs/pactl
+# stub rfkill too: the toggle resolves /usr/sbin/rfkill outside PATH, so
+# without one the host's real radio state (blocked or not) leaks into
+# the suite and "hardware-free" becomes host-dependent
+printf '#!/bin/bash\necho "0: hci0: Bluetooth"; echo "Soft blocked: no"; echo "Hard blocked: no"\n' > /tmp/maidbt-p/stubs/rfkill
 chmod +x /tmp/maidbt-p/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-p/.config/bluetooth-buds.conf
 state=$(PATH="/tmp/maidbt-p/stubs:$PATH" HOME=/tmp/maidbt-p bash "$PKGDIR/bin/bluetooth-toggle.sh" porcelain 2>/dev/null || true)
@@ -209,6 +213,7 @@ case "$*" in
 esac
 EOF
 printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-ph/stubs/pactl
+printf '#!/bin/bash\necho "0: hci0: Bluetooth"; echo "Soft blocked: no"; echo "Hard blocked: no"\n' > /tmp/maidbt-ph/stubs/rfkill
 chmod +x /tmp/maidbt-ph/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-ph/.config/bluetooth-buds.conf
 printf '%s 1200\n' "$(date +%s)" > /tmp/maidbt-ph/bt-hands-off
@@ -236,6 +241,7 @@ case "$*" in
 esac
 EOF
 printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-noise/stubs/pactl
+printf '#!/bin/bash\necho "0: hci0: Bluetooth"; echo "Soft blocked: no"; echo "Hard blocked: no"\n' > /tmp/maidbt-noise/stubs/rfkill
 chmod +x /tmp/maidbt-noise/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-noise/.config/bluetooth-buds.conf
 for i in 1 2 3 4 5; do
@@ -537,7 +543,179 @@ grep -q "$TOK" /tmp/maidbt-i/srv.log && fail "token leaked into logs"
 ok "intent server auth"
 rm -rf /tmp/maidbt-i
 
-echo "== settings helper =="
+echo "== model db auto-recognize =="
+# stored names can be placeholders ("My Earbuds") while the buds announce
+# their real model over Bluetooth. cmd_model must fall back to the live
+# BlueZ alias for the same MAC so the Equalizer page lights up without a
+# name hunt. stub bluetoothctl answers one MAC and stays silent on another.
+rm -rf /tmp/maidbt-m && mkdir -p /tmp/maidbt-m/stubs /tmp/maidbt-m/.config/maid-watcher
+cat > /tmp/maidbt-m/stubs/bluetoothctl <<'EOF'
+#!/bin/bash
+for a in "$@"; do
+  case "$a" in
+    11:22:33:44:55:66)
+      echo "Device 11:22:33:44:55:66 (public)"
+      echo "	Alias: soundcore Liberty 5"
+      echo "	Connected: no"
+      exit 0 ;;
+  esac
+done
+echo "Device 11:22:33:44:55:66 (public)"; exit 1
+EOF
+chmod +x /tmp/maidbt-m/stubs/bluetoothctl
+cat > /tmp/maidbt-m/.config/maid-watcher/config.json <<'EOF'
+{"devices": [
+  {"mac": "11:22:33:44:55:66", "name": "My Earbuds", "short": "Buds 1",
+   "priority": 1},
+  {"mac": "22:33:44:55:66:77", "name": "Unknown Buds", "short": "Buds 2",
+   "priority": 2}
+]}
+EOF
+PATH="/tmp/maidbt-m/stubs:$PATH" HOME=/tmp/maidbt-m /usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF5' || fail "model autorecognize failed"
+import io, os, sys
+from unittest.mock import MagicMock
+sys.path.insert(0, sys.argv[1])
+for m in ["dbus", "dbus.mainloop", "dbus.mainloop.glib", "gi", "gi.repository"]:
+    sys.modules[m] = MagicMock()
+g = {"__name__": "model-test", "__file__": os.path.join(sys.argv[1], "maid-watcher")}
+code = open(os.path.join(sys.argv[1], "maid-watcher")).read()
+exec(compile(code, "maid-watcher", "exec"), g)
+
+buf, old = io.StringIO(), sys.stdout
+sys.stdout = buf
+try:
+    g["cmd_model"]("My Earbuds")       # placeholder for the real buds
+    g["cmd_model"]("Buds 1")           # short alias reaches the same MAC
+    g["cmd_model"]("Unknown Buds")     # no BlueZ alias: no invention
+finally:
+    sys.stdout = old
+out = buf.getvalue().splitlines()
+assert len(out) == 3, out
+assert "-> soundcore Liberty 5" in out[0], out[0]
+assert "device-control" in out[0], out[0]
+assert "-> soundcore Liberty 5" in out[1], out[1]
+assert "not in the model database" in out[2], out[2]
+print("model autorecognize passed")
+PYEOF5
+ok "model db auto-recognize"
+rm -rf /tmp/maidbt-m
+
+echo "== volume resume remembers and returns =="
+# a fresh A2DP path starts at the adapter default and buds come back too
+# quiet. the toggle must remember the buds' level on the way out and
+# hand it back on the way in - but never guess on a first ever pairing.
+rm -rf /tmp/maidbt-v; mkdir -p /tmp/maidbt-v/stubs /tmp/maidbt-v/.config /tmp/maidbt-v/state
+cat > /tmp/maidbt-v/stubs/bluetoothctl <<'EOF'
+#!/bin/bash
+case "$*" in
+  *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
+  *connect*) echo "Connection successful" ;;
+  *disconnect*) echo "Successfully disconnected" ;;
+  *info*) printf 'Device 11:22:33:44:55:66 (public)\n\tAlias: soundcore Liberty 5\n\tConnected: yes\n' ;;
+  *) exit 1 ;;
+esac
+exit 0
+EOF
+cat > /tmp/maidbt-v/stubs/pactl <<'EOF'
+#!/bin/bash
+S="${STUBSTATE:-/tmp/maidbt-v/state}"
+case "$*" in
+  *short*sinks*) cat "$S/sinks" 2>/dev/null ;;
+  *short*sink-inputs*) echo "11 testsink 10 PipeWire" ;;
+  *short*cards*) : ;;
+  *list*cards*) : ;;
+  *list*sinks*) : ;;
+  *get-sink-volume*) printf 'Volume: front-left: 23760 / 36%% / -8.69 dB\n\tfront-right: 23760 / 36%% / -8.69 dB\n' ;;
+  *set-sink-volume*) printf '%s\n' "$*" >> "$S/calls" ;;
+  *set-default-sink*) echo "set-default $2" >> "$S/calls"; echo "bluez_output.11_22_33_44_55_66.1" > "$S/default" ;;
+  *suspend-sink*) : ;;
+  *move-sink-input*) : ;;
+  *info*) echo "Default Sink: $(cat "$S/default" 2>/dev/null)" ;;
+esac
+exit 0
+EOF
+printf '#!/bin/bash\necho "0: hci0: Bluetooth"; echo "Soft blocked: no"; echo "Hard blocked: no"\n' > /tmp/maidbt-v/stubs/rfkill
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-v/stubs/notify-send
+printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-v/stubs/kdeconnect-cli
+chmod +x /tmp/maidbt-v/stubs/*
+printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="testsink-fallback"\n' > /tmp/maidbt-v/.config/bluetooth-buds.conf
+printf 'agent-Bluetooth\n' > /tmp/maidbt-v/agent
+# fresh pairing never gets a guessed volume applied
+printf '33 bluez_output.11_22_33_44_55_66.1\n50 testsink-fallback\n' > /tmp/maidbt-v/state/sinks
+rm -rf /tmp/maidbt-v/statedata; mkdir -p /tmp/maidbt-v/statedata
+XDG_RUNTIME_DIR=/tmp/maidbt-v STUBSTATE=/tmp/maidbt-v/state HOME=/tmp/maidbt-v \
+XDG_STATE_HOME=/tmp/maidbt-v/statedata PATH="/tmp/maidbt-v/stubs:$PATH" \
+timeout 60 bash "$PKGDIR/bin/bluetooth-toggle.sh" on > /tmp/maidbt-v/one.log 2>&1
+! grep -q "set-sink-volume" /tmp/maidbt-v/state/calls 2>/dev/null || fail "fresh pairing got a guessed volume"
+# the level leaves with the buds: release remembers what was on them
+XDG_RUNTIME_DIR=/tmp/maidbt-v STUBSTATE=/tmp/maidbt-v/state HOME=/tmp/maidbt-v \
+XDG_STATE_HOME=/tmp/maidbt-v/statedata PATH="/tmp/maidbt-v/stubs:$PATH" \
+timeout 60 bash "$PKGDIR/bin/bluetooth-toggle.sh" release > /tmp/maidbt-v/rel.log 2>&1
+[ "$(tail -n 1 /tmp/maidbt-v/statedata/maid-bt/earbuds-volume 2>/dev/null)" = "36" ] \
+  || fail "release did not remember the buds volume: $(cat /tmp/maidbt-v/statedata/maid-bt/earbuds-volume 2>/dev/null)"
+# ...and the next connect returns to that remembered state, not to 100
+: > /tmp/maidbt-v/state/calls
+XDG_RUNTIME_DIR=/tmp/maidbt-v STUBSTATE=/tmp/maidbt-v/state HOME=/tmp/maidbt-v \
+XDG_STATE_HOME=/tmp/maidbt-v/statedata PATH="/tmp/maidbt-v/stubs:$PATH" \
+timeout 60 bash "$PKGDIR/bin/bluetooth-toggle.sh" on > /tmp/maidbt-v/two.log 2>&1
+grep -q "set-sink-volume bluez_output.11_22_33_44_55_66.1 36%" /tmp/maidbt-v/state/calls \
+  || fail "connect did not return to the last volume state"
+rm -rf /tmp/maidbt-v
+ok "volume resume remembers and returns"
+
+echo "== controllers never count as headsets =="
+# DualSense-class (CoD major device class "Peripheral") gear can expose
+# speaker caps - the any-headset grab must leave it alone entirely.
+rm -rf /tmp/maidbt-c2; mkdir -p /tmp/maidbt-c2/stubs /tmp/maidbt-c2/.config /tmp/maidbt-c2/state
+cat > /tmp/maidbt-c2/stubs/bluetoothctl <<'EOF'
+#!/bin/bash
+case "$*" in
+  *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
+  *info*11:22:33:44:55:66*) printf 'Device 11:22:33:44:55:66 (public)\n\tAlias: soundcore Liberty 5\n\tConnected: yes\n' ;;
+  *info*44:55:66:77:88:99*) printf 'Device 44:55:66:77:88:99 (public)\n\tAlias: DualSense Wireless Controller\n\tClass: 0x00248404\n\tUUID: Audio Sink (0000110b-0000-1000-8000-00805f9b34fb)\n\tConnected: no\n' ;;
+  *connect*) echo "Connection successful" ;;
+  *) exit 1 ;;
+esac
+exit 0
+EOF
+cat > /tmp/maidbt-c2/stubs/pactl <<'EOF'
+#!/bin/bash
+S="${STUBSTATE:-/tmp/maidbt-c2/state}"
+case "$*" in
+  *short*sinks*) cat "$S/sinks" 2>/dev/null ;;
+  *short*sink-inputs*) echo "11 testsink 10 PipeWire" ;;
+  *info*) echo "Default Sink: $(cat "$S/default" 2>/dev/null)" ;;
+  *set-default-sink*) echo "set-default $2" >> "$S/calls"; echo "$2" > "$S/default" ;;
+  *suspend-sink*) : ;;
+  *move-sink-input*) echo "move $2 -> $3" >> "$S/calls" ;;
+  *list*cards*) : ;;
+esac
+exit 0
+EOF
+printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-c2/stubs/notify-send
+printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-c2/stubs/kdeconnect-cli
+chmod +x /tmp/maidbt-c2/stubs/*
+printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="testsink-fallback"\n' > /tmp/maidbt-c2/.config/bluetooth-buds.conf
+printf '11 testsink\n50 testsink-fallback\n' > /tmp/maidbt-c2/state/sinks
+echo "testsink" > /tmp/maidbt-c2/state/default
+export STUBSTATE=/tmp/maidbt-c2/state
+export PATH="/tmp/maidbt-c2/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-c2
+HOME=/tmp/maidbt-c2 timeout 30 bash "$PKGDIR/bin/buds-fallback.sh" > /tmp/maidbt-c2/daemon.log 2>&1 &
+DPID=$!
+sleep 3
+# the controller's sink shows up mid-run, exactly like the generic
+# headset test above: if the guard is gone, this grab must fail the suite
+printf '44 bluez_output.44_55_66_77_88_99.1\n' >> /tmp/maidbt-c2/state/sinks
+sleep 5
+[ -f /tmp/maidbt-c2/state/calls ] && fail "audio was moved onto a controller"
+grep -q "is a controller - audio stays put" /tmp/maidbt-c2/daemon.log \
+  || fail "controller not recognized as one"
+kill -9 "$DPID" 2>/dev/null || true
+wait "$DPID" 2>/dev/null || true
+rm -rf /tmp/maidbt-c2
+ok "controllers never count as headsets"
+
+echo "== radio recovery + settings helper =="
 rm -rf /tmp/maidbt-c; mkdir -p /tmp/maidbt-c/.config
 printf '%s\n' '# keep this comment' \
   'BUDS_MAC="AA:BB:CC:DD:EE:FF"' 'FALLBACK_SINK=""' \
@@ -594,6 +772,12 @@ grep -q 'release) do_release' "$PKGDIR/bin/bluetooth-toggle.sh" || fail "release
 grep -q 'porcelain)' "$PKGDIR/bin/bluetooth-toggle.sh" || fail "porcelain readout missing"
 grep -q 'on|off|release' "$PKGDIR/bin/bluetooth-toggle.sh" || fail "usage line drops contract actions"
 grep -q "jieke238y34/sleeve" "$PKGDIR/README.md" || fail "Sleeve pairing not documented"
+# radio recovery: another app can leave the radio soft-blocked, and an
+# unprivileged unblock can never undo that - the pkexec fallback is the
+# reason a panel tap actually turns Bluetooth back on (plasma 6.8 panel
+# tap-through). the watcher's sticky-off must never fail silently.
+grep -q "pkexec" "$PKGDIR/bin/bluetooth-toggle.sh" || fail "rfkill has no pkexec recovery"
+grep -q "rfkill block not permitted" "$PKGDIR/bin/buds-fallback.sh" || fail "sticky-off hides rfkill failures"
 ok "third-party contract"
 
 echo "== cleanup =="

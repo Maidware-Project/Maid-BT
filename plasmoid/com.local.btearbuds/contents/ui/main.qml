@@ -12,6 +12,10 @@ PlasmoidItem {
     property bool busy: false
     readonly property int popupWidth: Math.max(Kirigami.Units.gridUnit * 22, 380)
     property string toggle: "@HOME@/.local/bin/bluetooth-toggle.sh"
+    // an action stays busy while the switch is on its way: real connects
+    // can take 20s+, and re-enabling tiles at 1.1s invited double taps
+    property string busyFrom: ""
+    property double busySince: 0
 
     Loader {
         id: settingsWinLoader
@@ -74,6 +78,8 @@ PlasmoidItem {
             return ;
 
         busy = true;
+        busyFrom = btState;
+        busySince = Date.now();
         execSource.connectSource(toggle + " " + a);
         refreshSoon.restart();
     }
@@ -93,6 +99,10 @@ PlasmoidItem {
                 if (t === "off" || t === "on" || t === "buds" || t === "phone")
                     root.btState = t;
 
+            } else {
+                // the action process finished: the switch is done
+                root.busy = false;
+                root.busyFrom = "";
             }
             execSource.disconnectSource(sourceName);
         }
@@ -113,7 +123,13 @@ PlasmoidItem {
         interval: 1100
         repeat: false
         onTriggered: {
-            root.busy = false;
+            // state moved while switching, or the flow capped: stand down
+            if (root.busy && (root.btState !== root.busyFrom
+                              || !root.busyFrom
+                              || Date.now() - root.busySince > 30000)) {
+                root.busy = false;
+                root.busyFrom = "";
+            }
             root.refresh();
         }
     }

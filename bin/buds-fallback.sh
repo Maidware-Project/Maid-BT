@@ -168,6 +168,15 @@ on_new_bluez_sink() {
   [ "$mac" = "$BUDS_MAC" ] && return 0
   if hands_off; then log "new sink $sink ignored (hands-off)"; return 0; fi
   alias=$(bt_alias "$sink")
+  local inf
+  inf=$(bluetoothctl info "$mac" 2>/dev/null)
+  if is_gamepad "$inf" "$alias"; then
+    # a controller shows up as a sink sometimes (it owns speaker caps);
+    # Maid BT stays an earbuds tool - the stream never moves onto it and
+    # no pairing notification pretends it is a headset
+    log "new device $alias ($sink) is a controller - audio stays put"
+    return 0
+  fi
   log "new headset $alias ($sink) -> switching audio"
   pactl set-default-sink "$sink" 2>/dev/null || true
   pactl suspend-sink "$sink" 0 2>/dev/null || true
@@ -218,11 +227,77 @@ sink_exists() {
   pactl list short sinks 2>/dev/null | awk '{print $2}' | grep -Fxq "$1"
 }
 
+# --- volume resume: return to the last state if found ------------------
+# a fresh A2DP path starts at the adapter default and buds come back too
+# quiet, so while the buds are connected the level is remembered and
+# handed back on every arrival. the file only matters when it exists:
+# a brand-new pairing keeps the buds' own default, no guess is applied.
+VOL_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/maid-bt/earbuds-volume"
+
+buds_volume_pct() {
+  # first channel's percent of the buds' sink, plain integer, else ""
+  # (pactl prints "Volume: front-left: 23760 / 36% / -8.69 dB")
+  local sink
+  sink=$(bluez_sink); [ -n "$sink" ] || return 0
+  pactl get-sink-volume "$sink" 2>/dev/null | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+%$/) { sub(/%/, "", $i); print $i; exit } }'
+}
+
+remember_buds_volume() {
+  local pct now
+  pct=$(buds_volume_pct)
+  case "$pct" in ''|*[!0-9]*) return 0 ;; esac
+  if [ -f "$VOL_STATE" ]; then
+    now=$(tail -n 1 "$VOL_STATE" 2>/dev/null)
+    [ "$now" = "$pct" ] && return 0
+  else
+    mkdir -p "${VOL_STATE%/*}" 2>/dev/null || return 0
+  fi
+  printf '%s\n' "$pct" > "$VOL_STATE" 2>/dev/null || true
+}
+
+restore_buds_volume() {
+  # only a remembered level is applied - "return to the last state if
+  # found"; without one the buds keep whatever they came up at
+  local sink saved
+  [ -f "$VOL_STATE" ] || return 0
+  saved=$(tail -n 1 "$VOL_STATE" 2>/dev/null)
+  case "$saved" in ''|*[!0-9]*) return 0 ;; esac
+  sink=$(bluez_sink); [ -n "$sink" ] || return 0
+  pactl set-sink-volume "$sink" "${saved}%" >/dev/null 2>&1 || true
+  maid_audit maid-bt "earbuds volume restored to ${saved}% (last state)"
+}
+
+# --- controllers are input devices, not headsets ------------------------
+is_gamepad() {
+  # Maid BT is an earbud tool: a Bluetooth gamepad has to stay a gamepad.
+  # recognized by Class of Device (major device class "Peripheral":
+  # gamepads, joysticks, remotes) and by the usual controller names, so
+  # the any-headset grab never moves a stream onto one, ever.
+  local cod="$1" name="$2" maj
+  case "$name" in
+    *gamepad*|*Gamepad*|*gamepad*) return 0 ;;
+  esac
+  name=$(echo "$name" | tr '[:upper:]' '[:lower:]')
+  case "$name" in
+    *controller*|*dualsense*|*dualshock*|*joycon*|*joy-con*|*nintendo*|*8bitdo*)
+      return 0 ;;
+  esac
+  case "$cod" in
+    *"Class: 0x"*) ;;
+    *) return 1 ;;
+  esac
+  maj=$(( 0x$(echo "$cod" | sed -n 's/.*Class: 0x0*\(.*\)/\1/p' | head -n 1) ))
+  maj=$(( (maj >> 8) & 31 ))
+  [ "$maj" = "4" ] && return 0
+  return 1
+}
+
 park_on_fallback() {
   local fb
   fb=$(park_target)
   if sink_exists "$fb"; then
     pactl set-default-sink "$fb" 2>/dev/null || log "set-default-sink \"$fb\" failed"
+    remember_buds_volume
     move_bluez_to_fallback
     suspend_bluez
     sleep 1
@@ -417,6 +492,7 @@ try_connect_once() {
 }
 
 a2dp_tick=0
+vol_tick=0
 log "start (buds=$BUDS_MAC fallback=$FALLBACK_SINK grace=$GRACE power_off=$POWER_OFF_ON_LOST)"
 
 while true; do
@@ -432,6 +508,10 @@ while true; do
   if [ "$connected" = "1" ]; then
     a2dp_tick=$(( (a2dp_tick + 1) % 12 ))
     [ "$a2dp_tick" = "1" ] && ensure_a2dp
+    # remember the buds' level about once a minute while they play:
+    # unplug, dock, lock or reboot loses the link, not the volume you had
+    vol_tick=$(( (vol_tick + 1) % 60 ))
+    [ "$vol_tick" = "1" ] && remember_buds_volume
   fi
 
   # init prev on first loop (no notify for steady state)
@@ -496,7 +576,9 @@ while true; do
     park_on_fallback
     if [ "$BLOCK_ON_EXTERNAL_OFF" = "1" ]; then
       RFKILL_BIN="$(command -v rfkill 2>/dev/null || { [ -x /usr/sbin/rfkill ] && echo /usr/sbin/rfkill; } || { [ -x /sbin/rfkill ] && echo /sbin/rfkill; } || echo rfkill)"
-      "$RFKILL_BIN" block bluetooth 2>/dev/null || true
+      if ! "$RFKILL_BIN" block bluetooth 2>/dev/null; then
+        log "rfkill block not permitted for the user service (needs root); powered-off state still parked - bluetooth-toggle.sh off or pkexec rfkill block works"
+      fi
     fi
     if ! manual_recent; then
       notify "Bluetooth off" "Bluetooth is off - audio back on fallback sink." normal bluetooth-disabled
@@ -536,6 +618,7 @@ while true; do
       buds_docked=0
       media_cycle_start
       switch_to_buds_nowait
+      restore_buds_volume
       media_cycle_end
       if ! manual_recent; then
         notify "Bluetooth on" "Connected to earbuds." normal bluetooth
