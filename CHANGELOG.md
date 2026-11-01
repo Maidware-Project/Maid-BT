@@ -69,6 +69,33 @@
   (github.com/jieke238y34/sleeve): with bluetooth-toggle.sh on PATH its
   Settings gets Use earbuds / Hand to phone / Turn off buttons that
   call on / release / off like the applet does.
+- volume resume: return to the last state if found. the buds' level is
+  remembered while they play (once a minute, plus every park) and
+  restored on arrival, in both bluetooth-toggle.sh and buds-fallback.
+  state lives in ~/.local/state/maid-bt/earbuds-volume; a fresh
+  pairing gets no guessed volume, and every activate path (applet
+  tap, watcher auto-connect, sleeve button) returns what you last had.
+- controllers stay controllers: a class-of-device Peripheral major
+  (gamepads, joysticks) plus the usual controller names are recognized
+  as input devices - the any-headset grab never routes the stream onto
+  a controller even when it advertises speaker caps (dualsense on bt
+  does). regression tests cover both the skip and the volume cycle.
+- radio recovery: when another app (the kde tray, a manager) leaves the
+  radio soft-blocked, an unprivileged rfkill unblock can never undo
+  it, so a panel tap failed silently. bluetooth-toggle.sh now falls
+  back to pkexec and lets the desktop ask once - a tap actually turns
+  bluetooth back on. the watcher's sticky-off (BLOCK_ON_EXTERNAL_OFF)
+  logs honestly when the block is not permitted instead of dying
+  quietly.
+- model auto-recognize: stored names can be placeholders ("My
+  Earbuds") while the buds announce their real model over bluetooth.
+  `maid-watcher model` now falls back to the live bluez alias for the
+  same mac, so the equalizer page lights up without a name hunt and
+  the watcher quirks apply even on setups nobody renamed.
+- porcelain test determinism: the suite stubs rfkill now - the toggle
+  resolves /usr/sbin/rfkill outside PATH and the host's real radio
+  state used to decide "hardware-free" porcelain outcomes (seen live:
+  red suite on a soft-blocked desktop, green in ci).
 
 ## gui wording
 
