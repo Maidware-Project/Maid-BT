@@ -7,7 +7,9 @@ notifications, KDE Connect telephony signal).
 
 Usage:
   maid-watcher run      start daemon
-  maid-watcher status   show managed devices, connection, battery
+  maid-watcher status [--json]
+                        show managed devices, connection, battery (json for
+                        scripts: one line, plain values)
   maid-watcher scan     list nearby BT audio devices for config
   maid-watcher model [NAME]  check a name against the model database
                         (no NAME: all configured devices)
@@ -29,6 +31,7 @@ from gi.repository import GLib
 from maid_core import config as config_mod
 from maid_core import models
 from maid_core import notify
+from maid_core import report
 from maid_core.battery import BatteryWatch
 from maid_core.bluez import DeviceMonitor
 from maid_core.case import DockProbe
@@ -512,37 +515,47 @@ class Daemon:
         GLib.MainLoop().run()
 
 
-def cmd_status(cfg):
+def cmd_status(cfg, as_json=False):
+    "One pass over the configured devices: text for people, json for scripts (see maid_core.report)."
     bus = dbus.SystemBus()
     mon = DeviceMonitor(bus, lambda *a: None)
     ct = config_mod.chassis_type()
-    print(f"chassis:   {ct} "
-          f"(laptop mode {'on' if config_mod.laptop_mode(cfg) else 'off'})")
+    laptop = config_mod.laptop_mode(cfg)
+    probe_case = cfg.get("case_detect", {}).get("enabled", True)
+    probe_s = cfg.get("case_detect", {}).get("probe_s", 8)
+    rows = []
     for dev in cfg["devices"]:
         mac = dev["mac"]
         mon.watch(mac)
-        print(f"{dev.get('name', mac)} [{mac}]")
-        print(f"  connected: {mon.is_connected(mac)}")
-        print(f"  profile:   {audio.active_profile(mac)}")
         holders = audio.mic_holders()
-        print(f"  mic held by: "
-              f"{', '.join(a if a != '?' else n for a, n in holders) or 'nobody'}")
-        print(f"  battery:   {mon.battery_percent(mac)}%")
-        if mon.is_connected(mac):
-            print("  case:      n/a (connected)")
-        elif cfg.get("case_detect", {}).get("enabled", True):
+        connected = mon.is_connected(mac)
+        battery = mon.battery_percent(mac)
+        if connected:
+            case = "n/a (connected)"
+        elif probe_case:
             try:
-                live = DockProbe(mac).visible(
-                    window_s=cfg.get("case_detect", {}).get("probe_s", 8))
+                live = DockProbe(mac).visible(window_s=probe_s)
             except Exception:
                 live = None
-            state = {True: "out of case (advertising)",
-                     False: "in charging case (silent)",
-                     None: "unknown (scan unavailable)"}[live]
-            print("  case:      " + state)
-    if not cfg["devices"]:
-        print("no devices configured - copy config.example.json to "
-              "~/.config/maid-watcher/config.json")
+            case = {True: "out of case (advertising)",
+                    False: "in charging case (silent)",
+                    None: "unknown (scan unavailable)"}[live]
+        else:
+            case = None
+        rows.append({
+            "name": dev.get("name", mac),
+            "mac": mac,
+            "connected": connected,
+            "profile": audio.active_profile(mac),
+            "mic_text": ", ".join(a if a != "?" else n for a, n in holders) or "nobody",
+            "holders": [n for a, n in holders],
+            "battery": battery,
+            "case": case,
+        })
+    if as_json:
+        print(report.shape(ct, laptop, rows))
+        return
+    print(report.text(ct, laptop, rows))
 
 
 def _bluez_alias(mac):
@@ -700,7 +713,7 @@ def main():
     if len(sys.argv) < 2 or sys.argv[1] == "run":
         Daemon(cfg).run()
     elif sys.argv[1] == "status":
-        cmd_status(cfg)
+        cmd_status(cfg, as_json="--json" in sys.argv[2:])
     elif sys.argv[1] == "scan":
         cmd_scan()
     elif sys.argv[1] == "model":

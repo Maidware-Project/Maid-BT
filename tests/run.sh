@@ -32,14 +32,33 @@ ok "no personal data"
 echo "== watcher extras =="
 [ -x "$PKGDIR/watcher/maid-watcher" ] || fail "watcher not executable"
 python3 - <<EOF || fail "watcher unit checks"
+import json
 import sys
 sys.path.insert(0, "$PKGDIR/watcher")
 from maid_core.config import laptop_mode
 assert laptop_mode({"laptop": {"mode": "on"}}) is True
 assert laptop_mode({"laptop": {"mode": "off"}}) is False
 assert laptop_mode({}) is False
+
+from maid_core.report import shape, text  # noqa: E402
+rows = [{"name": "Buds", "mac": "F0:00:00:00:00:01", "connected": True,
+         "profile": "a2dp", "mic_text": "nobody", "holders": [],
+         "battery": 74, "case": "n/a (connected)"}]
+loaded = json.loads(shape("laptop", False, rows))
+assert loaded["devices"][0]["battery"] == 74 and loaded["devices"][0]["connected"] is True
+assert shape("laptop", False, []) == \
+    '{"chassis": "laptop", "laptop_mode": false, "devices": []}'
+spec = text("laptop", True, rows).splitlines()
+assert spec[0] == "chassis:   laptop (laptop mode on)" and spec[1] == "Buds [F0:00:00:00:00:01]"
+assert spec[5] == "  battery:   74%" and "autonomous" not in spec[3]
+row_none = dict(rows[0], battery=None, connected=False, case=None)
+spec_none = text("laptop", True, [row_none]).splitlines()
+assert "  battery:   None%" in spec_none and not any("case:" in line for line in spec_none[2:])
+empty = text("laptop", False, []).splitlines()
+assert empty[-1].endswith("copy config.example.json to ~/.config/maid-watcher/config.json")
 print("watcher unit checks passed")
 EOF
+grep -q "as_json" "$PKGDIR/watcher/maid-watcher" || fail "watcher status has no --json"
 [ -f "$PKGDIR/watcher/maid-watcher.desktop" ] || fail "watcher desktop missing"
 [ -f "$PKGDIR/watcher/maid-watcher.service" ] || fail "watcher unit missing"
 grep -q "MemoryMax" "$PKGDIR/watcher/maid-watcher.service" || fail "watcher unit has no RAM cap"
