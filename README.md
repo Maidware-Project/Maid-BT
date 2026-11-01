@@ -120,6 +120,19 @@ buds-on.sh / buds-off.sh / buds-release.sh   # shortcuts for the above
 maid-watcher status                          # connection, profile, battery
 ```
 
+## apps that pair with it
+
+[Sleeve](https://github.com/jieke238y34/sleeve) speaks Maid BT directly:
+with `bluetooth-toggle.sh` on PATH (where the installer puts it), the
+player's Settings gains an Earbuds (Maid BT) row with three buttons -
+Use earbuds (`on`), Hand to phone (`release`) and Turn off (`off`).
+nothing to set up on either side: the calls run the same scripts the
+applet uses, so routing, warm release and the call pause all behave as
+normal. those three action names are the stable surface other apps
+build on - `on`, `off` and `release` mean exactly what they say whether
+they are typed in a terminal, clicked in the applet or called by a
+player, and `tests/run.sh` keeps that promise.
+
 ## notes (please read)
 
 **KDE can crash when bluetooth audio dies suddenly.** that's a system
