@@ -233,4 +233,5 @@ and the bundled Maid Watcher shares your KDE Connect phone pairing with Maidshar
 
 ## License
 
-MIT - see LICENSE. a Maidware Project, Forkable open source tools served to help
+MIT - see LICENSE. third-party and credits: THIRD-PARTY-NOTICES.md names what Maid BT references or
+runs, and what it never bundles. a Maidware Project, Forkable open source tools served to help
