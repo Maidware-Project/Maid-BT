@@ -65,8 +65,8 @@
 - maid-setup notes the model database quirks (multipoint/LDAC hints)
   into the generated config.
 - apps that pair: the third-party surface is documented and locked by a
-  suite test. first partner is the Sleeve player
-  (github.com/jieke238y34/sleeve): with bluetooth-toggle.sh on PATH its
+
+
   Settings gets Use earbuds / Hand to phone / Turn off buttons that
   call on / release / off like the applet does.
 - volume resume: return to the last state if found. the buds' level is
@@ -74,7 +74,7 @@
   restored on arrival, in both bluetooth-toggle.sh and buds-fallback.
   state lives in ~/.local/state/maid-bt/earbuds-volume; a fresh
   pairing gets no guessed volume, and every activate path (applet
-  tap, watcher auto-connect, sleeve button) returns what you last had.
+
 - controllers stay controllers: a class-of-device Peripheral major
   (gamepads, joysticks) plus the usual controller names are recognized
   as input devices - the any-headset grab never routes the stream onto

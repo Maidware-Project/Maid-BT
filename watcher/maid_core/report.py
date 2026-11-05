@@ -1,5 +1,5 @@
 """Shared presentation for maid-watcher status: the same facts as text for the terminal, one json line for
-scripts that read it (`maid-watcher status --json` - Sleeve's earbuds view does). Plain values only; nothing
+
 here claims quality, lossless or anything else that Bluetooth output cannot honestly be."""
 
 import json

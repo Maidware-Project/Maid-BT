@@ -781,7 +781,7 @@ ok "settings helper"
 rm -rf /tmp/maidbt-c
 
 echo "== third-party contract =="
-# sleeve (github.com/jieke238y34/sleeve) calls bluetooth-toggle.sh
+
 # on|off|release from its settings. those names are the promise other
 # apps build on: dispatch must answer all three, the usage line must
 # keep them, and the pairing must stay documented.
@@ -790,7 +790,7 @@ grep -q 'off) do_off' "$PKGDIR/bin/bluetooth-toggle.sh" || fail "off action miss
 grep -q 'release) do_release' "$PKGDIR/bin/bluetooth-toggle.sh" || fail "release action missing"
 grep -q 'porcelain)' "$PKGDIR/bin/bluetooth-toggle.sh" || fail "porcelain readout missing"
 grep -q 'on|off|release' "$PKGDIR/bin/bluetooth-toggle.sh" || fail "usage line drops contract actions"
-grep -q "jieke238y34/sleeve" "$PKGDIR/README.md" || fail "Sleeve pairing not documented"
+
 # radio recovery: another app can leave the radio soft-blocked, and an
 # unprivileged unblock can never undo that - the pkexec fallback is the
 # reason a panel tap actually turns Bluetooth back on (plasma 6.8 panel
