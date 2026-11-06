@@ -89,10 +89,11 @@ Kirigami.ScrollablePage {
         try {
             st = JSON.parse(out);
         } catch (e) {
-            statusText = "Could not read the buds' state.";
-            detailText = err !== "" || out !== ""
-                ? (err || out)
-                : "No response from the buds. Press Refresh to retry.";
+            // maid-soundcore already speaks plainly; surface its line and
+            // keep the page usable offline with a retry hint
+            const plain = err.replace(/^could not talk to the buds:\s*/, "");
+            statusText = plain !== "" ? plain : "Could not read the buds' state.";
+            detailText = "Press Refresh once the buds are powered on and out of the case.";
             busy = false;
             return;
         }

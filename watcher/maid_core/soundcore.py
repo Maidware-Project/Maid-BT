@@ -369,6 +369,29 @@ def _take_control_lock(timeout):
             time.sleep(0.1)
 
 
+class ControlRefused(RuntimeError):
+    """BlueZ itself turned the control attempt down (br-connection-*).
+
+    Distinct from a silent timeout: a refusal is an answer, so callers
+    stop retrying and show it instead of burning the full window again.
+    """
+
+
+def _human_link_error(detail):
+    """A br-connection-* code -> what it usually means, in plain words."""
+    d = str(detail or "")
+    if "br-connection-refused" in d:
+        return ("the buds refused the control connection - they are usually "
+                "docked in the case, asleep, or busy with the phone right now")
+    if "profile-unavailable" in d:
+        return "the buds' control service is not reachable right now"
+    if "br-connection-cancelled" in d or "br-connection-canceled" in d:
+        return "the buds went away before the control channel opened"
+    if "br-connection-timeout" in d or "timed out" in d:
+        return "the buds did not answer"
+    return ""
+
+
 def _connect_rfcomm(mac, uuid, timeout=8.0):
     """Open the device's RFCOMM socket the BlueZ-supported way.
 
@@ -414,7 +437,10 @@ def _connect_rfcomm(mac, uuid, timeout=8.0):
             sink["tick_done"] = True
             mainloop.quit()
             return False
-        if sink.get("error") and sink.get("tick", 0) > 20:
+        if sink.get("error") and sink.get("tick", 0) > 10:
+            # an answer from BlueZ is an answer: once ConnectProfile came
+            # back with a refusal there is nothing to wait for, so the
+            # state page fails in ~1s instead of riding out the deadline
             sink["tick_done"] = True
             mainloop.quit()
             return False
@@ -489,10 +515,13 @@ def _connect_rfcomm(mac, uuid, timeout=8.0):
             pass
 
     if sink.get("fd") is None:
-        detail = sink.get("error")
+        reason = _human_link_error(sink.get("error"))
+        if reason:
+            raise ControlRefused(reason)
         raise RuntimeError(
-            "control channel %s did not open within %.0fs%s"
-            % (uuid, timeout, ": " + detail if detail else ""))
+            "the buds did not answer (no control channel opened within "
+            "%.0fs) - make sure they are powered on and out of the case"
+            % timeout)
     return socket.socket(fileno=sink["fd"], family=socket.AF_BLUETOOTH,
                          type=socket.SOCK_STREAM,
                          proto=socket.BTPROTO_RFCOMM)
@@ -516,6 +545,11 @@ class Device:
         try:
             try:
                 self._open_once()
+            except ControlRefused:
+                # BlueZ answered with a refusal: docked/asleep/phone holds
+                # the buds. Another window will not change that, and the
+                # person can press Refresh once the buds are back.
+                raise
             except Exception:
                 # the buds often still hold the previous control session
                 # (a GUI refresh or an apply that just ran); one settle +

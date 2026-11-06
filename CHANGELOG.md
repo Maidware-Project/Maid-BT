@@ -1,5 +1,18 @@
 # changelog
 
+## Maid BT v1.3 (unreleased)
+
+fixed:
+- state page: a refused control connection now fails in about a second
+  with words ("usually docked in the case, asleep, or busy with the
+  phone") instead of raw br-connection-refused after the full 8s window.
+- the applet's four tiles draw as one shape: same rounded background,
+  shared hover/highlight colors, long names elide instead of stretching
+  their row.
+
+added:
+- nothing else. routing and flap behavior untouched from v1.2.
+
 ## Maid BT v1.2 (this release)
 
 fixed:
