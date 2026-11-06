@@ -64,11 +64,6 @@
   errors.
 - maid-setup notes the model database quirks (multipoint/LDAC hints)
   into the generated config.
-- apps that pair: the third-party surface is documented and locked by a
-
-
-  Settings gets Use earbuds / Hand to phone / Turn off buttons that
-  call on / release / off like the applet does.
 - volume resume: return to the last state if found. the buds' level is
   remembered while they play (once a minute, plus every park) and
   restored on arrival, in both bluetooth-toggle.sh and buds-fallback.
