@@ -231,12 +231,16 @@ def default_source_name():
     return out or None
 
 
-def route_comms_to_default(patterns=COMMS_PATTERNS):
+def route_comms_to_default(patterns=COMMS_PATTERNS, audible_only=True):
     """Move matching playback streams onto the default sink.
 
-    Playback only - microphone routing is never touched. Returns the
-    number of streams moved. Streams already on the default are left
-    alone, so this is a no-op aligner, not a hijack.
+    Playback only - microphone routing is never touched. A stream the
+    apps keep open for later, or one sitting muted, carries no sound:
+    moving those is what heard as a sudden switch when the phone woke
+    or charging changed. So a move happens only for streams with audio
+    in them right now (uncorked and unmuted), and silent ones stay
+    wherever they already were; they travel when their sound arrives.
+    Returns the number of streams moved.
     """
     import re
     default = default_sink_name()
@@ -256,18 +260,24 @@ def route_comms_to_default(patterns=COMMS_PATTERNS):
 
     def flush():
         nonlocal moved
-        if cur_id is not None and cur_sink is not None:
-            if any(pat.lower() in cur_app.lower() for pat in patterns) \
-                    and sinks.get(cur_sink) != default:
-                _pactl(["move-sink-input", cur_id, default])
-                moved += 1
+        if cur_id is None or cur_sink is None:
+            return
+        if not any(pat.lower() in cur_app.lower() for pat in patterns):
+            return
+        if sinks.get(cur_sink) == default:
+            return
+        if audible_only and (cur_corked or cur_muted):
+            return
+        _pactl(["move-sink-input", cur_id, default])
+        moved += 1
 
-    cur_id, cur_app, cur_sink = None, "", None
+    cur_id, cur_app, cur_sink, cur_corked, cur_muted = None, "", None, False, False
     for line in _pactl(["list", "sink-inputs"]).splitlines():
         m = re.match(r"Sink Input #(\d+)", line)
         if m:
             flush()
             cur_id, cur_app, cur_sink = m.group(1), "", None
+            cur_corked, cur_muted = False, False
             continue
         m = re.match(r"\s*Sink: (\d+)", line)
         if m:
@@ -276,8 +286,45 @@ def route_comms_to_default(patterns=COMMS_PATTERNS):
         m = re.match(r'\s*application\.name = "(.*)"', line)
         if m:
             cur_app = m.group(1)
+            continue
+        m = re.match(r"\s*Corked: (\S+)", line)
+        if m:
+            cur_corked = m.group(1) == "yes"
+            continue
+        m = re.match(r"\s*Mute: (\S+)", line)
+        if m:
+            cur_muted = m.group(1) == "yes"
     flush()
     return moved
+
+
+def audible_now():
+    """True when playback is sounding right now: on PipeWire any output
+    stream in the running state, else a pactl stream that is neither
+    corked nor muted. Reads a snapshot; nothing here schedules work."""
+    for node in _pw_dump():
+        info = node.get("info", {})
+        props = info.get("props", {}) or {}
+        if "Stream/Output" not in str(props.get("media.class", "")):
+            continue
+        if info.get("state") == "running":
+            return True
+    import re
+    corked, muted = "", ""
+    for line in _pactl(["list", "sink-inputs"]).splitlines():
+        m = re.match(r"Sink Input #(\d+)", line)
+        if m:
+            if corked == "no" and muted == "no":
+                return True
+            corked, muted = "", ""
+            continue
+        m = re.match(r"\s*Corked: (\S+)", line)
+        if m:
+            corked = m.group(1)
+        m = re.match(r"\s*Mute: (\S+)", line)
+        if m:
+            muted = m.group(1)
+    return corked == "no" and muted == "no"
 
 
 def mic_holders():

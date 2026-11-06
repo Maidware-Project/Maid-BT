@@ -8,7 +8,6 @@ import org.kde.plasma.plasmoid
 //
 // Plasma's stock applet settings dialog adds "Keyboard Shortcuts" and
 // "About" pages for every widget and they cannot be removed from an
-// applet side, so for Maid BT 1.1 the gear button (and the tray menu
 // entry) opens this window instead. It houses the exact pages we ship:
 // Earbuds, Behavior, Equalizer, About - nothing else.
 Window {
@@ -149,7 +148,7 @@ Window {
                                     source: "bluetooth"
                                 }
                                 QQC2.Label {
-                                    text: "<h2>Maid BT 1.1</h2>"
+                                    text: "<h2>Maid BT</h2>"
                                     onLinkActivated: function(link) {
                                         Qt.openUrlExternally(link);
                                     }
@@ -164,6 +163,12 @@ Window {
                                       + "tray. Part of the Maidware "
                                       + "Project."
                                 Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                            }
+
+                            QQC2.Label {
+                                text: "Version 1.2"
+                                opacity: 0.6
                                 wrapMode: Text.WordWrap
                             }
 

@@ -38,6 +38,7 @@ from maid_core.case import DockProbe
 from maid_core import audio
 from maid_core import media
 from maid_core.calls import CallWatcher
+from maid_core.flaps import CALM_S, FlapWatch
 
 DISCORD_PATTERNS = ("discord", "vesktop", "webcord", "vencord")
 
@@ -61,8 +62,12 @@ class Daemon:
         for mac in self.devices:
             self.monitor.watch(mac)
         self.retry = {}  # mac -> [fails, next_try]
+        self._retry_src = {}  # mac -> GLib source id of the pending retry
         self._last_op = {}  # (mac, kind) -> last BT op timestamp
         self._wedged = {}  # mac -> consecutive failed enforces
+        self.flap = FlapWatch()  # mac -> disconnect-storm state (tug-of-war)
+        self._was_hot = set()  # macs whose stand-down ends on a later tick
+        self._defer_a2dp = set()  # macs whose a2dp switch waits for sound
         self._docked = set()  # macs recognized docked (in charging case)
         self._dock_next = {}  # mac -> epoch of next docked recheck
         self.quirks = {}  # mac -> models.lookup() result (info only)
@@ -86,26 +91,70 @@ class Daemon:
                 self._dock_next.pop(mac, None)
                 notify.audit(f"case state cleared: {name} connected again")
             notify.audit(f"connected: {name}")
-            notify.send("Earbuds connected", name)
+            # no popup: buds returning is not news (the fallback parks a
+            # notice on the disconnect). every radio blink popping a
+            # balloon read as the watcher being annoying.
+            now = time.time()
+            hot = self.flap.hot(mac, now)
             hit = models.lookup(name)
             if hit["brand"]:
                 self.quirks[mac] = hit
                 notify.audit(f"model db: {name} -> {hit['brand']} "
                              f"{hit['model']} ["
                              f"{', '.join(hit['quirks']) or 'no quirks'}]")
-            self.retry.pop(mac, None)
-            if dev.get("prefer_profile") == "a2dp":
-                GLib.timeout_add_seconds(2, self._enforce_a2dp, mac)
-            GLib.timeout_add_seconds(4, self._route_after_connect)
+            if not self.flap.hot(mac, now):
+                # A mid-storm connect must not clear the backoff: the
+                # drop that follows would restart it from five seconds.
+                # A link that holds earns the clear in _flap_pass.
+                self.retry.pop(mac, None)
+            if dev.get("prefer_profile") == "a2dp" and not hot:
+                # The profile switch waits for actual sound: calling it
+                # on every radio event is the "sudden switch" heard on
+                # charging and phone wake-ups, when nothing is playing.
+                self._defer_a2dp.add(mac)
+            if not hot:
+                GLib.timeout_add_seconds(4, self._route_after_connect)
         else:
             notify.audit(f"disconnected: {name}")
             # no popup here: buds-fallback.sh already fires the one
             # "Earbuds disconnected / audio parked" notice - two daemons
             # popping duplicates reads like a glitch
+            now = time.time()
+            self.flap.note_down(mac, now)
+            self._defer_a2dp.discard(mac)     # buds gone: no switch to finish
+            if self.flap.hot(mac, now):
+                # Tug-of-war: the buds bounce between the phone and this
+                # PC (a charging phone waking up does exactly this).
+                # Chasing every drop is what heard as a sudden switch, so
+                # the watcher stands down - one notice, then no reconnect
+                # race, no profile switches, no routing - and picks back
+                # up in _flap_pass when the calm is over.
+                if self.flap.stand_down(mac, now):
+                    notify.audit(f"flap storm on {name}: standing down "
+                                 f"{int(CALM_S)}s, waiting for calm")
+                    notify.send("Buds pulled both ways",
+                                "The buds are bouncing between your phone "
+                                "and this PC. I'll wait for things to "
+                                "settle - audio moves only when something "
+                                "actually plays.")
+                self.retry.pop(mac, None)
+                return
             if dev.get("auto_reconnect", True):
-                delay = self.rc["initial_delay_s"]
-                self.retry[mac] = [0, time.time() + delay]
-                GLib.timeout_add_seconds(delay + 1, self._maybe_reconnect, mac)
+                self._queue_reconnect(mac)
+
+    def _queue_reconnect(self, mac):
+        "The ordinary, unhurried reconnect: the first wait, then _maybe_reconnect."
+        # BlueZ can fire "disconnected" several times per dropped link
+        # (profile teardown). Each event queueing its own chain ran the
+        # connect attempts in parallel - a piece of the transport
+        # wedging. One chain per device: if one is already scheduled,
+        # this is a duplicate event, not a new cycle.
+        if self._retry_src.get(mac) is not None:
+            return
+        delay = self.rc["initial_delay_s"]
+        self.retry[mac] = [0, time.time() + delay]
+        self._retry_src[mac] = GLib.timeout_add_seconds(
+            delay + 1, self._maybe_reconnect, mac)
 
     def _bt_op_allowed(self, mac, kind):
         # One BT operation per device per cooldown window. Slow is
@@ -122,6 +171,8 @@ class Daemon:
     def _enforce_a2dp(self, mac, attempt=0):
         # Card appears in PipeWire slightly after the BlueZ connect;
         # retry a few times instead of assuming one shot lands.
+        if self.flap.hot(mac, time.time()):
+            return False     # storm running: a profile change now is noise
         if self.monitor.is_connected(mac):
             if not self._bt_op_allowed(mac, "profile"):
                 GLib.timeout_add_seconds(self.rc.get("op_cooldown_s", 10),
@@ -159,9 +210,17 @@ class Daemon:
         return False
 
     def _maybe_reconnect(self, mac):
-        if mac not in self.retry or self.monitor.is_connected(mac):
-            self.retry.pop(mac, None)
+        self._retry_src.pop(mac, None)     # this chain fired; the slot is free
+        if mac not in self.retry:
             return False
+        if self.monitor.is_connected(mac):
+            # A switch that drops again must not restart the escalation,
+            # so the count only clears on a link that held (see _flap_pass).
+            if not self.flap.hot(mac, time.time()):
+                self.retry.pop(mac, None)
+            return False
+        if self.flap.hot(mac, time.time()):
+            return False     # tug-of-war: never race the phone for the buds
         # Serialize connects: BlueZ rejects overlapping connects
         # (InProgress) and parallel A2DP setups flap PipeWire. Highest
         # priority pending device goes first; the rest wait their turn.
@@ -245,12 +304,9 @@ class Daemon:
             GLib.timeout_add_seconds(1, self._maybe_reconnect, _mac)
 
         notify.audit(f"reconnect gave up: {name}")
-        notify.send("Giving up reconnect",
-                    f"{name} - tap to retry, or reconnect manually",
-                    "critical",
-                    actions=[("retry", "Reconnect now")],
-                    on_action=_retry_now,
-                    session_bus=self.session_bus)
+        # no balloon and no button: the drift eats popups for breakfast
+        # (a walk away from the PC means give-up once or twice a day).
+        # going quiet; the MaidLogs trail keeps the when-and-what.
         return False
 
     def case_rewatch(self):
@@ -310,9 +366,65 @@ class Daemon:
         self.battery.poll(list(self.devices.values()))
         self.case_rewatch()
         self.fallback_grab()
+        self._flap_pass()
+        self._deferred_audio_pass()
         self.route_comms()
         self.bt_fallback_watch()
         return True
+
+    def _flap_pass(self):
+        """Once a tick: storms end, links that held clean their history,
+        and the audio work a storm held back re-arms."""
+        now = time.time()
+        for mac, dev in self.devices.items():
+            name = dev.get("name", mac)
+            if self.flap.hot(mac, now):
+                self._was_hot.add(mac)
+                continue
+            if mac in self._was_hot:
+                # The calm expired with nothing bouncing: the tug-of-war
+                # is over and everything it froze comes back gently.
+                self._was_hot.discard(mac)
+                self.flap.forget(mac)
+                self._wedged.pop(mac, None)
+                if self.monitor.is_connected(mac):
+                    notify.audit(f"{name} settled: watcher stands back up")
+                    if dev.get("prefer_profile") == "a2dp":
+                        self._defer_a2dp.add(mac)
+                elif dev.get("auto_reconnect", True) \
+                        and mac not in self._docked:
+                    notify.audit(f"{name} settled: reconnect resumes")
+                    self._queue_reconnect(mac)
+            if self.monitor.is_connected(mac) and self.flap.settled(mac, now):
+                # The link held long enough: old drops stop counting.
+                self.retry.pop(mac, None)
+
+    def _deferred_audio_pass(self):
+        """The a2dp switch that waited for actual sound. Used to fire the
+        moment BlueZ blinked, which the ears heard as a sudden switch on
+        charging or phone wake-ups with nothing playing - now it lands
+        when something is really playing."""
+        if not self._defer_a2dp:
+            return
+        try:
+            audible = audio.audible_now()
+        except Exception:                 # audio stack hiccup: try next tick
+            return
+        if not audible:
+            return
+        for mac in list(self._defer_a2dp):
+            self._defer_a2dp.discard(mac)
+            dev = self.devices.get(mac, {})
+            if not self.monitor.is_connected(mac):
+                continue
+            if self.flap.hot(mac, time.time()):
+                self._defer_a2dp.add(mac)  # storms stay frozen until calm
+                continue
+            if dev.get("prefer_profile") == "a2dp":
+                notify.audit(f"{dev.get('name', mac)}: audio is playing, "
+                             "a2dp switch resumes")
+                GLib.idle_add(self._enforce_a2dp, mac)
+        self.route_comms()
 
     # ---- live config reload -------------------------------------------
     # The applet's config pages write ~/.config/maid-watcher/config.json on
@@ -364,13 +476,18 @@ class Daemon:
             self._docked.discard(mac)
             self._dock_next.pop(mac, None)
             self.quirks.pop(mac, None)
+            self.flap.forget(mac)
+            self._defer_a2dp.discard(mac)
+            self._was_hot.discard(mac)
         for mac in self.devices:
             if mac not in old_macs:
                 self.monitor.watch(mac)
                 if self.monitor.is_connected(mac):
                     dev = self.devices[mac]
                     if dev.get("prefer_profile") == "a2dp":
-                        self._enforce_a2dp(mac)
+                        # same gate as a connect: the switch waits for
+                        # sound, a silent attach switches nothing
+                        self._defer_a2dp.add(mac)
                 elif self.devices[mac].get("auto_reconnect", True) \
                         and mac not in self._docked \
                         and mac not in self.retry:

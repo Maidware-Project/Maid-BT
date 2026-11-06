@@ -100,18 +100,66 @@ def fake(args):
     if args == ["list", "sinks"]:
         return "Sink #44\n\tName: alsa_output.usb-dac.analog-stereo\nSink #61\n\tName: bluez_output.XX.1\n"
     if args == ["list", "sink-inputs"]:
-        return ("Sink Input #10\n\tSink: 44\n\tapplication.name = \"Vesktop\"\n"
-                "Sink Input #11\n\tSink: 61\n\tapplication.name = \"Firefox\"\n")
+        return ("Sink Input #10\n\tSink: 44\n\tapplication.name = \"Vesktop\"\n\tCorked: no\n\tMute: no\n"
+                "Sink Input #11\n\tSink: 44\n\tapplication.name = \"Vesktop\"\n\tCorked: yes\n\tMute: no\n"
+                "Sink Input #12\n\tSink: 44\n\tapplication.name = \"Vesktop\"\n\tCorked: no\n\tMute: yes\n"
+                "Sink Input #13\n\tSink: 61\n\tapplication.name = \"Firefox\"\n")
     if args[:1] == ["move-sink-input"]:
         moved.append(tuple(args))
         return ""
     return ""
 audio._pactl = fake
-assert audio.route_comms_to_default() == 1, "should move 1 stranded stream"
+audio._pw_dump = lambda: []                       # hermetic: no live PipeWire here
+assert audio.route_comms_to_default() == 1, "only the sounding stream moves"
 assert moved == [("move-sink-input", "10", "bluez_output.XX.1")], moved
+moved.clear()
+assert audio.route_comms_to_default(audible_only=False) == 3, \
+    "with the gate off, every stranded stream moves"
+assert [m[1] for m in moved] == ["10", "11", "12"], moved
+audio._pactl = lambda args: "Sink Input #20\n\tCorked: yes\n\tMute: no\n" \
+    if args == ["list", "sink-inputs"] else ""
+assert audio.audible_now() is False, "a corked stream is silent: nothing sounding"
+audio._pactl = lambda args: "Sink Input #21\n\tCorked: no\n\tMute: no\n" \
+    if args == ["list", "sink-inputs"] else ""
+assert audio.audible_now() is True, "uncorked and unmuted: sounding"
 print("router unit passed")
 PYEOF2
 ok "comms router unit"
+/usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF2' || fail "flap watch failed"
+import sys
+sys.path.insert(0, sys.argv[1])
+from maid_core.flaps import CALM_S, HOLD_S, LIMIT, WINDOW_S, FlapWatch
+
+w = FlapWatch()
+t = 1000.0
+assert not w.hot("a", t) and w.settled("a", t) is False and w.last_down("a", t) is None
+# LIMIT drops inside the window stand the watcher down
+for i in range(LIMIT):
+    w.note_down("a", t + 4 * i)
+assert w.hot("a", t + 4 * LIMIT), "a tug-of-war must stand down"
+assert w.stand_down("a", t + 4 * LIMIT) is True      # first arm: the one notice
+assert w.stand_down("a", t + 4 * LIMIT + 1) is False  # never again meanwhile
+assert w.hot("a", t + 4 * LIMIT + 2)
+assert w.hot("a", t + CALM_S + WINDOW_S + 1) is False, "calm over: old hops are history"
+# old single hops stop counting on their own (window, not the queue)
+w2 = FlapWatch(); w2.note_down("b", t)
+assert w2.hot("b", t + WINDOW_S + 1) is False
+assert w2.last_down("b", t + WINDOW_S + 1) is not None, "history is kept for settling"
+# a held link forgets everything exactly once
+w3 = FlapWatch()
+for i in range(LIMIT):
+    w3.note_down("c", t + i)
+assert w3.hot("c", t + LIMIT)
+last = w3.last_down("c", t + LIMIT)
+assert w3.settled("c", last + HOLD_S - 1) is False, "not yet held long enough"
+assert w3.settled("c", last + HOLD_S) is True, "HOLD_S of quiet clears the slate"
+assert w3.settled("c", t + LIMIT + HOLD_S + 5) is False and not w3.hot("c", t + LIMIT + HOLD_S + 5)
+# forgetting is instant and total
+w3.note_down("d", t); w3.forget("d")
+assert not w3.hot("d", t) and w3.settled("d", t + HOLD_S) is False and w3.last_down("d", t) is None
+print("flap watch passed")
+PYEOF2
+ok "flap storm stands down"
 mkdir -p /tmp/btstub
 printf '#!/bin/bash\necho "2: bnep0: <UP> mtu 1500"\necho "    inet 192.0.2.1/24 scope global bnep0"\n' > /tmp/btstub/ip
 chmod +x /tmp/btstub/ip

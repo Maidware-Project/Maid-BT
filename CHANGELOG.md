@@ -1,120 +1,56 @@
 # changelog
 
-## Maid BT v1.1 (this release)
+## Maid BT v1.2 (this release)
 
-- dock-aware goes: earbuds inside their charging case go silent (closed
-  case powers them off). maid-watcher probes instead of retrying blindly,
-  buds-fallback stands down after repeated silent connects, and any
-  reconnect re-arms. no more retry storms while the buds are parked.
-- smart fallback: "when the buds dock, hand audio to the output used
-  before them" (GUI checkbox; falls back to the configured fallback
-  speakers when that output is gone). music keeps playing through the
-  move now - the pause/resume cycle covers the dock transition, so
-  Chromium/Electron apps no longer stall.
-- soundcore device control (Liberty 5 family): battery + ANC mode +
-  10-band EQ written into the buds' own memory from Maid BT. The wire
-  protocol facts come from the GPL OpenSCQ30 project; Maid BT speaks it
-  through our own clean-room Python implementation (MIT) - credit and
-  details in the About page and README.
-- new settings window: gear opens "Maid BT Settings" with exactly the
-  Maidware pages (Earbuds / Behavior / Equalizer / About) - no Plasma
-  stock "Keyboard Shortcuts" page. Plasma's own dialog still exists in
-  the right-click menu and now includes the Equalizer page too.
-- model database: full Soundcore family (Q/Life/Space/headphone series
-  with device codes), multipoint/codec/case/home-ecosystem quirks for
-  ~40 brands; `maid-watcher model "NAME"` CLI; docs/DEVICE-SUPPORT.md
-  (generated) lists what is natively supported on Linux.
-- phone switching from KDE Connect: the paired device's "run command"
-  list gets three bluetooth commands ("Earbuds: audio on PC", "Earbuds:
-  audio on phone", "Earbuds: who has audio") backed by bin/maid-switch
-  (pc|phone|status), calling the same release/on machinery as the
-  applet. existing personal commands in that list are preserved and
-  Maid BT config snapshots live in ~/.config/kdeconnect-cmd-backup-*.
-- soundcore device control is live end-to-end: real reads (battery/
-  firmware/dual connection) and writes (ANC modes, NC strength, preset
-  and custom EQ curves) verified against a Liberty 5 on the wire; the
-  settings window shows the curve that is actually on the buds and a
-  failed read says so honestly instead of showing stale zeros.
-- model database lookup understands short aliases ("Liberty 5"
-  resolves to "soundcore Liberty 5") - the EQ page no longer shows
-  "not supported" for buds whose configured name is the short form.
-- bluetooth stability: WirePlumber quality/A2DP-only guards deployed
-  with the service, reconnect back-off refinements, battery monitor
-  and call watcher cleanups. Toggle actions now survive missing rfkill
-  in the systemd user PATH.
-- applet state no longer flickers: the porcelain readout collects
-  bluetoothctl's output before matching instead of piping into
-  `grep -q`. grep exited on the first match, bluetoothctl took
-  SIGPIPE, and pipefail turned a good read into "off"/"on" while the
-  earbuds were connected. the same race could make a real fallback
-  sink look missing during a park. regression test uses a chatty fake
-  adapter.
-- default codec ladder drops LDAC (wireplumber/52-bt-max-quality.conf
-  = [aac sbc_xq sbc]): adapters with the Realtek LDAC stall lose
-  packets until quality collapses, so AAC and SBC-XQ are offered
-  instead. the max-quality pin stays an explicit opt-in (helper GUI).
-- a2dp watchdog in buds-fallback: while buds are connected, a dead
-  transport is re-asserted every ~12 ticks instead of leaving the card
-  stuck at profile "off" with silence until a manual profile flip.
-- settings window fixes: pages hosted in Maid BT's own window render
-  correctly again (the switch handler destroyed each freshly-loaded
-  page via sourceComponent's last-set-wins rule), page roots use
-  host-agnostic ScrollablePage, the EQ strength slider applies on
-  release, and the About pane no longer logs undefined-assignment
-  errors.
-- maid-setup notes the model database quirks (multipoint/LDAC hints)
-  into the generated config.
-- volume resume: return to the last state if found. the buds' level is
-  remembered while they play (once a minute, plus every park) and
-  restored on arrival, in both bluetooth-toggle.sh and buds-fallback.
-  state lives in ~/.local/state/maid-bt/earbuds-volume; a fresh
-  pairing gets no guessed volume, and every activate path (applet
+fixed:
+- sudden audio switch on charging / phone wake: the a2dp switch and
+  chat stream routing now happen only while something is playing -
+  silent connects change nothing, sound moves the audio when it comes.
+- reconnect storm: 3 connect/drop hops in 2 minutes stand the watcher
+  down for 10 minutes (one quiet notice, no reconnect races, no
+  profile changes, no popup spam), then it picks itself back up.
+- reconnect backoff: a connect that drops again no longer resets the
+  attempt counter - only a link that held clears it.
 
-- controllers stay controllers: a class-of-device Peripheral major
-  (gamepads, joysticks) plus the usual controller names are recognized
-  as input devices - the any-headset grab never routes the stream onto
-  a controller even when it advertises speaker caps (dualsense on bt
-  does). regression tests cover both the skip and the volume cycle.
-- radio recovery: when another app (the kde tray, a manager) leaves the
-  radio soft-blocked, an unprivileged rfkill unblock can never undo
-  it, so a panel tap failed silently. bluetooth-toggle.sh now falls
-  back to pkexec and lets the desktop ask once - a tap actually turns
-  bluetooth back on. the watcher's sticky-off (BLOCK_ON_EXTERNAL_OFF)
-  logs honestly when the block is not permitted instead of dying
-  quietly.
-- model auto-recognize: stored names can be placeholders ("My
-  Earbuds") while the buds announce their real model over bluetooth.
-  `maid-watcher model` now falls back to the live bluez alias for the
-  same mac, so the equalizer page lights up without a name hunt and
-  the watcher quirks apply even on setups nobody renamed.
-- porcelain test determinism: the suite stubs rfkill now - the toggle
-  resolves /usr/sbin/rfkill outside PATH and the host's real radio
-  state used to decide "hardware-free" porcelain outcomes (seen live:
-  red suite on a soft-blocked desktop, green in ci).
+added:
+- nothing else. third-party pairing docs removed by request; the
+  on/off/release contract test stays.
+
+## Maid BT v1.1
+
+added:
+- dock-aware: buds sitting in the charging case stand down (no retry
+  storms); opening the lid reconnects.
+- smart fallback: on dock, audio hands back to the previous output.
+  music keeps playing through the move.
+- Soundcore device control: battery, ANC and 10-band EQ written on the
+  buds - clean-room Python port of the OpenSCQ30 protocol (MIT).
+- our own settings window (Earbuds / Behavior / Equalizer / About) and
+  phone-side switching commands over KDE Connect (maid-switch).
+- model database: ~40 brands with codes and quirks; `maid-watcher
+  model` CLI, auto-recognize via the live bluez alias.
+- "Maid BT Helper" GUI: checks, safe fixes, reversible LDAC pin,
+  shareable report.
+- live config: the watcher re-reads config.json on change;
+  `maid-bt-config apply` flips saver / laptop mode without a restart.
+- applet shows which side has the audio, wider popup, symbolic icons.
+
+fixed:
+- applet flicker on chatty adapters; tooltip clipping.
+- a2dp watchdog re-asserts a dead transport instead of leaving the
+  card silent until a manual profile flip.
+- rfkill: pkexec fallback rescues a soft-blocked radio; missing rfkill
+  in the service PATH handled honestly.
+- codec ladder: LDAC dropped by default (Realtek LDAC adapters stall)
+  - AAC / SBC-XQ offered; the max-quality pin stays opt-in.
+- volume resume returns the buds to their last level; controllers
+  (DualSense on bluetooth and friends) are never grabbed as headsets.
 
 ## gui wording
 
 - the applet describes itself with its gui parts now: "A Linux-only
   Bluetooth earbuds switcher - tray applet + helper window".
   same wording on the repo description. nothing in behavior changed.
-
-## Maid BT v1.1
-
-- applet: shows which side owns the audio ("Earbuds: PC · audio here" /
-  "Earbuds: phone"), a wider popup so nothing clips, and symbolic Breeze
-  icons on the header and tiles.
-- Maid BT Helper GUI: checks, safe fixes, one-click LDAC pin
-  (reversible), shareable report. installed as the "Maid BT Helper"
-  launcher next to the shell.
-- live settings: `maid-bt-config apply` takes battery saver and laptop
-  mode on the spot (saver = idle park timer, laptop mode = reconnect
-  aggressiveness) - no re-run of the watcher needed.
-- watcher: re-reads its config on change and applies it live without a
-  restart; switch-triggered unwatch/refresh drops stale reconnection
-  attempts after phone-side moves.
-- sound quality stays stock by default: the max-quality pin is an
-  explicit opt-in (installer or helper GUI), and the shell ships with
-  no codec forced.
 
 ## Maid BT v1.0
 
