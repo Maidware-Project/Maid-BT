@@ -263,10 +263,22 @@ PlasmoidItem {
                         PlasmaComponents.ToolTip.text: "Connect earbuds to this PC."
                         PlasmaComponents.ToolTip.visible: hovered
                         onClicked: root.runAction("on")
+                        // one tile look for the four of them: the default
+                        // delegate chrome hugs the content, so hover and
+                        // highlight drew different shapes per tile
+                        background: Rectangle {
+                            radius: Kirigami.Units.smallSpacing * 2
+                            color: pcTile.highlighted ? Kirigami.Theme.highlightColor
+                                 : pcTile.hovered ? Kirigami.Theme.alternateBackgroundColor
+                                 : "transparent"
+                            Behavior on color {
+                                ColorAnimation { duration: Kirigami.Units.shortDuration }
+                            }
+                        }
 
                         contentItem: Item {
                             ColumnLayout {
-                                anchors.centerIn: parent
+                                anchors.fill: parent
                                 opacity: pcTile.enabled ? 1 : 0.5
                                 spacing: 2
 
@@ -282,7 +294,10 @@ PlasmoidItem {
                                     text: pcTile.text
                                     font.bold: pcTile.highlighted
                                     color: pcTile.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
                                     Layout.alignment: Qt.AlignHCenter
+                                    Layout.maximumWidth: pcTile.contentItem.width
                                 }
 
                             }
@@ -304,10 +319,19 @@ PlasmoidItem {
                         PlasmaComponents.ToolTip.text: "Release earbuds to the phone."
                         PlasmaComponents.ToolTip.visible: hovered
                         onClicked: root.runAction("release")
+                        background: Rectangle {
+                            radius: Kirigami.Units.smallSpacing * 2
+                            color: phoneTile.highlighted ? Kirigami.Theme.highlightColor
+                                 : phoneTile.hovered ? Kirigami.Theme.alternateBackgroundColor
+                                 : "transparent"
+                            Behavior on color {
+                                ColorAnimation { duration: Kirigami.Units.shortDuration }
+                            }
+                        }
 
                         contentItem: Item {
                             ColumnLayout {
-                                anchors.centerIn: parent
+                                anchors.fill: parent
                                 opacity: phoneTile.enabled ? 1 : 0.5
                                 spacing: 2
 
@@ -323,7 +347,10 @@ PlasmoidItem {
                                     text: phoneTile.text
                                     font.bold: phoneTile.highlighted
                                     color: phoneTile.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
                                     Layout.alignment: Qt.AlignHCenter
+                                    Layout.maximumWidth: phoneTile.contentItem.width
                                 }
 
                             }
@@ -345,10 +372,19 @@ PlasmoidItem {
                         PlasmaComponents.ToolTip.text: "Bluetooth on for another device."
                         PlasmaComponents.ToolTip.visible: hovered
                         onClicked: root.runAction("radio")
+                        background: Rectangle {
+                            radius: Kirigami.Units.smallSpacing * 2
+                            color: radioTile.highlighted ? Kirigami.Theme.highlightColor
+                                 : radioTile.hovered ? Kirigami.Theme.alternateBackgroundColor
+                                 : "transparent"
+                            Behavior on color {
+                                ColorAnimation { duration: Kirigami.Units.shortDuration }
+                            }
+                        }
 
                         contentItem: Item {
                             ColumnLayout {
-                                anchors.centerIn: parent
+                                anchors.fill: parent
                                 opacity: radioTile.enabled ? 1 : 0.5
                                 spacing: 2
 
@@ -364,7 +400,10 @@ PlasmoidItem {
                                     text: radioTile.text
                                     font.bold: radioTile.highlighted
                                     color: radioTile.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
                                     Layout.alignment: Qt.AlignHCenter
+                                    Layout.maximumWidth: radioTile.contentItem.width
                                 }
 
                             }
@@ -386,10 +425,19 @@ PlasmoidItem {
                         PlasmaComponents.ToolTip.text: "Turn Bluetooth off."
                         PlasmaComponents.ToolTip.visible: hovered
                         onClicked: root.runAction("off")
+                        background: Rectangle {
+                            radius: Kirigami.Units.smallSpacing * 2
+                            color: offTile.highlighted ? Kirigami.Theme.highlightColor
+                                 : offTile.hovered ? Kirigami.Theme.alternateBackgroundColor
+                                 : "transparent"
+                            Behavior on color {
+                                ColorAnimation { duration: Kirigami.Units.shortDuration }
+                            }
+                        }
 
                         contentItem: Item {
                             ColumnLayout {
-                                anchors.centerIn: parent
+                                anchors.fill: parent
                                 opacity: offTile.enabled ? 1 : 0.5
                                 spacing: 2
 
@@ -405,7 +453,10 @@ PlasmoidItem {
                                     text: offTile.text
                                     font.bold: offTile.highlighted
                                     color: offTile.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
                                     Layout.alignment: Qt.AlignHCenter
+                                    Layout.maximumWidth: offTile.contentItem.width
                                 }
 
                             }
