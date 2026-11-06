@@ -167,7 +167,7 @@ Window {
                             }
 
                             QQC2.Label {
-                                text: "Version 1.2"
+                                text: "Version 1.2.1"
                                 opacity: 0.6
                                 wrapMode: Text.WordWrap
                             }

@@ -1,19 +1,17 @@
 # changelog
 
-## Maid BT v1.3 (unreleased)
+## Maid BT v1.2.1 (this release)
 
-fixed:
-- state page: a refused control connection now fails in about a second
-  with words ("usually docked in the case, asleep, or busy with the
-  phone") instead of raw br-connection-refused after the full 8s window.
-- the applet's four tiles draw as one shape: same rounded background,
-  shared hover/highlight colors, long names elide instead of stretching
-  their row.
+- the earbuds state page used to sit for the whole 8s window and come
+  back with bluetooth talk (br-connection-refused) when the buds were
+  busy. refused control connections now answer in about a second, in
+  plain words: buds usually docked, asleep, or on the phone. press
+  refresh to go again once the buds are out.
+- the applet's four tiles (this pc / phone / radio / off) share one
+  tile shape: same rounding, hover and highlight painted on the tile,
+  long names cut off instead of stretching the row.
 
-added:
-- nothing else. routing and flap behavior untouched from v1.2.
-
-## Maid BT v1.2 (this release)
+## Maid BT v1.2
 
 fixed:
 - sudden audio switch on charging / phone wake: the a2dp switch and
