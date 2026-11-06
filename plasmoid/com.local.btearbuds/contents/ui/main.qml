@@ -260,8 +260,6 @@ PlasmoidItem {
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
                         highlighted: root.btState === "buds"
                         enabled: !root.busy
-                        PlasmaComponents.ToolTip.text: "Connect earbuds to this PC."
-                        PlasmaComponents.ToolTip.visible: hovered
                         onClicked: root.runAction("on")
                         // one tile look for the four of them: the default
                         // delegate chrome hugs the content, so hover and
@@ -316,8 +314,6 @@ PlasmoidItem {
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
                         highlighted: root.btState === "phone"
                         enabled: !root.busy
-                        PlasmaComponents.ToolTip.text: "Release earbuds to the phone."
-                        PlasmaComponents.ToolTip.visible: hovered
                         onClicked: root.runAction("release")
                         background: Rectangle {
                             radius: Kirigami.Units.smallSpacing * 2
@@ -369,8 +365,6 @@ PlasmoidItem {
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
                         enabled: !root.busy
                         Accessible.description: "Power Bluetooth for a mouse, controller, or other accessory without moving earbud audio"
-                        PlasmaComponents.ToolTip.text: "Bluetooth on for another device."
-                        PlasmaComponents.ToolTip.visible: hovered
                         onClicked: root.runAction("radio")
                         background: Rectangle {
                             radius: Kirigami.Units.smallSpacing * 2
@@ -422,8 +416,6 @@ PlasmoidItem {
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
                         highlighted: root.btState === "off"
                         enabled: !root.busy
-                        PlasmaComponents.ToolTip.text: "Turn Bluetooth off."
-                        PlasmaComponents.ToolTip.visible: hovered
                         onClicked: root.runAction("off")
                         background: Rectangle {
                             radius: Kirigami.Units.smallSpacing * 2
