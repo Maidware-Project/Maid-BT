@@ -335,7 +335,7 @@ do_doctor() {
   local _desk="${XDG_CURRENT_DESKTOP:-n/a}"; printf '  desktop: %s%s%s\n' "$B" "$_desk" "$R"
   case "${_desk,,}" in
     *plasma*|*kde*) ok "KDE Plasma: supported (applet, integrations)" ;;
-    *hyprland*|*sway*|*i3*) warn "compositor ${_desk}: CLI/TUI + bluetooth-toggle/maid-switch work; Plasma applet is KDE-only (support: partial/experimental, roadmap)" ;;
+    *hyprland*|*sway*|*i3*) warn "compositor ${_desk}: CLI/TUI + bluetooth-toggle/maid-switch work; Plasma applet is KDE-only (partial/experimental; adapters iterative)" ;;
     *) say "compositor ${_desk}: core CLI/TUI expected to work; desktop integrations vary" ;;
   esac
   [ -f "$CONF" ] && grep -q "^BUDS_MAC=" "$CONF" 2>/dev/null \
