@@ -1,6 +1,6 @@
 # third-party and credits
 
-Everything in Maid BT is Maidware work under the MIT license in LICENSE. None of the items below
+Everything in Maid BT is Maidware work under the **GPL-3.0-or-later** license in `LICENSE`. None of the items below
 is bundled: Maid BT either references knowledge, or calls other programs your distribution already
 has. This file names them, so nobody has to dig through sources to find who deserves the credit.
 
