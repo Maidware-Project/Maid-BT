@@ -198,6 +198,17 @@ works.
 on 4 GB machines: leave phone remote off unless you use it, leave the
 idle saver off (default). Fedora/openSUSE already compress RAM (zram).
 
+## NixOS (flakes & home-manager)
+
+a `flake.nix` is provided for the cli/tools:
+
+```sh
+nix run github:Maidware-Project/Maid-BT -- status
+# or install: nix profile install github:Maidware-Project/Maid-BT
+```
+
+home-manager: enable `programs.maid-bt.enable = true;` via the flake’s `homeManagerModules.default`. bluez/pipewire (or pulseaudio-compat), rfkill, and notifications come from your NixOS config; user services (watcher/listener) and the Plasma plasmoid are session/system-specific - manage them via home-manager/systemd user units or the tool’s own setup as appropriate.
+
 ## uninstall
 
 ```sh
