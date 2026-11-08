@@ -1,7 +1,8 @@
 # changelog
 
-## unreleased
+## Maid BT v1.2.3 (this release)
 
+- **NixOS (flakes + home-manager), easy setup:** `flake.nix` with packages/apps, top-level `homeManagerModules.default`/`nixosModules.default`, and declarative options: `programs.maid-bt.enable`, plus `services.maid-bt.watcher.enable`, `services.maid-bt.maidWatcher.enable` (+ `settings` -> `~/.config/maid-watcher/config.json`), and `services.maid-bt.intentListener.enable`. track `github:Maidware-Project/Maid-BT` and rebuild with `--refresh` to auto-update on every `nixos-rebuild`/`home-manager switch`.
 - **relicensed to GPL-3.0-or-later** (forkable, open source). Third-party components retain their own licenses; see `THIRD-PARTY-NOTICES.md`.
 - **silent install**: a piped run (`bash <(curl ...)`) never touches sudo and
   never asks: packages are opt-in (`--packages` forces, tty runs ask once,
@@ -11,20 +12,6 @@
   to enable)" line instead. output is quiet by default: one `installed N
   files -> dir` line per destination instead of a per-file dump; `--verbose`
   brings the old full list back.
-- `tests/demo.sh`: preview the installer the way a fresh user sees it, in a
-  throw-away home with shims for sudo, package managers, systemctl, bluez
-  and pulse. `bash tests/demo.sh` prints the piped experience;
-  `bash tests/demo.sh --window` opens the interactive TUI in your default
-  terminal (ghostty/konsole/kitty/... auto-detected).
-- fixed: the menu crashed the shell on first draw (`$1: unbound
-  variable` under `set -u` in rule()/head(), and again in the
-  keep-existing-MAC path). suite now pty-runs the TUI so this class of
-  bug can't ship again (33 checks).
-- you can type `cancel` (or `q`) everywhere: main menu, earbud and
-  sink picks, and the uninstall prompt.
-- `bash <(curl -fsSL ...raw.../install.sh)` works: install.sh falls back to
-  downloading the repo tarball when it is piped through curl, instead of
-  failing on a /dev/fd path.
 - new text-UI installer (`install.sh --tui` or `bin/tui-install.sh`): screens
   with numbered picks, full install / config-only / doctor / **uninstall**
   (engine `--uninstall [--purge]`), version facts, and an N64-style
@@ -33,12 +20,24 @@
   ($TERMINAL/$TERM_PROGRAM → session markers → Plasma kdeglobals → common
   binaries) and records it as `TERMINAL_CMD=` in bluetooth-buds.conf for
   log-tail/helper windows.
+- `tests/demo.sh`: preview the installer the way a fresh user sees it, in a
+  throw-away home with shims for sudo, package managers, systemctl, bluez
+  and pulse.
+- fixed: the menu crashed the shell on first draw (`$1: unbound variable`
+  under `set -u` in rule()/head(), and again in the keep-existing-MAC path).
+  suite now pty-runs the TUI so this class of bug can't ship again (33 checks).
+- you can type `cancel` (or `q`) everywhere: main menu, earbud and sink picks,
+  and the uninstall prompt.
+- `bash <(curl -fsSL ...raw.../install.sh)` works: install.sh falls back to
+  downloading the repo tarball when it is piped through curl.
 - config-only menu choice no longer reruns the engine: it re-picks earbuds
   + fallback sink, rewrites the conf, and restarts buds-fallback only.
-- suite extended to 33 checks (TUI parse, no-tty refusal, uninstall wiring,
-  boot intro, `--tui` passthrough).
+- tui boot intro made robust in pty/script/ci environments.
+- clearer Soundcore control-channel errors (audio can work while vendor
+  control is refused/busy by phone/multipoint); restored a `NoDisplay`
+  `maid-helper.desktop` for portal/app-id.
 
-## Maid BT v1.2.2 (this release)
+## Maid BT v1.2.2
 
 - the watcher used to wake every single second all day: bluetoothctl
   twice, pactl two to three times, qdbus6 for the lockscreen - a dozen

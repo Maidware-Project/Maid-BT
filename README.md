@@ -200,14 +200,30 @@ idle saver off (default). Fedora/openSUSE already compress RAM (zram).
 
 ## NixOS (flakes & home-manager)
 
-a `flake.nix` is provided for the cli/tools:
+the easy way (flakes + home-manager). add to your flake inputs and import the module:
 
-```sh
-nix run github:Maidware-Project/Maid-BT -- status
-# or install: nix profile install github:Maidware-Project/Maid-BT
+```nix
+# flake.nix (your config)
+inputs.maid-bt.url = "github:Maidware-Project/Maid-BT"; # tracks main
+
+# home-manager
+imports = [ inputs.maid-bt.homeManagerModules.default ];
+programs.maid-bt.enable = true;
+services.maid-bt.watcher.enable = true;      # optional: buds fallback watcher
+services.maid-bt.maidWatcher.enable = true;   # optional: calls/battery/reconnect
+# services.maid-bt.intentListener.enable = true; # optional: phone intent (LAN, only if you use it)
 ```
 
-home-manager: enable `programs.maid-bt.enable = true;` via the flake’s `homeManagerModules.default`. bluez/pipewire (or pulseaudio-compat), rfkill, and notifications come from your NixOS config; user services (watcher/listener) and the Plasma plasmoid are session/system-specific - manage them via home-manager/systemd user units or the tool’s own setup as appropriate.
+**auto-update on every rebuild/switch (important):** keep the input tracking `main` (as above) and rebuild with refresh so the latest is fetched:
+
+```sh
+nix flake update maid-bt && sudo nixos-rebuild switch --flake .#<host>
+# or: home-manager switch --flake .#<user> --refresh
+# or rebuild with: sudo nixos-rebuild switch --flake .#<host> --refresh
+```
+
+quick try without installing: `nix run github:Maidware-Project/Maid-BT -- status`.
+bluez/pipewire (or pulseaudio-compat), rfkill, and notifications come from your NixOS config; the Plasma plasmoid is session-specific (install/manage it per your desktop setup).
 
 ## uninstall
 
