@@ -46,7 +46,7 @@ ok()     { printf ' %s[ok]%s %s\n' "$GR" "$R" "$*"; }
 warn()   { printf ' %s[!!] %s%s\n' "$YL" "$R" "$*"; }
 bad()    { printf ' %s[bad] %s%s\n' "$RD" "$R" "$*"; }
 
-rule() { local c t="$1"; [ -n "$t" ] || t=$((COLS - 2)); c="$t"; printf '%*s\n%s\n' "$c" '' | tr ' ' '-'; }
+rule() { printf '%*s\n' "${1:-$((COLS - 2))}" '' | tr ' ' '-'; }
 head() {
   printf '\n%s MAID BT %s%s %s%s\n' "$INV" "$R" "$B" "$*" "$R"
   rule
@@ -60,6 +60,7 @@ ask_line() { # ask_line "prompt" -> $REPLY, input on the same line
 
 numbered_pick() {
   # numbered_pick "title" item1 item2... -> $PICK (1-based index) or empty
+  [ $# -ge 1 ] || return 1
   local title="$1"; shift
   local -a items=("$@")
   [ "${#items[@]}" -ge 1 ] || return 1
@@ -70,10 +71,10 @@ numbered_pick() {
     i=$((i + 1))
   done
   while :; do
-    printf '  %s pick 1-%d, Enter for 1, q cancel: %s' "$B" "${#items[@]}" "$R"
+    printf '  %s pick 1-%d, Enter for 1, or cancel: %s' "$B" "${#items[@]}" "$R"
     read -r REPLY
     case "${REPLY:-1}" in
-      q|Q) return 1 ;;
+      q|Q|cancel|Cancel) return 1 ;;
       *[!0-9]*|"") continue ;;
     esac
     [ "$REPLY" -ge 1 ] && [ "$REPLY" -le "${#items[@]}" ] && { PICK="$REPLY"; return 0; }
@@ -152,7 +153,7 @@ host_facts() {
 # ----------------------------------------------------- config write
 write_config() {
   # $1 = BUDS_MAC, $2 = FALLBACK_SINK; keeps TERMINAL_CMD when known
-  local mac="$1" sink="$2" t=""
+  local mac="${1:-}" sink="${2:-}" t=""
   [ -f "$CONF" ] && t="$(sed -n 's/^TERMINAL_CMD="\(.*\)"/\1/p' "$CONF" 2>/dev/null | head -n 1)"
   detect_terminal; [ -n "$TERMINAL_CMD" ] || t=""
   {
@@ -221,7 +222,12 @@ do_install() {
     printf '  %sexisting earbuds:%s %s%s%s\n' "$DIM" "$R" "$B" "$existing" "$R"
     ask_line "keep it? [y/N]"
     case "${REPLY,,}" in
-      y|yes) do_install_steps "$existing" ; return ;;
+      y|yes)
+        # keep the learned fallback sink too, not just the MAC
+        ks="$(sed -n 's/^FALLBACK_SINK="\(.*\)"/\1/p' "$CONF" 2>/dev/null | head -n 1)"
+        do_install_steps "$existing" "${ks:-}"
+        return
+        ;;
     esac
   fi
   pick_buds_and_sink || return 1
@@ -229,7 +235,7 @@ do_install() {
 }
 
 do_install_steps() {
-  local mac="$1" sink="$2"
+  local mac="${1:-}" sink="${2:-}"
   say "earbuds $mac · fallback $sink"
   write_config "$mac" "$sink"
   ensure_token
@@ -318,10 +324,10 @@ do_uninstall() {
   head "uninstall"
   hr
   printf '  %sp%s) keep configs (logs, MAC tokens)   %sP%s) purge everything\n' "$B" "$R" "$B" "$R"
-  printf '  %sq%s) cancel\n' "$B" "$R"
-  ask_line "choice"
+  printf '  %sq%s / %scancel%s) soft remove (configs, logs and phone token stay)\n' "$B" "$R" "$B" "$R"
+  printf '  %sP%s) purge everything (fresh machine)\n' "$B" "$R"  ask_line "choice"
   case "${REPLY:-q}" in
-    q|Q|"") say "cancelled"; return ;;
+    q|Q|cancel|Cancel|"") say "cancelled"; return ;;
     p)      say "engine uninstall (configs and logs stay)"
             bash "$PKGDIR/install.sh" --uninstall </dev/null || true ;;
     P)      say "engine uninstall with purge"
@@ -394,7 +400,7 @@ menu() {
   hr
   printf '  default terminal: %s%s%s   %s(used for log tail + helper windows)%s\n\n' \
     "$B" "${TERMINAL_CMD:-none found}" "$R" "$DIM" "$R"
-  printf '  %s pick [1-4, q]: %s' "$B" "$R"
+  printf '  %s pick [1-4, q or cancel]: %s' "$B" "$R"
 }
 
 main() {
@@ -409,7 +415,7 @@ main() {
       2) do_config ;;
       3) do_doctor ;;
       4) do_uninstall ;;
-      q|Q|"") printf ' bye!\n'; return 0 ;;
+      q|Q|cancel|Cancel|"") printf ' bye!\n'; return 0 ;;
     esac
   done
 }

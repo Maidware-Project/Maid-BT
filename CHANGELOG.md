@@ -2,6 +2,12 @@
 
 ## unreleased
 
+- fixed: the menu crashed the shell on first draw (`$1: unbound
+  variable` under `set -u` in rule()/head(), and again in the
+  keep-existing-MAC path). suite now pty-runs the TUI so this class of
+  bug can't ship again (33 checks).
+- you can type `cancel` (or `q`) everywhere: main menu, earbud and
+  sink picks, and the uninstall prompt.
 - `bash <(curl -fsSL ...raw.../install.sh)` works: install.sh falls back to
   downloading the repo tarball when it is piped through curl, instead of
   failing on a /dev/fd path.

@@ -886,6 +886,17 @@ case "$(sed -n '/^main() {/,/^}/p' "$PKGDIR/bin/tui-install.sh")" in
   *"n64_boot"*) ok "boot intro runs before the menu" ;;
   *) fail "n64_boot not called in main()" ;;
 esac
+# pty smoke: the menu must actually render end to end. a set -u
+# "$1" crash inside rule()/head() used to kill the shell the moment
+# the menu drew - suite greps cannot see that, a pty run can.
+if command -v script >/dev/null 2>&1; then
+  CAP="$(mktemp /tmp/maidbt-tui.XXXXXX)"
+  timeout 15 script -qec "bash '$PKGDIR/bin/tui-install.sh'" "$CAP" </dev/null >/dev/null 2>&1
+  grep -q 'M  A  I  D  W  A  R  E' "$CAP" || fail "boot intro never settled on screen"
+  grep -q "MAID BT" "$CAP" && grep -q "uninstall" "$CAP" || fail "main menu never rendered"
+  grep -q "cancel" "$CAP" || fail "menu does not offer cancel"
+  rm -f "$CAP"
+fi
 ok "tui"
 
 echo "== cleanup =="
