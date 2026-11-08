@@ -275,14 +275,19 @@ PlasmoidItem {
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
                         highlighted: root.btState === "buds"
                         enabled: !root.busy
+                        hoverEnabled: true
                         onClicked: root.runAction("on")
                         // one tile look for the four of them: the default
                         // delegate chrome hugs the content, so hover and
                         // highlight drew different shapes per tile
                         background: Rectangle {
+                            id: pcBg
                             radius: Kirigami.Units.smallSpacing * 2
+                            // hover must be unmistakable: a faint
+                            // alternate-background wash goes unnoticed on
+                            // dark panels and made hover look broken
                             color: pcTile.highlighted ? Kirigami.Theme.highlightColor
-                                 : pcTile.hovered ? Kirigami.Theme.alternateBackgroundColor
+                                 : pcTile.hovered ? Qt.alpha(Kirigami.Theme.hoverColor, 0.35)
                                  : "transparent"
                             Behavior on color {
                                 ColorAnimation { duration: Kirigami.Units.shortDuration }
@@ -335,11 +340,13 @@ PlasmoidItem {
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
                         highlighted: root.btState === "phone"
                         enabled: !root.busy
+                        hoverEnabled: true
                         onClicked: root.runAction("release")
                         background: Rectangle {
+                            id: phoneBg
                             radius: Kirigami.Units.smallSpacing * 2
                             color: phoneTile.highlighted ? Kirigami.Theme.highlightColor
-                                 : phoneTile.hovered ? Kirigami.Theme.alternateBackgroundColor
+                                 : phoneTile.hovered ? Qt.alpha(Kirigami.Theme.hoverColor, 0.35)
                                  : "transparent"
                             Behavior on color {
                                 ColorAnimation { duration: Kirigami.Units.shortDuration }
@@ -391,12 +398,14 @@ PlasmoidItem {
                         Layout.fillWidth: true
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
                         enabled: !root.busy
+                        hoverEnabled: true
                         Accessible.description: "Power Bluetooth for a mouse, controller, or other accessory without moving earbud audio"
                         onClicked: root.runAction("radio")
                         background: Rectangle {
+                            id: radioBg
                             radius: Kirigami.Units.smallSpacing * 2
                             color: radioTile.highlighted ? Kirigami.Theme.highlightColor
-                                 : radioTile.hovered ? Kirigami.Theme.alternateBackgroundColor
+                                 : radioTile.hovered ? Qt.alpha(Kirigami.Theme.hoverColor, 0.35)
                                  : "transparent"
                             Behavior on color {
                                 ColorAnimation { duration: Kirigami.Units.shortDuration }
@@ -451,11 +460,13 @@ PlasmoidItem {
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
                         highlighted: root.btState === "off"
                         enabled: !root.busy
+                        hoverEnabled: true
                         onClicked: root.runAction("off")
                         background: Rectangle {
+                            id: offBg
                             radius: Kirigami.Units.smallSpacing * 2
                             color: offTile.highlighted ? Kirigami.Theme.highlightColor
-                                 : offTile.hovered ? Kirigami.Theme.alternateBackgroundColor
+                                 : offTile.hovered ? Qt.alpha(Kirigami.Theme.hoverColor, 0.35)
                                  : "transparent"
                             Behavior on color {
                                 ColorAnimation { duration: Kirigami.Units.shortDuration }
