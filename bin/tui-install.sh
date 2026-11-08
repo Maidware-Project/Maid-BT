@@ -298,8 +298,18 @@ do_doctor() {
   head "system doctor"
   hr
   host_facts
-  printf '  distro: %s%s%s · plasma %s%s%s\n' "$B" "$DISTRO" "$R" "$B" "${PLASMA:-n/a}" "$R"
+  if [ -n "${PLASMA:-}" ]; then
+    printf '  distro: %s%s%s · plasma %s%s%s\n' "$B" "$DISTRO" "$R" "$B" "$PLASMA" "$R"
+  else
+    printf '  distro: %s%s%s · plasma %s(n/a)%s\n' "$B" "$DISTRO" "$R" "$DIM" "$R"
+  fi
   printf '  session: %s%s%s · default terminal %s%s%s\n' "$B" "$SESS" "$R" "$B" "${TERMINAL_CMD:-none}" "$R"
+  local _desk="${XDG_CURRENT_DESKTOP:-n/a}"; printf '  desktop: %s%s%s\n' "$B" "$_desk" "$R"
+  case "${_desk,,}" in
+    *plasma*|*kde*) ok "KDE Plasma: supported (applet, integrations)" ;;
+    *hyprland*|*sway*|*i3*) warn "compositor ${_desk}: CLI/TUI + bluetooth-toggle/maid-switch work; Plasma applet is KDE-only (support: partial/experimental, roadmap)" ;;
+    *) say "compositor ${_desk}: core CLI/TUI expected to work; desktop integrations vary" ;;
+  esac
   [ -f "$CONF" ] && grep -q "^BUDS_MAC=" "$CONF" 2>/dev/null \
     && ok "config exists: $CONF" \
     || warn "config missing/empty: $CONF"
@@ -307,9 +317,14 @@ do_doctor() {
   systemctl --user is-active buds-fallback.service >/dev/null 2>&1 \
     && ok "buds-fallback.service active" \
     || warn "buds-fallback.service not running"
-  [ -d "$HOME/.local/share/plasma/plasmoids/com.local.btearbuds" ] \
-    && ok "applet installed in ~/.local/share/plasma/plasmoids" \
-    || warn "applet not installed"
+  if [ -d "$HOME/.local/share/plasma/plasmoids/com.local.btearbuds" ]; then
+    ok "applet installed (KDE Plasma widget)"
+  else
+    case "${XDG_CURRENT_DESKTOP:-}" in
+      *[Pp]lasma*|*[Kk][Dd][Ee]*) warn "applet not installed (~/.local/share/plasma/plasmoids)" ;;
+      *) say "applet: KDE Plasma-only (not required on ${XDG_CURRENT_DESKTOP:-this session}; core CLI/TUI works)" ;;
+    esac
+  fi
   PORCELAIN="$(~/.local/bin/bluetooth-toggle.sh porcelain 2>/dev/null || echo unknown)"
   printf '  bluetooth state: %s%s%s\n' "$B" "$PORCELAIN" "$R"
   say "engine check:"
@@ -323,15 +338,17 @@ pause_or_done() { printf '\n  %sENTER%s back to the menu' "$B" "$R"; read -r _; 
 do_uninstall() {
   head "uninstall"
   hr
-  printf '  %sp%s) keep configs (logs, MAC tokens)   %sP%s) purge everything\n' "$B" "$R" "$B" "$R"
-  printf '  %sq%s / %scancel%s) soft remove (configs, logs and phone token stay)\n' "$B" "$R" "$B" "$R"
-  printf '  %sP%s) purge everything (fresh machine)\n' "$B" "$R"  ask_line "choice"
+  printf '  %sp%s) uninstall, keep configs (logs, MAC/tokens stay)\n' "$B" "$R"
+  printf '  %sP%s) uninstall + purge everything (fresh machine)\n' "$B" "$R"
+  printf '  %sq%s) cancel\n\n' "$B" "$R"
+  ask_line "choice [p/P/q]:"
   case "${REPLY:-q}" in
     q|Q|cancel|Cancel|"") say "cancelled"; return ;;
     p)      say "engine uninstall (configs and logs stay)"
             bash "$PKGDIR/install.sh" --uninstall </dev/null || true ;;
     P)      say "engine uninstall with purge"
             bash "$PKGDIR/install.sh" --uninstall --purge </dev/null || true ;;
+    *)      say "cancelled"; return ;;
   esac
   pause_or_done
 }
