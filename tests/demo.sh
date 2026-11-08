@@ -14,7 +14,7 @@ set -u
 
 DEMO_ROOT="$(mktemp -d /tmp/maidbt-demo-home.XXXXXX)"
 trap 'rm -rf "$DEMO_ROOT"' EXIT
-PKGDIR="$(cd "$(dirname "$0")/.." && pwd)"
+PKGDIR="${MAID_DEMO_PKGDIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 
 export HOME="$DEMO_ROOT/home"
 mkdir -p "$HOME/.config" "$HOME/.local/share" "$HOME/.cache" "$HOME/.local/state"
@@ -43,8 +43,14 @@ export PATH="$SHIM:$PATH"
 
 # ------------------------------------------------------------- views
 window() {
-  # spawn "$@" inside the default terminal, best effort
-  local self; self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+  # spawn "$@" inside the default terminal, best effort. the launcher
+  # gets a spaceless copy of this script: ghostty's single-instance
+  # IPC mangles commands whose path contains spaces.
+  local self win_sh
+  self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+  win_sh="$DEMO_ROOT/maid-demo.sh"
+  cp "$self" "$win_sh"; chmod +x "$win_sh"
+  export MAID_DEMO_PKGDIR="$PKGDIR"
   local tl=""
   for c in "${MAID_DEMO_TERMINAL:-}" "${TERMINAL:-}" "${TERM_PROGRAM:-}" \
            ghostty konsole kitty alacritty wezterm gnome-terminal xterm; do
@@ -53,13 +59,13 @@ window() {
   [ -n "$tl" ] || { echo "no terminal found - set MAID_DEMO_TERMINAL=konsole (etc)"; return 1; }
   echo "· demo TUI opening in $tl (sandbox: $DEMO_ROOT/home)"
   case "$tl" in
-    konsole)        nohup konsole -e "$self" --tui-child >/dev/null 2>&1 & ;;
-    kitty)          nohup kitty "$self" --tui-child >/dev/null 2>&1 & ;;
-    alacritty)      nohup alacritty -e "$self" --tui-child >/dev/null 2>&1 & ;;
-    wezterm)        nohup wezterm start -- "$self" --tui-child >/dev/null 2>&1 & ;;
-    ghostty)        nohup ghostty -e "$self" --tui-child >/dev/null 2>&1 & ;;
-    gnome-terminal) nohup gnome-terminal -- "$self" --tui-child >/dev/null 2>&1 & ;;
-    xterm)          nohup xterm -e "$self" --tui-child >/dev/null 2>&1 & ;;
+    konsole)        nohup konsole -e "$win_sh" --tui-child >/dev/null 2>&1 & ;;
+    kitty)          nohup kitty "$win_sh" --tui-child >/dev/null 2>&1 & ;;
+    alacritty)      nohup alacritty -e "$win_sh" --tui-child >/dev/null 2>&1 & ;;
+    wezterm)        nohup wezterm start -- "$win_sh" --tui-child >/dev/null 2>&1 & ;;
+    ghostty)        nohup ghostty -e "$win_sh" --tui-child >/dev/null 2>&1 & ;;
+    gnome-terminal) nohup gnome-terminal -- "$win_sh" --tui-child >/dev/null 2>&1 & ;;
+    xterm)          nohup xterm -e "$win_sh" --tui-child >/dev/null 2>&1 & ;;
     *) echo "no exec recipe for $tl"; return 1 ;;
   esac
 }
