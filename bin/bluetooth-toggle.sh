@@ -42,7 +42,7 @@ session_doctor() {
     *[Hh]yprland*|*[Ss]way*|*[Ii]3*) echo "  support: core CLI (on/off/release/radio/status/porcelain) works; Plasma applet is KDE-only (partial/experimental). Bind keys in your compositor config." ;;
     *) echo "  support: core CLI works on Linux with bluez/pactl; desktop integration varies." ;;
   esac
-  echo "  tips: bluetooth-toggle.sh status | porcelain; see contrib/compositors/ for Hyprland/Sway/i3 snippets."
+  echo "  tips: moves all playback streams (app-agnostic). bluetooth-toggle.sh status | porcelain; see contrib/compositors/ for Hyprland/Sway/i3 snippets."
 }
 
 ACTION="${1:-toggle}"
@@ -410,6 +410,9 @@ do_on() {
     switch_to_buds || true
     restore_buds_volume
     media_cycle_end
+    # app-agnostic: catch straggler streams that (re)appeared after resume
+    sleep 1
+    sink="$(bluez_sink)"; [ -n "$sink" ] && move_all_to "$sink"
     maid_audit maid-bt "action=on buds connected, audio moved"
     notify "Bluetooth on" "Connected to earbuds." normal bluetooth
     notify_phone "Earbuds switched to PC"
