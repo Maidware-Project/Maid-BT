@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import org.kde.plasma.components as PlasmaComponents
 import org.kde.plasma.plasma5support as P5Support
 
 // Equalizer + device controls for soundcore gear (Liberty 5 family).
@@ -173,7 +174,7 @@ Kirigami.ScrollablePage {
 
         RowLayout {
             Layout.fillWidth: true
-            QQC2.Label {
+            PlasmaComponents.Label {
                 text: page.supported
                       ? "These controls are written into the earbuds and stay there."
                       : "Not a supported device"
@@ -181,7 +182,7 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
             }
-            QQC2.Button {
+            PlasmaComponents.Button {
                 icon.name: "view-refresh"
                 visible: page.supported
                 text: "Refresh"
@@ -189,7 +190,7 @@ Kirigami.ScrollablePage {
             }
         }
 
-        QQC2.Label {
+        PlasmaComponents.Label {
             visible: page.statusText !== ""
             text: page.statusText
             color: page.busy ? Kirigami.Theme.textColor
@@ -198,7 +199,7 @@ Kirigami.ScrollablePage {
             wrapMode: Text.WordWrap
         }
 
-        QQC2.Label {
+        PlasmaComponents.Label {
             visible: page.detailText !== ""
             text: page.detailText
             font: Kirigami.Theme.smallFont
@@ -207,7 +208,7 @@ Kirigami.ScrollablePage {
             wrapMode: Text.WordWrap
         }
 
-        QQC2.Label {
+        PlasmaComponents.Label {
             visible: !page.supported
             text: "Supported: Soundcore buds/headphones with vendor device "
                   + "control (model database: device-control). The wire "
@@ -223,7 +224,7 @@ Kirigami.ScrollablePage {
             visible: page.supported
         }
 
-        QQC2.Label {
+        PlasmaComponents.Label {
             visible: page.supported
             text: "Noise controls"
             font.bold: true
@@ -240,7 +241,7 @@ Kirigami.ScrollablePage {
 
             Repeater {
                 model: page.ancModes
-                QQC2.Button {
+                PlasmaComponents.Button {
                     required property var modelData
                     checkable: true
                     autoExclusive: false
@@ -260,7 +261,7 @@ Kirigami.ScrollablePage {
                      && page.deviceState.anc
                      && page.deviceState.anc.ambient === "noise"
             Kirigami.FormData.label: "Strength:"
-            QQC2.Slider {
+            PlasmaComponents.Slider {
                 id: strengthSlider
                 from: 0
                 to: 5
@@ -273,7 +274,7 @@ Kirigami.ScrollablePage {
                 onPressedChanged: if (!pressed)
                     page.applyAnc("noise manual " + Math.round(value))
             }
-            QQC2.Label {
+            PlasmaComponents.Label {
                 text: strengthSlider.value + "/5"
                 Layout.preferredWidth: 40
             }
@@ -283,7 +284,7 @@ Kirigami.ScrollablePage {
             visible: page.supported
         }
 
-        QQC2.Label {
+        PlasmaComponents.Label {
             visible: page.supported
             text: "Equalizer (stays in the buds)"
             font.bold: true
@@ -300,7 +301,7 @@ Kirigami.ScrollablePage {
                     required property int index
                     Layout.fillWidth: true
                     Layout.preferredHeight: 130
-                    QQC2.Slider {
+                    PlasmaComponents.Slider {
                         id: bandSlider
                         anchors.horizontalCenter: parent.horizontalCenter
                         orientation: Qt.Vertical
@@ -316,7 +317,7 @@ Kirigami.ScrollablePage {
                             page.eqBands = next;
                         }
                     }
-                    QQC2.Label {
+                    PlasmaComponents.Label {
                         anchors.bottom: parent.bottom
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: Math.round(bandSlider.value) > 0
@@ -324,7 +325,7 @@ Kirigami.ScrollablePage {
                               : String(Math.round(bandSlider.value))
                         font: Kirigami.Theme.smallFont
                     }
-                    QQC2.Label {
+                    PlasmaComponents.Label {
                         anchors.top: parent.top
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: modelData
@@ -335,7 +336,7 @@ Kirigami.ScrollablePage {
             }
         }
 
-        QQC2.Button {
+        PlasmaComponents.Button {
             visible: page.supported
             text: "Apply custom EQ"
             icon.name: "dialog-ok"
@@ -348,7 +349,7 @@ Kirigami.ScrollablePage {
             spacing: 6
             Repeater {
                 model: ["flat", "bass-boost", "vocal", "treble-boost"]
-                QQC2.Button {
+                PlasmaComponents.Button {
                     required property string modelData
                     enabled: !page.busy
                     text: modelData
@@ -357,7 +358,7 @@ Kirigami.ScrollablePage {
             }
         }
 
-        QQC2.Label {
+        PlasmaComponents.Label {
             visible: page.supported
             text: "EQ curve values live in the earbuds' own memory. "
                   + "Custom curves here do NOT switch between the buds' "

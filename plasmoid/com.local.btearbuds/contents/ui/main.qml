@@ -16,6 +16,9 @@ PlasmoidItem {
     // can take 20s+, and re-enabling tiles at 1.1s invited double taps
     property string busyFrom: ""
     property double busySince: 0
+    // the exact command whose exit means "the switch is done": poll
+    // sources finish mid-action too, and they must never unlock the tiles
+    property string busySource: ""
 
     Loader {
         id: settingsWinLoader
@@ -61,7 +64,9 @@ PlasmoidItem {
     function stateIcon() {
         // symbolic glyphs recolor with the theme and match the panel style
         if (root.btState === "off")
-            return "bluetooth-disabled-symbolic";
+            // power-off metaphor; bluetooth-disabled-symbolic does not
+            // exist in breeze/hicolor, which Papirus-Dark inherits from
+            return "system-shutdown-symbolic";
 
         if (root.btState === "on")
             return "bluetooth-disconnected-symbolic";
@@ -80,8 +85,8 @@ PlasmoidItem {
         busy = true;
         busyFrom = btState;
         busySince = Date.now();
-        execSource.connectSource(toggle + " " + a);
-        refreshSoon.restart();
+        busySource = toggle + " " + a;
+        execSource.connectSource(busySource);
     }
 
     toolTipMainText: "Maid BT"
@@ -99,10 +104,12 @@ PlasmoidItem {
                 if (t === "off" || t === "on" || t === "buds" || t === "phone")
                     root.btState = t;
 
-            } else {
+            } else if (sourceName === root.busySource) {
                 // the action process finished: the switch is done
                 root.busy = false;
                 root.busyFrom = "";
+                root.busySource = "";
+                root.refresh();
             }
             execSource.disconnectSource(sourceName);
         }
@@ -118,19 +125,26 @@ PlasmoidItem {
     }
 
     Timer {
-        id: refreshSoon
+        id: busyWatch
 
         interval: 1100
-        repeat: false
+        repeat: true
+        running: root.busy
+        // the switch can outlast any one-shot: real connects take 20s+,
+        // so the watch keeps ticking until the action process itself
+        // reports back, or the 20s cap fires. the poll timer keeps
+        // refreshing state meanwhile, so a moved state ends the wait early.
         onTriggered: {
-            // state moved while switching, or the flow capped: stand down
-            if (root.busy && (root.btState !== root.busyFrom
-                              || !root.busyFrom
-                              || Date.now() - root.busySince > 30000)) {
+            if (!root.busy)
+                return ;
+
+            if (root.btState !== root.busyFrom
+                || !root.busyFrom
+                || Date.now() - root.busySince > 20000) {
                 root.busy = false;
                 root.busyFrom = "";
+                root.busySource = "";
             }
-            root.refresh();
         }
     }
 
@@ -283,6 +297,9 @@ PlasmoidItem {
                                 Kirigami.Icon {
                                     source: pcTile.icon.name
                                     color: pcTile.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                    Behavior on color {
+                                        ColorAnimation { duration: Kirigami.Units.shortDuration }
+                                    }
                                     Layout.alignment: Qt.AlignHCenter
                                     Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                                     Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
@@ -292,6 +309,9 @@ PlasmoidItem {
                                     text: pcTile.text
                                     font.bold: pcTile.highlighted
                                     color: pcTile.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                    Behavior on color {
+                                        ColorAnimation { duration: Kirigami.Units.shortDuration }
+                                    }
                                     horizontalAlignment: Text.AlignHCenter
                                     elide: Text.ElideRight
                                     Layout.alignment: Qt.AlignHCenter
@@ -334,6 +354,9 @@ PlasmoidItem {
                                 Kirigami.Icon {
                                     source: phoneTile.icon.name
                                     color: phoneTile.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                    Behavior on color {
+                                        ColorAnimation { duration: Kirigami.Units.shortDuration }
+                                    }
                                     Layout.alignment: Qt.AlignHCenter
                                     Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                                     Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
@@ -343,6 +366,9 @@ PlasmoidItem {
                                     text: phoneTile.text
                                     font.bold: phoneTile.highlighted
                                     color: phoneTile.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                    Behavior on color {
+                                        ColorAnimation { duration: Kirigami.Units.shortDuration }
+                                    }
                                     horizontalAlignment: Text.AlignHCenter
                                     elide: Text.ElideRight
                                     Layout.alignment: Qt.AlignHCenter
@@ -385,6 +411,9 @@ PlasmoidItem {
                                 Kirigami.Icon {
                                     source: radioTile.icon.name
                                     color: radioTile.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                    Behavior on color {
+                                        ColorAnimation { duration: Kirigami.Units.shortDuration }
+                                    }
                                     Layout.alignment: Qt.AlignHCenter
                                     Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                                     Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
@@ -394,6 +423,9 @@ PlasmoidItem {
                                     text: radioTile.text
                                     font.bold: radioTile.highlighted
                                     color: radioTile.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                    Behavior on color {
+                                        ColorAnimation { duration: Kirigami.Units.shortDuration }
+                                    }
                                     horizontalAlignment: Text.AlignHCenter
                                     elide: Text.ElideRight
                                     Layout.alignment: Qt.AlignHCenter
@@ -410,7 +442,8 @@ PlasmoidItem {
                         id: offTile
 
                         text: "Off"
-                        icon.name: "bluetooth-disabled-symbolic"
+                        // same reason as stateIcon(): theme-chain-safe
+                        icon.name: "system-shutdown-symbolic"
                         display: PlasmaComponents.AbstractButton.TextUnderIcon
                         Layout.fillWidth: true
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
@@ -436,6 +469,9 @@ PlasmoidItem {
                                 Kirigami.Icon {
                                     source: offTile.icon.name
                                     color: offTile.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                    Behavior on color {
+                                        ColorAnimation { duration: Kirigami.Units.shortDuration }
+                                    }
                                     Layout.alignment: Qt.AlignHCenter
                                     Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                                     Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
@@ -445,6 +481,9 @@ PlasmoidItem {
                                     text: offTile.text
                                     font.bold: offTile.highlighted
                                     color: offTile.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                    Behavior on color {
+                                        ColorAnimation { duration: Kirigami.Units.shortDuration }
+                                    }
                                     horizontalAlignment: Text.AlignHCenter
                                     elide: Text.ElideRight
                                     Layout.alignment: Qt.AlignHCenter

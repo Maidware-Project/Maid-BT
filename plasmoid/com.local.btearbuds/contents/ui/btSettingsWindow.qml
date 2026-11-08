@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import org.kde.plasma.components as PlasmaComponents
 import org.kde.plasma.plasmoid
 
 // Maid BT Settings - the Maidware's own settings window.
@@ -22,6 +23,11 @@ Window {
     color: Kirigami.Theme.backgroundColor
 
     function open() {
+        // center on the window's own screen: without a position the
+        // compositor dropped it wherever, and this shell got dragged
+        // half off-screen once and stayed cut from then on
+        btWindow.x = Math.max(0, btWindow.screen.width - btWindow.width) / 2;
+        btWindow.y = Math.max(0, btWindow.screen.height - btWindow.height) / 2;
         visible = true;
         raise();
         requestActivate();
@@ -60,7 +66,7 @@ Window {
                 Repeater {
                     model: btWindow.entries
 
-                    QQC2.ItemDelegate {
+                    PlasmaComponents.ItemDelegate {
                         required property var modelData
                         required property int index
                         Layout.fillWidth: true
@@ -73,7 +79,7 @@ Window {
                                 Layout.preferredWidth: 20
                                 Layout.preferredHeight: 20
                             }
-                            QQC2.Label {
+                            PlasmaComponents.Label {
                                 text: modelData.label
                                 font.bold: btWindow.current === index
                                 elide: Text.ElideRight
@@ -147,7 +153,7 @@ Window {
                                 Kirigami.Icon {
                                     source: "bluetooth"
                                 }
-                                QQC2.Label {
+                                PlasmaComponents.Label {
                                     text: "<h2>Maid BT</h2>"
                                     onLinkActivated: function(link) {
                                         Qt.openUrlExternally(link);
@@ -155,7 +161,7 @@ Window {
                                 }
                             }
 
-                            QQC2.Label {
+                            PlasmaComponents.Label {
                                 text: "A Linux-only Bluetooth "
                                       + "earbuds switcher: reconnects, "
                                       + "switches audio, guards calls and "
@@ -166,15 +172,15 @@ Window {
                                 wrapMode: Text.WordWrap
                             }
 
-                            QQC2.Label {
-                                text: "Version 1.2.1"
+                            PlasmaComponents.Label {
+                                text: "Version 1.2.2"
                                 opacity: 0.6
                                 wrapMode: Text.WordWrap
                             }
 
                             Kirigami.Separator { Layout.fillWidth: true }
 
-                            QQC2.Label {
+                            PlasmaComponents.Label {
                                 text: "<b>Soundcore device control</b>"
                                       + "<p>The equalizer and noise "
                                       + "controls speak the Soundcore "
@@ -199,7 +205,7 @@ Window {
                                 }
                             }
 
-                            QQC2.Label {
+                            PlasmaComponents.Label {
                                 text: "<p>License: MIT (see LICENSE). "
                                       + "Website: <a href=\"https://maidware-project.github.io/\">"
                                       + "maidware-project.github.io</a> "
@@ -227,7 +233,7 @@ Window {
                         anchors.fill: parent
                         anchors.margins: Kirigami.Units.gridUnit
 
-                        QQC2.Label {
+                        PlasmaComponents.Label {
                             text: "This settings page failed to load."
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap

@@ -262,7 +262,10 @@ printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-p/stubs/pactl
 printf '#!/bin/bash\necho "0: hci0: Bluetooth"; echo "Soft blocked: no"; echo "Hard blocked: no"\n' > /tmp/maidbt-p/stubs/rfkill
 chmod +x /tmp/maidbt-p/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-p/.config/bluetooth-buds.conf
-state=$(PATH="/tmp/maidbt-p/stubs:$PATH" HOME=/tmp/maidbt-p bash "$PKGDIR/bin/bluetooth-toggle.sh" porcelain 2>/dev/null || true)
+# XDG_RUNTIME_DIR is isolated with the rest: without it the porcelain
+# state file lands in the real /run/user/<uid> - the test would read
+# the host's live state and overwrite it with the sandbox's "on"
+state=$(XDG_RUNTIME_DIR=/tmp/maidbt-p PATH="/tmp/maidbt-p/stubs:$PATH" HOME=/tmp/maidbt-p bash "$PKGDIR/bin/bluetooth-toggle.sh" porcelain 2>/dev/null || true)
 case "$state" in
   off|on|buds|phone) ok "porcelain -> $state" ;;
   *) fail "porcelain garbage (stub adapter, expected off|on|buds|phone): '$state'" ;;
@@ -290,6 +293,13 @@ state=$(XDG_RUNTIME_DIR=/tmp/maidbt-ph PATH="/tmp/maidbt-ph/stubs:$PATH" HOME=/t
 printf 'radio\n' > /tmp/maidbt-ph/bt-hands-mode
 state=$(XDG_RUNTIME_DIR=/tmp/maidbt-ph PATH="/tmp/maidbt-ph/stubs:$PATH" HOME=/tmp/maidbt-ph bash "$PKGDIR/bin/bluetooth-toggle.sh" porcelain 2>/dev/null || true)
 [ "$state" = "buds" ] || fail "radio-only state should stay buds (got '$state')"
+# new semantics: inside the phone hand-off window the state stays
+# "phone" even after the PC dropped the buds' link (the drop is the
+# point - the phone is about to claim them). stub says not connected now.
+sed -i 's/Connected: yes/Connected: no/' /tmp/maidbt-ph/stubs/bluetoothctl
+printf 'phone\n' > /tmp/maidbt-ph/bt-hands-mode
+state=$(XDG_RUNTIME_DIR=/tmp/maidbt-ph PATH="/tmp/maidbt-ph/stubs:$PATH" HOME=/tmp/maidbt-ph bash "$PKGDIR/bin/bluetooth-toggle.sh" porcelain 2>/dev/null || true)
+[ "$state" = "phone" ] || fail "phone hand-off window should stay phone after the PC lets go (got '$state')"
 rm -rf /tmp/maidbt-ph
 ok "porcelain distinguishes phone from PC"
 
@@ -298,6 +308,9 @@ echo "== porcelain steady with noisy adapter =="
 # device tree afterwards, takes SIGPIPE, and pipefail used to turn a match
 # into a failure: the applet then flickered between off, on and buds while
 # the earbuds stayed connected. the fake adapter is deliberately chatty.
+# porcelain also publishes a state file; isolating XDG_RUNTIME_DIR keeps
+# that to this sandbox, and each run drops it so the compute path is
+# what actually gets exercised (the cache must not mask real regressions).
 rm -rf /tmp/maidbt-noise && mkdir -p /tmp/maidbt-noise/stubs /tmp/maidbt-noise/.config
 cat > /tmp/maidbt-noise/stubs/bluetoothctl <<'EOF'
 #!/bin/bash
@@ -312,7 +325,8 @@ printf '#!/bin/bash\necho "0: hci0: Bluetooth"; echo "Soft blocked: no"; echo "H
 chmod +x /tmp/maidbt-noise/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-noise/.config/bluetooth-buds.conf
 for i in 1 2 3 4 5; do
-  state=$(PATH="/tmp/maidbt-noise/stubs:$PATH" HOME=/tmp/maidbt-noise bash "$PKGDIR/bin/bluetooth-toggle.sh" porcelain 2>/dev/null || true)
+  rm -f /tmp/maidbt-noise/bt-state
+  state=$(XDG_RUNTIME_DIR=/tmp/maidbt-noise PATH="/tmp/maidbt-noise/stubs:$PATH" HOME=/tmp/maidbt-noise bash "$PKGDIR/bin/bluetooth-toggle.sh" porcelain 2>/dev/null || true)
   [ "$state" = "buds" ] || fail "noisy adapter state should stay buds (got '$state' on run $i)"
 done
 rm -rf /tmp/maidbt-noise

@@ -32,6 +32,7 @@ command -v need >/dev/null 2>&1 || need() { command -v "$1" >/dev/null 2>&1 || {
 need bluetoothctl "bluez package"
 need pactl "pulseaudio-utils / libpulse package"
 RFKILL="$(command -v rfkill 2>/dev/null || { [ -x /usr/sbin/rfkill ] && echo /usr/sbin/rfkill; } || { [ -x /sbin/rfkill ] && echo /sbin/rfkill; } || echo rfkill)"
+STATE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-state"
 ACTION="${1:-toggle}"
 while [ "${ACTION#-}" != "$ACTION" ]; do ACTION="${ACTION#-}"; done
 
@@ -408,10 +409,13 @@ do_on() {
 }
 
 do_release() {
-  # release buds to the phone: park PC audio on fallback but KEEP the link up.
-  # Warm link = switch-back is an instant PipeWire flip (no BT paging,
-  # no profile bring-up) and no transport teardown (anti-crash).
-  # Daemon won't re-grab for HANDS_SECS (hands-off).
+  # release buds to the phone: park PC audio on fallback, open a
+  # hands-off window, then LET GO - PC drops the link so the buds are
+  # free and your phone's Bluetooth claims them on its own (dual
+  # connection buds rejoin the phone instantly; single-link buds page
+  # it the same way). A warm PC link was tried before: the buds kept
+  # the PC as their primary source and the phone frequently could not
+  # take over ('on' reconnects in a couple of seconds either way).
   echo "Parking audio on fallback sink ($FALLBACK_SINK)..."
   media_cycle_start
   park_on_fallback
@@ -427,7 +431,20 @@ do_release() {
   fi
   printf '%s\n' phone > "$HANDS_MODE" 2>/dev/null || true
   if is_buds_connected; then
-    echo "Link stays warm for instant switch-back."
+    # small grace so the parked-audio switch settles, then free the
+    # buds. `on` clears the hands window first, so a cancel in the
+    # gap keeps the link instead.
+    echo "PC lets go of the buds shortly so your phone can take them..."
+    sleep "${RELEASE_DROP_SECS:-3}"
+    if [ -f "$HANDS" ]; then
+      if bluetoothctl disconnect "$BUDS_MAC" >/dev/null 2>&1; then
+        echo "Buds free for the phone ('$0 on' brings them back fast)."
+      else
+        echo "Link already gone (buds left on their own)."
+      fi
+    else
+      echo "Switched back to PC meanwhile - keeping the link."
+    fi
   else
     echo "Buds not on PC right now - PC grabs when free and hands-off lapses."
   fi
@@ -436,8 +453,8 @@ do_release() {
   else
     echo "Released (PC stays hands-off $((HANDS_SECS/60)) min; '$0 on' cancels)."
   fi
-  maid_audit maid-bt "action=release parked on fallback, link warm"
-  notify "Earbuds released" "Audio on fallback sink. Use the phone - link stays warm." normal bluetooth-disabled
+  maid_audit maid-bt "action=release parked on fallback, PC dropped link, hands-off phone mode"
+  notify "Earbuds to phone" "PC let go - your phone can take them. '$0 on' or the tile brings them back." normal bluetooth
   notify_phone "Earbuds switched to phone"
   mark_manual
 }
@@ -488,7 +505,7 @@ do_off() {
   if is_blocked; then
     echo "Bluetooth OFF (buds disconnected, audio on fallback, radio blocked)."
     maid_audit maid-bt "action=off parked, radio blocked"
-    notify "Bluetooth off" "Earbuds disconnected, audio back on fallback sink." normal bluetooth-disabled
+    notify "Bluetooth off" "Earbuds disconnected, audio back on fallback sink." normal bluetooth
     notify_phone "PC Bluetooth off"
     systemctl --user stop buds-fallback.service 2>/dev/null || true
     mark_manual
@@ -521,14 +538,43 @@ case "$ACTION" in
     ;;
   porcelain)
     # machine-readable state for the tray widget: off|on|buds|phone
-    if is_blocked || ! is_powered; then echo "off";
-    elif is_buds_connected; then
-      if hands_active && [ "$(cat "$HANDS_MODE" 2>/dev/null || echo phone)" = "phone" ]; then
-        echo "phone"
-      else
-        echo "buds"
+    # fast path first: buds-fallback.sh rewrites this file every tick,
+    # so a fresh file costs a cat instead of poking rfkill/bluez/pactl
+    # from the tray twice a second all day (that churn is what pushed
+    # plasmashell's audio monitor into repeating journal errors).
+    # the cache is invalid when it predates the hands-off marker files
+    # (release/radio flip phone<->buds<->on semantics mid-cycle) or
+    # when it has aged out (watcher dead: answer straight, no lying).
+    st_age=999999
+    cached=""
+    if [ -f "$STATE" ]; then
+      st_age=$(( $(date +%s) - $(stat -c %Y "$STATE" 2>/dev/null || echo 0) ))
+      cached=$(head -n 1 "$STATE" 2>/dev/null)
+      if [ -f "$HANDS" ] && [ "$(stat -c %Y "$HANDS")" -ge "$(stat -c %Y "$STATE" 2>/dev/null || echo 0)" ]; then
+        st_age=999999
+      elif [ -f "$HANDS_MODE" ] && [ "$(stat -c %Y "$HANDS_MODE")" -ge "$(stat -c %Y "$STATE" 2>/dev/null || echo 0)" ]; then
+        st_age=999999
       fi
-    else echo "on"; fi
+    fi
+    if [ "$st_age" -lt 3 ] && [ "$st_age" -ge 0 ]; then
+      case "$cached" in
+        off|on|buds|phone) echo "$cached"; exit 0 ;;
+      esac
+    fi
+    st=""
+    if is_blocked || ! is_powered; then st="off";
+    elif hands_active && [ "$(cat "$HANDS_MODE" 2>/dev/null || echo phone)" = "phone" ]; then
+      # the hand-off window IS "phone" while it lasts (the PC let go;
+      # buds are the phone's business until `on` or the window lapses)
+      st="phone"
+    elif is_buds_connected; then
+      st="buds"
+    else st="on"; fi
+    # leave the fresh state behind for the next asker (and the tray)
+    [ -n "$st" ] && { printf '%s\n' "$st" > "$STATE".tmp.$$ 2>/dev/null \
+        && mv -f "$STATE".tmp.$$ "$STATE" 2>/dev/null \
+        || rm -f "$STATE".tmp.$$ 2>/dev/null; }
+    [ -n "$st" ] && echo "$st"
     ;;
   *) echo "usage: $0 [on|off|release|radio|toggle|status|porcelain]"; exit 2 ;;
 esac

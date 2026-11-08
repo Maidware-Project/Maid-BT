@@ -1,6 +1,43 @@
 # changelog
 
-## Maid BT v1.2.1 (this release)
+## Maid BT v1.2.2 (this release)
+
+- the watcher used to wake every single second all day: bluetoothctl
+  twice, pactl two to three times, qdbus6 for the lockscreen - a dozen
+  spawns per second, close to a million a day. steady stretches now run
+  on a slower cadence (heavy sweep every 3rd tick, half speed while the
+  buds are quietly playing), the lockscreen probe and pactl sweeps ride
+  the same gates, and duplicate re-probes inside one tick are gone.
+  same reactions, a fraction of the process churn.
+- the tray applet used to ask the whole bluetooth stack every 2 seconds
+  on top of that (rfkill + bluetoothctl twice). the watcher now
+  publishes its readout to a runtime state file every tick, and the
+  tray reads that instead when it is fresh - a state question costs a
+  file read, not a stack poke. if the watcher is down the tray answers
+  itself again, no lying: a stale file is ignored.
+- applet busy state fixed: a background state poll finishing mid-switch
+  used to unlock all four tiles too early (looked unresponsive, allowed
+  double taps), and the stand-down timer fired only once, so a slow
+  connect could leave the tiles stuck on one highlight. the poll can no
+  longer clear the busy flag, the watch now re-arms until the switch
+  really reports back (20s cap), and tile icon/label colors now
+  animate to the new tint instead of snapping late.
+- switching to the phone: release used to keep the PC-buds link warm
+  "for instant switch-back", but the buds then often refused to hand
+  audio to the PC's phone connection. release now parks the PC audio,
+  gives it a few seconds, and lets go of the link - the buds' Bluetooth
+  then walks over to the phone on its own. `on` (or the This PC tile)
+  still brings them back in a couple of seconds. the tray reads
+  "phone" for the whole hand-off window, the watcher stays hands-off
+  (and never powers the radio down mid-hand-off), and the duplicate
+  "earbuds disconnected" notices during a release are gone.
+- the settings window and its pages follow your system theme now
+  (plasma widgets instead of generic ones), open centered on the
+  screen, and the Off tile/power icons use names that exist in every
+  theme chain (papirus-dark inherits breeze, which has no
+  bluetooth-disabled icon - it used to draw a broken fallback).
+
+## Maid BT v1.2.1
 
 - the earbuds state page used to sit for the whole 8s window and come
   back with bluetooth talk (br-connection-refused) when the buds were

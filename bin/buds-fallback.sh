@@ -67,7 +67,9 @@ POWER_OFF_ON_LOST=0   # 0 = auto mode: radio stays on, buds reconnect on case-op
 BLOCK_ON_EXTERNAL_OFF=0 # 1 = also rfkill block when KDE tray powers off (sticky off)
 MARKER="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-toggle-manual"
 HANDS="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-hands-off"
+HANDS_MODE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-hands-mode"
 PREV_SINK="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-prev-sink"
+STATE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-state"
 HANDS_SECS=1200  # release-to-phone window; explicit `on` clears it early
 
 # release-to-phone active? marker holds "epoch [seconds]" (default HANDS_SECS)
@@ -79,6 +81,40 @@ hands_off() {
   [ -n "${mtime:-}" ] || return 1
   dur=${dur:-$HANDS_SECS}
   [ $((now_s - mtime)) -lt "$dur" ]
+}
+
+hands_is_phone() {
+  # inside the release-to-phone hand-off window: notifications that
+  # merely echo what the release already said stay silent here
+  [ -f "$HANDS" ] && [ "$(cat "$HANDS_MODE" 2>/dev/null)" = "phone" ]
+}
+
+write_state() {
+  # publish the tray readout (off|on|buds|phone) every tick, same
+  # contract as bluetooth-toggle.sh porcelain. the tray's porcelain
+  # call serves this file when it is fresh instead of querying the
+  # stack itself, so the desktop never has to be poked twice a second.
+  # ALWAYS rewrite (not only on change): the mtime itself is the
+  # watcher-liveness signal the porcelain fast path trusts. the
+  # phone hand-off window reads "phone" while it lasts (the PC let
+  # go of the buds; they are the phone's business until `on` or the
+  # window lapses). radio-only reads "buds" while still connected,
+  # "on" when only the radio runs.
+  local st
+  if [ "${powered:-0}" = "0" ]; then
+    st="off"
+  elif hands_off && [ "$(cat "$HANDS_MODE" 2>/dev/null || echo phone)" = "phone" ]; then
+    st="phone"
+  elif [ "${connected:-0}" = "1" ]; then
+    st="buds"
+  else
+    st="on"
+  fi
+  # atomic publish: a rename never leaves half a file for a concurrent
+  # porcelain reader (truncate-in-place could, for a few microseconds)
+  printf '%s\n' "$st" > "$STATE".tmp.$$ 2>/dev/null \
+    && mv -f "$STATE".tmp.$$ "$STATE" 2>/dev/null \
+    || rm -f "$STATE".tmp.$$ 2>/dev/null
 }
 
 ping_phone() {
@@ -493,6 +529,9 @@ try_connect_once() {
 
 a2dp_tick=0
 vol_tick=0
+tick=0
+HEAVY_EVERY=3   # seconds between pactl sweeps (any-headset + ghost + lock)
+last_heavy="$(date +%s)"
 log "start (buds=$BUDS_MAC fallback=$FALLBACK_SINK grace=$GRACE power_off=$POWER_OFF_ON_LOST)"
 
 while true; do
@@ -500,6 +539,14 @@ while true; do
   now=$(date +%s)
   is_powered && powered=1
   is_connected && connected=1
+  # publish the tray readout every tick (cheap: one head, maybe one write)
+  write_state
+  tick=$((tick + 1))
+  last_heavy_delta=$(( now - last_heavy ))
+  [ "$last_heavy_delta" -lt 0 ] && last_heavy_delta=0
+  heavy=0
+  [ $((tick % HEAVY_EVERY)) = 1 ] && heavy=1
+  [ "$heavy" = "1" ] && last_heavy=$now
 
   # A2DP watchdog: if a transport died while we were not looking, PipeWire
   # leaves the card on the "off" profile (buds silent until disturbed).
@@ -508,7 +555,7 @@ while true; do
   if [ "$connected" = "1" ]; then
     a2dp_tick=$(( (a2dp_tick + 1) % 12 ))
     [ "$a2dp_tick" = "1" ] && ensure_a2dp
-    # remember the buds' level about once a minute while they play:
+    # remember the buds' level every couple of minutes while they play:
     # unplug, dock, lock or reboot loses the link, not the volume you had
     vol_tick=$(( (vol_tick + 1) % 60 ))
     [ "$vol_tick" = "1" ] && remember_buds_volume
@@ -522,33 +569,46 @@ while true; do
   fi
 
   # --- any-headset watch: new bluez sink appears -> route audio to it ---
-  cur_bluez=$(current_bluez_sinks | sort | tr '\n' ' ')
-  if [ -z "$KNOWN_INIT" ]; then
-    KNOWN_BLUEZ="$cur_bluez"   # silent baseline, no announce for steady state
-    KNOWN_INIT=1
-  else
-    for s in $cur_bluez; do
-      case " $KNOWN_BLUEZ " in
-        *" $s "*) : ;;
-        *) on_new_bluez_sink "$s" ;;
-      esac
-    done
-    KNOWN_BLUEZ="$cur_bluez"
+  # (runs on the HEAVY cadence: every 3rd tick - about 3s apart while
+  # hunting at 1s ticks, about 6s apart while the buds hold the audio)
+  if [ "$heavy" = "1" ]; then
+    cur_bluez=$(current_bluez_sinks | sort | tr '\n' ' ')
+    if [ -z "$KNOWN_INIT" ]; then
+      KNOWN_BLUEZ="$cur_bluez"   # silent baseline, no announce for steady state
+      KNOWN_INIT=1
+    else
+      for s in $cur_bluez; do
+        case " $KNOWN_BLUEZ " in
+          *" $s "*) : ;;
+          *) on_new_bluez_sink "$s" ;;
+        esac
+      done
+      KNOWN_BLUEZ="$cur_bluez"
+    fi
   fi
 
   # --- default sink vanished (e.g. headset yanked) -> park on fallback ---
-  def_sink=$(default_sink_name)
+  def_sink=""
+  def_live=0
+  if [ "$heavy" = "1" ]; then
+    def_sink=$(default_sink_name)
+    if [ -n "$def_sink" ]; then
+      if echo "$(all_sink_names)" | grep -qxF "$def_sink"; then
+        def_live=1
+      fi
+    fi
+  fi
   if [ -n "$def_sink" ]; then
-    if echo "$(all_sink_names)" | grep -qxF "$def_sink"; then
+    if [ "$def_live" = "1" ]; then
       ghost_for=0
       GHOST_PARKED=0
     else
-      ghost_for=$((ghost_for + POLL))
+      ghost_for=$((ghost_for + last_heavy_delta))
       if [ "$ghost_for" -ge "$GHOST_GRACE" ] && [ "$GHOST_PARKED" = "0" ]; then
         log "default sink $def_sink gone -> parking on fallback"
         maid_audit maid-bt "vanished sink parked on fallback"
         park_on_fallback
-        notify "Audio device gone" "Output parked on fallback." normal bluetooth-disabled
+        notify "Audio device gone" "Output parked on fallback." normal bluetooth
         GHOST_PARKED=1
       fi
     fi
@@ -581,7 +641,7 @@ while true; do
       fi
     fi
     if ! manual_recent; then
-      notify "Bluetooth off" "Bluetooth is off - audio back on fallback sink." normal bluetooth-disabled
+      notify "Bluetooth off" "Bluetooth is off - audio back on fallback sink." normal bluetooth
       ping_phone "PC Bluetooth off"
     fi
     did_fallback=1
@@ -590,8 +650,9 @@ while true; do
 
   # screen lock: park PC audio on fallback silently (warm link, no teardown).
   # unlock: route back to buds ONLY if they are actively connected.
+  # probe on the HEAVY cadence (qdbus6 spawn is otherwise 86k/day)
   locked=0
-  is_locked && locked=1
+  [ "$heavy" = "1" ] && is_locked && locked=1
   if [ -z "$prev_locked" ]; then
     prev_locked=$locked
   elif [ "$locked" = "1" ] && [ "$prev_locked" = "0" ]; then
@@ -661,11 +722,12 @@ while true; do
       # a healthy non-buds headset owns the audio: pause the buds-loss
       # timer so fallback never steals it (generic path routed it).
       # your own buds still win on appearance via the buds path above.
-      def_now=$(default_sink_name)
-      case "$def_now" in
+      # reuses def_sink/def_live from the HEAVY sweep (no extra pactl spawn
+      # twice a second while buds are away; the sweep is fresh <3s ago)
+      case "$def_sink" in
         *bluez*)
-          mac_now=$(echo "$def_now" | grep -oE '[0-9A-Fa-f]{2}(_[0-9A-Fa-f]{2}){5}' | head -n 1 | tr '_' ':')
-          if [ "$mac_now" != "$BUDS_MAC" ] && echo "$(all_sink_names)" | grep -qxF "$def_now"; then
+          mac_now=$(echo "$def_sink" | grep -oE '[0-9A-Fa-f]{2}(_[0-9A-Fa-f]{2}){5}' | head -n 1 | tr '_' ':')
+          if [ "$mac_now" != "$BUDS_MAC" ] && [ "$def_live" = "1" ]; then
             [ "$lost_for" -gt 0 ] && log "generic headset active, buds timer paused"
             lost_for=0
           else
@@ -719,7 +781,7 @@ while true; do
             buds_docked=1
             log "buds silent through $connect_fails connects - presumed in case, standing down"
             maid_audit maid-bt "buds presumed docked in case, standing down from retries"
-            notify "Earbuds in case" "Silent since you docked them - standing down. Take them out to reconnect." normal bluetooth
+            hands_is_phone || notify "Earbuds in case" "Silent since you docked them - standing down. Take them out to reconnect." normal bluetooth
           fi
           try_audio_sweep || true
         fi
@@ -733,7 +795,7 @@ while true; do
         media_cycle_start
         park_on_fallback
         media_cycle_end
-        if [ "$POWER_OFF_ON_LOST" = "1" ]; then
+        if [ "$POWER_OFF_ON_LOST" = "1" ] && ! hands_is_phone; then
           if other_device_connected; then
             log "other BT device connected, leaving radio on"
           else
@@ -742,13 +804,18 @@ while true; do
             # power-off transition notify happens next loop; send combined one now
             # if manual didn't just handle it (avoids double when manual off ran)
             if ! manual_recent; then
-              notify "Bluetooth off" "Earbuds gone - audio back on fallback sink." normal bluetooth-disabled
+              notify "Bluetooth off" "Earbuds gone - audio back on fallback sink." normal bluetooth
               ping_phone "Earbuds disconnected from PC"
             fi
           fi
+        elif hands_is_phone; then
+          # deliberate release-to-phone: the PC dropped the buds on
+          # purpose and the phone is about to claim them. no power
+          # off, no duplicate notices - release already told the user.
+          log "buds released to the phone - radio stays warm, no regrab"
         else
           if ! manual_recent; then
-            notify "Earbuds disconnected" "Audio back on fallback sink." normal bluetooth-disabled
+            notify "Earbuds disconnected" "Audio back on fallback sink." normal bluetooth
             ping_phone "Earbuds disconnected from PC"
           fi
         fi
@@ -771,7 +838,12 @@ while true; do
   fi
 
   prev_powered=$powered
-  # re-read connected in case retry just connected late
-  is_connected && prev_connected=1 || prev_connected=0
-  sleep "$POLL"
+  # prev_connected: the top of the loop and the retry path already
+  # re-checked is_connected; the extra bluetoothctl here doubled every
+  # single tick for information the next tick sees anyway
+  prev_connected=$connected
+  # cadence: fully awake while hunting/recovering; half asleep when the
+  # buds already hold the audio - same feel, half the spawns while they
+  # play (the biggest stretch of the day)
+  if [ "$connected" = "1" ] && [ "$powered" = "1" ]; then sleep 2; else sleep "$POLL"; fi
 done
