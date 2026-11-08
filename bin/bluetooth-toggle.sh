@@ -33,8 +33,20 @@ need bluetoothctl "bluez package"
 need pactl "pulseaudio-utils / libpulse package"
 RFKILL="$(command -v rfkill 2>/dev/null || { [ -x /usr/sbin/rfkill ] && echo /usr/sbin/rfkill; } || { [ -x /sbin/rfkill ] && echo /sbin/rfkill; } || echo rfkill)"
 STATE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-state"
+session_doctor() {
+  echo "Maid BT (bluetooth-toggle) — session/compositor (best-effort)"
+  echo "  XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-n/a}  XDG_SESSION_DESKTOP=${XDG_SESSION_DESKTOP:-n/a}"
+  echo "  WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}  DISPLAY=${DISPLAY:-}"
+  case "${XDG_CURRENT_DESKTOP:-} ${XDG_SESSION_DESKTOP:-}" in
+    *[Pp]lasma*|*[Kk][Dd][Ee]*) echo "  support: KDE Plasma supported (applet + integrations available)." ;;
+    *[Hh]yprland*|*[Ss]way*|*[Ii]3*) echo "  support: core CLI (on/off/release/radio/status/porcelain) works; Plasma applet is KDE-only (partial/experimental). Bind keys in your compositor config." ;;
+    *) echo "  support: core CLI works on Linux with bluez/pactl; desktop integration varies." ;;
+  esac
+  echo "  tips: bluetooth-toggle.sh status | porcelain; see contrib/compositors/ for Hyprland/Sway/i3 snippets."
+}
+
 ACTION="${1:-toggle}"
-case "$ACTION" in --doctor|--session) session_doctor; exit 0 ;; esac
+case "$ACTION" in --doctor|--session|doctor|session) session_doctor; exit 0 ;; esac
 while [ "${ACTION#-}" != "$ACTION" ]; do ACTION="${ACTION#-}"; done
 
 BUDS_MAC="AA:BB:CC:DD:EE:FF"
@@ -121,17 +133,6 @@ notify() {
   fi
 }
 
-session_doctor() {
-  echo "Maid BT (bluetooth-toggle) — session/compositor (best-effort)"
-  echo "  XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-n/a}  XDG_SESSION_DESKTOP=${XDG_SESSION_DESKTOP:-n/a}"
-  echo "  WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}  DISPLAY=${DISPLAY:-}"
-  case "${XDG_CURRENT_DESKTOP:-} ${XDG_SESSION_DESKTOP:-}" in
-    *[Pp]lasma*|*[Kk][Dd][Ee]*) echo "  support: KDE Plasma supported (applet + integrations available)." ;;
-    *[Hh]yprland*|*[Ss]way*|*[Ii]3*) echo "  support: core CLI (on/off/release/radio/status/porcelain) works; Plasma applet is KDE-only (partial/experimental). Bind keys in your compositor config." ;;
-    *) echo "  support: core CLI works on Linux with bluez/pactl; desktop integration varies." ;;
-  esac
-  echo "  tips: bluetooth-toggle.sh status | porcelain; see contrib/compositors/ for Hyprland/Sway/i3 snippets."
-}
 
 # collect output first: with pipefail, `grep -q` exits on the first match,
 # the producer gets SIGPIPE, and the pipeline reports failure even though
