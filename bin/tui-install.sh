@@ -407,6 +407,7 @@ n64_boot() {
 # ------------------------------------------------------ main menu
 menu() {
   head "main menu"
+  printf '  %stype a number and press Enter · %sq%s cancels%s\n\n' "$DIM" "$B" "$DIM" "$R"
   printf '  %s1%s) %sinstall / update%s  programs + config + services\n' "$B" "$R" "$B" "$R"
   printf '  %s2%s) %sconfig only%s       re-pick earbuds + fallback sink\n' "$B" "$R" "$B" "$R"
   printf '  %s3%s) %sdoctor%s           what does this machine say?\n' "$B" "$R" "$B" "$R"
