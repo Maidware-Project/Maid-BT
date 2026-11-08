@@ -2,6 +2,19 @@
 
 ## unreleased
 
+- **silent install**: a piped run (`bash <(curl ...)`) never touches sudo and
+  never asks: packages are opt-in (`--packages` forces, tty runs ask once,
+  piped runs skip with a pointer), and every optional question (phone
+  integration, watcher autostart, warm-link, max-quality, a2dp-only) only
+  fires in a real interactive run - piped runs print their one "off (+ how
+  to enable)" line instead. output is quiet by default: one `installed N
+  files -> dir` line per destination instead of a per-file dump; `--verbose`
+  brings the old full list back.
+- `tests/demo.sh`: preview the installer the way a fresh user sees it, in a
+  throw-away home with shims for sudo, package managers, systemctl, bluez
+  and pulse. `bash tests/demo.sh` prints the piped experience;
+  `bash tests/demo.sh --window` opens the interactive TUI in your default
+  terminal (ghostty/konsole/kitty/... auto-detected).
 - fixed: the menu crashed the shell on first draw (`$1: unbound
   variable` under `set -u` in rule()/head(), and again in the
   keep-existing-MAC path). suite now pty-runs the TUI so this class of

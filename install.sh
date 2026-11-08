@@ -2,9 +2,12 @@
 # Universal installer: Arch (pacman), Debian/Ubuntu (apt), Fedora (dnf),
 # openSUSE (zypper). Copies files (no symlinks - survives folder moves).
 # Usage: ./install.sh [--check] [--no-packages] [--uninstall [--purge]]
-#          [--prefix=DIR] [--no-config]
+#          [--prefix=DIR] [--no-config] [--packages] [--verbose]
 # --prefix installs program files elsewhere (packaging); user config and
 # services still target $HOME unless --no-config skips them entirely.
+# --packages: install distro packages without asking. --verbose: restore
+# the per-file "installed ..." list; without it the install is quiet
+# (one summary line per destination - fits the piped curl install).
 set -u
 PKGDIR="$(cd "$(dirname "$0")" && pwd)" 2>/dev/null || PKGDIR=""
 if [ ! -f "$PKGDIR/install.sh" ]; then
@@ -22,9 +25,14 @@ if [ ! -f "$PKGDIR/install.sh" ]; then
   tar -xzf "$FETCH_TMP/maid-bt.tgz" -C "$FETCH_TMP" || exit 1
   PKGDIR="$(find "$FETCH_TMP" -mindepth 1 -maxdepth 1 -type d -name 'Maid-BT-*' | head -n 1)"
   [ -f "$PKGDIR/install.sh" ] || { echo "downloaded tree looks wrong" >&2; exit 1; }
+  # the script stream came through a pipe: stdin is still the user's
+  # tty, so never trust [ -t 0 ] alone here - stay silent by default
+  PIPED=1
 fi
 BACKUP_TS="$(date +%Y%m%d-%H%M%S)"
 CHECK=0; NO_PKGS=0; UNINST=0; PURGE=0; NOCONFIG=0; PREFIX=""; TUI=0
+PKGS=0; VERBOSE=0; PIPED=0
+declare -A STATS=()          # quiet-mode: install counts by destination
 for a in "$@"; do
   case "$a" in
     --check) CHECK=1 ;;
@@ -33,6 +41,8 @@ for a in "$@"; do
     --purge) PURGE=1 ;;
     --no-config) NOCONFIG=1 ;;
     --tui) TUI=1 ;;
+    --packages) PKGS=1 ;;
+    --verbose) VERBOSE=1 ;;
     --prefix=*) PREFIX="${a#--prefix=}" ;;
     *) echo "unknown option: $a (see header)" >&2; exit 2 ;;
   esac
@@ -81,7 +91,7 @@ if [ "$UNINST" = "1" ]; then
     rm -f "$HOME"/.config/bluetooth-buds.conf "$HOME"/.config/bluetooth-buds.conf.example "$HOME"/.config/bt-intent.token
     rm -rf "$HOME"/.config/maid-watcher
     echo "==> uninstalled, all settings removed (--purge)"
-  elif [ -t 0 ]; then
+  elif [ "$PIPED" = "0" ] && [ -t 0 ]; then
     printf 'Remove settings too (earbuds conf, phone token, watcher config)? [y/N]: '
     read -r _ans
     case "$_ans" in [Yy]*)
@@ -150,10 +160,12 @@ install_pkgs() {
 }
 
 PM=$(detect_pm)
-if [ "$CHECK" = "1" ]; then
-  say "package manager: $PM (check only, nothing installed)"
-elif [ "$NO_PKGS" = "0" ]; then
-  case "$PM" in
+
+do_packages() {
+  # one place for every distro package call - callers gate it so sudo
+  # is never hit from a piped run without the user asking for it
+  local pm="$1"
+  case "$pm" in
     pacman) REQ=(bluez bluez-utils util-linux libnotify libpulse python) ;;
     apt) REQ=(bluez bluetooth rfkill libnotify-bin pulseaudio-utils python3) ;;
     dnf) REQ=(bluez rfkill libnotify pulseaudio-utils python3) ;;
@@ -162,34 +174,49 @@ elif [ "$NO_PKGS" = "0" ]; then
   esac
   if [ "${#REQ[@]}" -gt 0 ]; then
     say "installing: ${REQ[*]}"
-    install_pkgs "$PM" "${REQ[@]}" || warn "package install had errors - continuing (see README requirements)"
+    install_pkgs "$pm" "${REQ[@]}" || warn "package install had errors - continuing (see README requirements)"
   fi
   # Maid Watcher (optional component) needs python dbus/gi bindings.
-  case "$PM" in
+  case "$pm" in
     pacman) WATCHREQ=(python-dbus python-gobject) ;;
     apt) WATCHREQ=(python3-dbus python3-gi) ;;
     dnf) WATCHREQ=(python3-dbus python3-gobject) ;;
     zypper) WATCHREQ=(python3-dbus python3-gobject) ;;
     *) WATCHREQ=() ;;
   esac
-  if [ "${#WATCHREQ[@]}" -gt 0 ] && [ "$CHECK" = "0" ] && [ "$NO_PKGS" = "0" ]; then
+  if [ "${#WATCHREQ[@]}" -gt 0 ]; then
     say "trying optional (Maid Watcher): ${WATCHREQ[*]}"
-    install_pkgs "$PM" "${WATCHREQ[@]}" >/dev/null 2>&1 || say "optional Maid Watcher deps skipped"
+    install_pkgs "$pm" "${WATCHREQ[@]}" >/dev/null 2>&1 || say "optional Maid Watcher deps skipped"
   fi
   # kdeconnect is optional (phone pings only): try it, tolerate absence.
-  case "$PM" in
-    pacman) OPT=(kdeconnect) ;;
-    apt) OPT=(kdeconnect) ;;
-    dnf) OPT=(kdeconnect) ;;
+  case "$pm" in
+    pacman|apt|dnf) OPT=(kdeconnect) ;;
     zypper) OPT=(kdeconnect-kde) ;;
     *) OPT=() ;;
   esac
-  if [ "${#OPT[@]}" -gt 0 ] && [ "$CHECK" = "0" ] && [ "$NO_PKGS" = "0" ]; then
+  if [ "${#OPT[@]}" -gt 0 ]; then
     say "trying optional (phone pings): ${OPT[*]}"
-    install_pkgs "$PM" "${OPT[@]}" >/dev/null 2>&1 || say "optional kdeconnect skipped"
+    install_pkgs "$pm" "${OPT[@]}" >/dev/null 2>&1 || say "optional kdeconnect skipped"
   fi
-else
+}
+
+if [ "$CHECK" = "1" ]; then
+  say "package manager: $PM (check only, nothing installed)"
+elif [ "$NO_PKGS" = "1" ]; then
   say "skipping packages (--no-packages)"
+elif [ "$PKGS" = "1" ]; then
+  do_packages "$PM"
+elif [ "$PIPED" = "1" ]; then
+  say "packages: not touching sudo in a piped run - install them anytime with: bash install.sh --packages"
+elif [ -t 0 ]; then
+  printf 'install the packages Maid BT needs (discovered via %s)? [y/N]: ' "$PM"
+  read -r _ans
+  case "${_ans:-n}" in
+    [Yy]*) do_packages "$PM" ;;
+    *) say "packages skipped now - install later with --packages (pass --no-packages to silence this ask)" ;;
+  esac
+else
+  say "packages skipped (non-interactive; --packages forces them)"
 fi
 
 copy_one() {
@@ -221,7 +248,13 @@ copy_one() {
   fi
   cat "$tmp" > "$dest"
   rm -f "$tmp"
-  echo "installed $dest"
+  # quiet mode counts instead of echoing every file; --verbose prints
+  if [ "$VERBOSE" = "1" ]; then
+    echo "installed $dest"
+  else
+    local qd; qd="$(dirname "$dest")"
+    STATS[$qd]=$(( ${STATS[$qd]:-0} + 1 ))
+  fi
 }
 
 # rewrite mode: 1 = user home fixup, 2 = system bare names
@@ -292,13 +325,20 @@ if [ "$NOCONFIG" = "0" ]; then
   copy_one "$PKGDIR/bluetooth-buds.conf.example" "$HOME/.config/bluetooth-buds.conf.example"
 fi
 
+# ---- quiet-mode summary: one line per destination -------------------
+if [ "$CHECK" = "0" ] && [ "$VERBOSE" = "0" ]; then
+  for qd in $(printf '%s\n' "${!STATS[@]}" | sort); do
+    say "installed ${STATS[$qd]} files -> ${qd/#$HOME/~}"
+  done
+fi
+
 # ---- per-machine earbuds config (interactive, skippable) ----
 CONF="$HOME/.config/bluetooth-buds.conf"
 if [ "$CHECK" = "1" ]; then
   echo "CONFIG $CONF (interactive prompt on real run)"
 elif [ -f "$CONF" ]; then
   say "$CONF exists - kept"
-elif [ "$NOCONFIG" = "1" ] || [ ! -t 0 ]; then
+elif [ "$NOCONFIG" = "1" ] || [ "$PIPED" = "1" ] || [ ! -t 0 ]; then
   say "non-interactive - skipped $CONF (copy the .example later)"
 else
   say "paired devices:"; bluetoothctl devices 2>/dev/null || true
@@ -367,12 +407,10 @@ fi
 # phone integration stays OFF unless asked: it opens a LAN port, so it is
 # opt-in, never default.
 PHONE_ON=0
-if [ "$SKIP_SERVICES" != "1" ] && [ -t 0 ]; then
+if [ "$SKIP_SERVICES" != "1" ] && [ "$PIPED" = "0" ] && [ -t 0 ]; then
   printf 'Enable phone integration (bt-intent.service, LAN port 8899)? [y/N]: '
   read -r _ans
   case "$_ans" in [Yy]*) PHONE_ON=1 ;; esac
-else
-  say "phone integration skipped (non-interactive; enable later, see phone/)"
 fi
 if [ "$PHONE_ON" = "1" ]; then
   systemctl --user enable --now bt-intent.service 2>/dev/null \
@@ -383,12 +421,10 @@ fi
 # Maid Watcher autostart is opt-in: it overlaps buds-fallback (reconnects +
 # A2DP enforcement). Safe to combine, but ask first.
 WATCH_ON=0
-if [ -t 0 ]; then
+if [ "$PIPED" = "0" ] && [ -t 0 ]; then
   printf 'Enable Maid Watcher autostart (calls, battery, 3-device priority)? [y/N]: '
   read -r _wans
   case "$_wans" in [Yy]*) WATCH_ON=1 ;; esac
-else
-  say "Maid Watcher autostart skipped (non-interactive; copy watcher/maid-watcher.desktop to ~/.config/autostart/ to enable)"
 fi
 if [ "$WATCH_ON" = "1" ]; then
   if [ "$SKIP_SERVICES" != "1" ]; then
@@ -411,12 +447,10 @@ fi
 # starts instantly instead of losing ~1s after silence. Costs some earbud
 # battery. Opt-in, off by default.
 WARM_ON=0
-if [ -t 0 ]; then
+if [ "$PIPED" = "0" ] && [ -t 0 ]; then
   printf 'Keep BT audio warm (no suspend delay, more earbud drain)? [y/N]: '
   read -r _wans2
   case "$_wans2" in [Yy]*) WARM_ON=1 ;; esac
-else
-  say "warm-link audio skipped (non-interactive; copy wireplumber/51-bt-no-suspend.conf to ~/.config/wireplumber/wireplumber.conf.d/ to enable, then restart wireplumber)"
 fi
 if [ "$WARM_ON" = "1" ]; then
   mkdir -p "$HOME/.config/wireplumber/wireplumber.conf.d"
@@ -424,19 +458,17 @@ if [ "$WARM_ON" = "1" ]; then
     "$HOME/.config/wireplumber/wireplumber.conf.d/51-bt-no-suspend.conf"
   say "warm-link on - restart wireplumber to apply: systemctl --user restart wireplumber"
 else
-  say "warm-link audio off"
+  say "warm-link audio off (enable: copy wireplumber/51-bt-no-suspend.conf to ~/.config/wireplumber/wireplumber.conf.d/, restart wireplumber)"
 fi
 # Max-quality audio: pin codec ladder LDAC > AAC > SBC-XQ > SBC and
 # unlock high-bitpool SBC-XQ. Needs LDAC/AAC headset; harmless
 # otherwise. Pair with QUALITY_LOCK=1 in ~/.config/bluetooth-buds.conf
 # to enforce LDAC after every switch. Opt-in, off by default.
 QLOCK_ON=0
-if [ -t 0 ]; then
+if [ "$PIPED" = "0" ] && [ -t 0 ]; then
   printf 'Prefer best codec (LDAC first, SBC-XQ unlocked, more earbud drain)? [y/N]: '
   read -r _wans3
   case "$_wans3" in [Yy]*) QLOCK_ON=1 ;; esac
-else
-  say "max-quality audio skipped (non-interactive; copy wireplumber/52-bt-max-quality.conf to ~/.config/wireplumber/wireplumber.conf.d/ to enable, then restart wireplumber)"
 fi
 if [ "$QLOCK_ON" = "1" ]; then
   mkdir -p "$HOME/.config/wireplumber/wireplumber.conf.d"
@@ -444,19 +476,17 @@ if [ "$QLOCK_ON" = "1" ]; then
     "$HOME/.config/wireplumber/wireplumber.conf.d/52-bt-max-quality.conf"
   say "max-quality on - restart wireplumber to apply: systemctl --user restart wireplumber"
 else
-  say "max-quality audio off"
+  say "max-quality audio off (enable: copy wireplumber/52-bt-max-quality.conf to ~/.config/wireplumber/wireplumber.conf.d/, restart wireplumber)"
 fi
 # A2DP-only: newer stacks try LE Audio transports first on dual-mode
 # buds when the adapter's ISO sockets are weak - those transports keep
 # failing and the buds go silent while classic A2DP works. Opt-in,
 # off by default.
 A2DP_ON=0
-if [ -t 0 ]; then
+if [ "$PIPED" = "0" ] && [ -t 0 ]; then
   printf 'Lock buds to classic A2DP (fixes silent LE Audio buds)? [y/N]: '
   read -r _wans4
   case "$_wans4" in [Yy]*) A2DP_ON=1 ;; esac
-else
-  say "a2dp-only skipped (non-interactive; copy wireplumber/53-bt-a2dp-only.conf to ~/.config/wireplumber/wireplumber.conf.d/ to enable, then restart wireplumber)"
 fi
 if [ "$A2DP_ON" = "1" ]; then
   mkdir -p "$HOME/.config/wireplumber/wireplumber.conf.d"
@@ -464,7 +494,7 @@ if [ "$A2DP_ON" = "1" ]; then
     "$HOME/.config/wireplumber/wireplumber.conf.d/53-bt-a2dp-only.conf"
   say "a2dp-only on - restart wireplumber to apply: systemctl --user restart wireplumber"
 else
-  say "a2dp-only off"
+  say "a2dp-only off (enable: copy wireplumber/53-bt-a2dp-only.conf to ~/.config/wireplumber/wireplumber.conf.d/, restart wireplumber)"
 fi
 command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 
