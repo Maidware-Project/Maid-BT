@@ -2,6 +2,7 @@
 
 ## unreleased
 
+- **relicensed to GPL-3.0-or-later** (forkable, open source). Rationale: keep improvements shared in the open — as WINE’s move from MIT to LGPL (2002) is often cited, “those who do not learn from history are doomed to repeat.” Third-party components retain their own licenses; see `THIRD-PARTY-NOTICES.md`.
 - **silent install**: a piped run (`bash <(curl ...)`) never touches sudo and
   never asks: packages are opt-in (`--packages` forces, tty runs ask once,
   piped runs skip with a pointer), and every optional question (phone
