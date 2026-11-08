@@ -4,16 +4,11 @@ command-line helper that ships its own gui: a plasma tray applet and a small hel
 ## quick start
 
 ```sh
-# one line, straight from GitHub (asks for your earbuds MAC + fallback sink):
 bash <(curl -fsSL https://raw.githubusercontent.com/Maidware-Project/Maid-BT/main/install.sh)
-
-# or clone first:
-git clone https://github.com/Maidware-Project/Maid-BT.git && cd Maid-BT
-bash install.sh                # asks for your earbuds MAC + fallback sink
-bash install.sh --tui          # same installer as a text UI (pick, doctor, uninstall)
-bluetoothctl pair <MAC>        # then: trust <MAC>
 bluetooth-toggle.sh on         # sound moves to your earbuds
 ```
+
+prefer a clone? `git clone --depth 1 https://github.com/Maidware-Project/Maid-BT.git` and run the same `bash install.sh` - `--tui` gives it a menu (install, config, doctor, uninstall).
 
 ## why not just use blueman / the desktop bluetooth panel?
 
