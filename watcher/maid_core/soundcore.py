@@ -381,8 +381,12 @@ def _human_link_error(detail):
     """A br-connection-* code -> what it usually means, in plain words."""
     d = str(detail or "")
     if "br-connection-refused" in d:
-        return ("the buds refused the control connection - they are usually "
-                "docked in the case, asleep, or busy with the phone right now")
+        return ("the buds refused the control connection (audio can still work). "
+                "They may be docked/asleep, or the control channel may be held by the phone, Soundcore app, or multipoint. "
+                "Try: keep buds out of the case, close the Soundcore app on the phone, or disconnect the phone temporarily, then retry")
+    if "br-connection-busy" in d:
+        return ("the buds' control channel is busy (often held by the phone/Soundcore app or multipoint). "
+                "Audio can still work; close the phone app or disconnect the phone temporarily, then retry")
     if "profile-unavailable" in d:
         return "the buds' control service is not reachable right now"
     if "br-connection-cancelled" in d or "br-connection-canceled" in d:

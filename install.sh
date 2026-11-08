@@ -92,7 +92,8 @@ if [ "$UNINST" = "1" ]; then
   rm -rf "$SHAREDIR/maid-bt" "$SHAREDIR/plasma/plasmoids/com.local.btearbuds"
   rm -f "$SHAREDIR"/applications/bt-earbuds-pc.desktop \
     "$SHAREDIR"/applications/bt-earbuds-phone.desktop "$SHAREDIR"/applications/bt-off.desktop \
-    "$SHAREDIR"/applications/bt-on.desktop "$SHAREDIR"/applications/maid-bt-helper.desktop
+    "$SHAREDIR"/applications/bt-on.desktop "$SHAREDIR"/applications/maid-bt-helper.desktop \
+    "$SHAREDIR"/applications/maid-helper.desktop
   if [ "$PURGE" = "1" ]; then
     rm -f "$HOME"/.config/bluetooth-buds.conf "$HOME"/.config/bluetooth-buds.conf.example "$HOME"/.config/bt-intent.token
     rm -rf "$HOME"/.config/maid-watcher

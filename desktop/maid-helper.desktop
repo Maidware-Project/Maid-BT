@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Maid Helper (component)
+Comment=Helper GUI component used by Maid BT (NoDisplay; satisfies portal/app-id)
+Exec=@HOME@/.local/bin/maid-helper-gui
+TryExec=@HOME@/.local/bin/maid-helper-gui
+Icon=maid-helper
+NoDisplay=true
+Terminal=false
