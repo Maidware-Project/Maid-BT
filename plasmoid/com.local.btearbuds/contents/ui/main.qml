@@ -64,9 +64,10 @@ PlasmoidItem {
     function stateIcon() {
         // symbolic glyphs recolor with the theme and match the panel style
         if (root.btState === "off")
-            // power-off metaphor; bluetooth-disabled-symbolic does not
-            // exist in breeze/hicolor, which Papirus-Dark inherits from
-            return "system-shutdown-symbolic";
+            // bluetooth glyph that exists in breeze-dark (Papirus-Dark's
+            // chain) - bluetooth-disabled-symbolic does not, and the
+            // power icon read as "not bluetooth" here
+            return "network-bluetooth-inactive-symbolic";
 
         if (root.btState === "on")
             return "bluetooth-disconnected-symbolic";
@@ -442,8 +443,9 @@ PlasmoidItem {
                         id: offTile
 
                         text: "Off"
-                        // same reason as stateIcon(): theme-chain-safe
-                        icon.name: "system-shutdown-symbolic"
+                        // same glyph as the off state: bt-inactive,
+                        // guaranteed inside the theme chain
+                        icon.name: "network-bluetooth-inactive-symbolic"
                         display: PlasmaComponents.AbstractButton.TextUnderIcon
                         Layout.fillWidth: true
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 2.9
