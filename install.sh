@@ -30,8 +30,9 @@ if [ ! -f "$PKGDIR/install.sh" ]; then
   PIPED=1
 fi
 BACKUP_TS="$(date +%Y%m%d-%H%M%S)"
-CHECK=0; NO_PKGS=0; UNINST=0; PURGE=0; NOCONFIG=0; PREFIX=""; TUI=0
-PKGS=0; VERBOSE=0; PIPED=0
+_WAS_PIPED="${PIPED:-0}"
+CHECK=0; NO_PKGS=0; UNINST=0; PURGE=0; NOCONFIG=0; PREFIX=""; TUI=0; FORCE_PLAIN=0
+PKGS=0; VERBOSE=0; PIPED="$_WAS_PIPED"
 declare -A STATS=()          # quiet-mode: install counts by destination
 for a in "$@"; do
   case "$a" in
@@ -41,13 +42,18 @@ for a in "$@"; do
     --purge) PURGE=1 ;;
     --no-config) NOCONFIG=1 ;;
     --tui) TUI=1 ;;
+    --plain|--no-tui) FORCE_PLAIN=1 ;;
     --packages) PKGS=1 ;;
     --verbose) VERBOSE=1 ;;
     --prefix=*) PREFIX="${a#--prefix=}" ;;
     *) echo "unknown option: $a (see header)" >&2; exit 2 ;;
   esac
 done
-# the optional text UI: same engine underneath, friendlier on top
+# TUI is the default for interactive runs: friendlier menu, same engine.
+# Scripted/piped/explicit-plain paths keep the engine output.
+if [ "$FORCE_PLAIN" != "1" ] && [ "$PIPED" != "1" ] && [ -t 0 ] && [ -t 1 ]; then
+  TUI=1
+fi
 if [ "$TUI" = "1" ]; then
   exec bash "$PKGDIR/bin/tui-install.sh"
 fi

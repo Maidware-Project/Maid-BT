@@ -17,7 +17,7 @@
 set -u
 
 if [ ! -t 0 ]; then
-  echo "tui needs a terminal - run: bash install.sh (plain mode)"
+  echo "tui needs a terminal - run: bash install.sh --plain"
   exit 2
 fi
 
@@ -46,16 +46,18 @@ ok()     { printf ' %s[ok]%s %s\n' "$GR" "$R" "$*"; }
 warn()   { printf ' %s[!!] %s%s\n' "$YL" "$R" "$*"; }
 bad()    { printf ' %s[bad] %s%s\n' "$RD" "$R" "$*"; }
 
+cls()  { printf '\033[H\033[2J'; }
 rule() { printf '%*s\n' "${1:-$((COLS - 2))}" '' | tr ' ' '-'; }
 head() {
-  printf '\n%s MAID BT %s%s %s%s\n' "$INV" "$R" "$B" "$*" "$R"
+  cls
+  printf '%s MAID BT %s%s %s%s\n' "$INV" "$R" "$B" "$*" "$R"
   rule
 }
 hr()  { printf '%s%s%s\n' "$DIM" "$(printf '%*s' $((COLS - 2)) '' | tr ' ' '─')" "$R"; }
 rel() { printf '%s' "$R"; }
 
 ask_line() { # ask_line "prompt" -> $REPLY, input on the same line
-  printf ' %s %s ' "$BL" "$*"; read -r REPLY
+  printf ' %s %s ' "$BL" "$*"; read -r REPLY || REPLY=""
 }
 
 numbered_pick() {
@@ -240,14 +242,18 @@ do_install_steps() {
   write_config "$mac" "$sink"
   ensure_token
   # engine does file copies, docs, units; stdin is /dev/null so its
-  # interactive blocks skip (config already written above)
-  say "running install.sh engine..."
-  if bash "$PKGDIR/install.sh" </dev/null; then
+  # interactive blocks skip (config already written above). --plain keeps
+  # it out of the TUI and avoids any accidental menu redraw.
+  hr
+  say "running install engine (output below)..."
+  hr
+  local rc=0
+  bash "$PKGDIR/install.sh" --plain </dev/null || rc=$?
+  hr
+  if [ "$rc" -eq 0 ]; then
     ok "engine finished"
-    # services are enabled by the engine; make sure they answer now
     systemctl --user daemon-reload 2>/dev/null || true
-    host_facts; : # conflicts not needed
-    printf '\n  %sn%s) tail maid-bt log in %s   %sr%s) open helper? ask later   %sENTER%s) done\n' \
+    printf '\n  %sn%s) tail maid-bt log in %s   %sr%s) open helper   %sENTER%s) back to menu\n' \
       "$B" "$R" "${TERMINAL_CMD:-a terminal}" "$B" "$R" "$B" "$R"
     ask_line "follow up"
     case "${REPLY:-}" in
@@ -256,9 +262,10 @@ do_install_steps() {
     esac
     ok "all set: bluetooth-toggle.sh on|off|release|radio · porcelain for the tray"
   else
-    bad "engine failed - scroll the output above"
-    return 1
+    bad "engine failed (rc=$rc) - read the output above"
   fi
+  pause_or_done
+  return "$rc"
 }
 
 # ------------------------------------------------------ config only
@@ -278,12 +285,10 @@ do_config() {
   ask_line "re-pick now? [y/N]"
   case "${REPLY,,}" in
     y|yes) : ;;
-    *) say "kept as is"; return ;;
+    *) say "kept as is"; pause_or_done; return ;;
   esac
   pick_buds_and_sink || { pause_or_done; return; }
   write_config "$REPLY_MAC" "$REPLY_SINK"
-  # the services read the conf when they start: a restart applies the
-  # new MAC/sink without touching a single installed file
   say "restarting buds-fallback to apply..."
   if systemctl --user restart buds-fallback.service 2>/dev/null; then
     ok "config applied - no reinstall needed"
@@ -344,10 +349,12 @@ do_uninstall() {
   ask_line "choice [p/P/q]:"
   case "${REPLY:-q}" in
     q|Q|cancel|Cancel|"") say "cancelled"; return ;;
-    p)      say "engine uninstall (configs and logs stay)"
-            bash "$PKGDIR/install.sh" --uninstall </dev/null || true ;;
-    P)      say "engine uninstall with purge"
-            bash "$PKGDIR/install.sh" --uninstall --purge </dev/null || true ;;
+    p)      hr
+            say "engine uninstall (configs and logs stay)"
+            bash "$PKGDIR/install.sh" --plain --uninstall </dev/null || true ;;
+    P)      hr
+            say "engine uninstall with purge"
+            bash "$PKGDIR/install.sh" --plain --uninstall --purge </dev/null || true ;;
     *)      say "cancelled"; return ;;
   esac
   pause_or_done
@@ -421,19 +428,40 @@ n64_boot() {
   printf '\033[?25h\033[0m'
 }
 
+update_from_github() {
+  head "update from GitHub (latest)"
+  hr
+  local url="https://raw.githubusercontent.com/Maidware-Project/Maid-BT/main/install.sh"
+  say "fetching official installer: $url"
+  if ! command -v curl >/dev/null 2>&1; then bad "curl not found"; pause_or_done; return 1; fi
+  local tmp; tmp="$(mktemp /tmp/maid-bt-update.XXXXXX.sh)"
+  if curl -fsSL "$url" -o "$tmp"; then
+    ok "downloaded; running latest installer (--plain, keeps your config flow safe)"
+    hr
+    bash "$tmp" --plain </dev/null || warn "latest installer exited $?"
+    rm -f "$tmp"
+  else
+    bad "download failed"
+    rm -f "$tmp"
+  fi
+  pause_or_done
+}
+
 # ------------------------------------------------------ main menu
 menu() {
   head "main menu"
   printf '  %stype a number and press Enter · %sq%s cancels%s\n\n' "$DIM" "$B" "$DIM" "$R"
   printf '  %s1%s) %sinstall / update%s  programs + config + services\n' "$B" "$R" "$B" "$R"
-  printf '  %s2%s) %sconfig only%s       re-pick earbuds + fallback sink\n' "$B" "$R" "$B" "$R"
-  printf '  %s3%s) %sdoctor%s           what does this machine say?\n' "$B" "$R" "$B" "$R"
-  printf '  %s4%s) %suninstall%s        engine uninstall (--purge ask)\n' "$B" "$R" "$B" "$R"
+  printf '  %s2%s) %sreinstall%s         re-pick config, then install\n' "$B" "$R" "$B" "$R"
+  printf '  %s3%s) %supdate from GitHub%s latest official installer\n' "$B" "$R" "$B" "$R"
+  printf '  %s4%s) %sconfig only%s       re-pick earbuds + fallback sink\n' "$B" "$R" "$B" "$R"
+  printf '  %s5%s) %sdoctor%s            what does this machine say?\n' "$B" "$R" "$B" "$R"
+  printf '  %s6%s) %suninstall%s         remove Maid BT (--purge ask)\n' "$B" "$R" "$B" "$R"
   printf '  %sq%s) %squit%s\n' "$B" "$R" "$B" "$R"
   hr
   printf '  default terminal: %s%s%s   %s(used for log tail + helper windows)%s\n\n' \
     "$B" "${TERMINAL_CMD:-none found}" "$R" "$DIM" "$R"
-  printf '  %s pick [1-4, q or cancel]: %s' "$B" "$R"
+  printf '  %s pick [1-6, q or cancel]: %s' "$B" "$R"
 }
 
 main() {
@@ -445,9 +473,11 @@ main() {
     read -r REPLY
     case "${REPLY:-}" in
       1) do_install ;;
-      2) do_config ;;
-      3) do_doctor ;;
-      4) do_uninstall ;;
+      2) head "reinstall"; hr; host_facts; pick_buds_and_sink && do_install_steps "$REPLY_MAC" "$REPLY_SINK" || pause_or_done ;;
+      3) update_from_github ;;
+      4) do_config ;;
+      5) do_doctor ;;
+      6) do_uninstall ;;
       q|Q|cancel|Cancel|"") printf ' bye!\n'; return 0 ;;
     esac
   done
