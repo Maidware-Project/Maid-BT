@@ -60,28 +60,51 @@ ask_line() { # ask_line "prompt" -> $REPLY, input on the same line
   printf ' %s %s ' "$BL" "$*"; read -r REPLY || REPLY=""
 }
 
-numbered_pick() {
-  # numbered_pick "title" item1 item2... -> $PICK (1-based index) or empty
+_tty_restore() { stty "${_TTY_SAVED:-}" 2>/dev/null </dev/tty || true; printf '\033[?25h'; }
+
+arrow_pick() {
+  # arrow_pick "title" item1 item2... -> $PICK (1-based). Arrows move, Enter selects, q cancels; digits+Enter still work.
   [ $# -ge 1 ] || return 1
   local title="$1"; shift
-  local -a items=("$@")
-  [ "${#items[@]}" -ge 1 ] || return 1
-  printf '\n'
-  local i=1
-  for it in "${items[@]}"; do
-    printf '  %s%2d)%s %s\n' "$B" "$i" "$R" "$it"
-    i=$((i + 1))
-  done
+  local -a items=("$@") n=${#items[@]} cur=1 typed="" k seq
+  [ "$n" -ge 1 ] || return 1
+  if [ ! -t 0 ] || [ ! -t 1 ]; then
+    local i=1; printf '\n'; for it in "${items[@]}"; do printf '  %s%2d)%s %s\n' "$B" "$i" "$R" "$it"; i=$((i+1)); done
+    while :; do printf '  %s pick 1-%d, Enter for 1, or q: %s' "$B" "$n" "$R"; read -r REPLY
+      case "${REPLY:-1}" in q|Q|cancel) return 1 ;; *[!0-9]*|"") continue ;; esac
+      [ "$REPLY" -ge 1 ] && [ "$REPLY" -le "$n" ] && { PICK="$REPLY"; return 0; }
+    done
+  fi
+  _TTY_SAVED=$(stty -g 2>/dev/null </dev/tty || true)
+  trap '_tty_restore' INT TERM
+  stty -echo -icanon min 1 time 0 2>/dev/null </dev/tty || true
+  printf '\033[?25l\n\033[s'
+  local i
   while :; do
-    printf '  %s pick 1-%d, Enter for 1, or cancel: %s' "$B" "${#items[@]}" "$R"
-    read -r REPLY
-    case "${REPLY:-1}" in
-      q|Q|cancel|Cancel) return 1 ;;
-      *[!0-9]*|"") continue ;;
+    printf '\033[u\033[J  %s%s%s %s(↑↓ move · Enter select · type number · q cancel)%s\n' "$B" "$title" "$R" "$DIM" "$R"
+    i=1
+    for it in "${items[@]}"; do
+      if [ "$i" -eq "$cur" ]; then printf '  %s❯ %2d) %s%s\033[K\n' "$CY$B" "$i" "$it" "$R"
+      else printf '    %s%2d)%s %s\033[K\n' "$DIM" "$i" "$R" "$it"; fi
+      i=$((i+1))
+    done
+    printf '  %s>%s %s\033[K' "$B" "$R" "${typed}"
+    IFS= read -rsn1 k </dev/tty 2>/dev/null || k=""
+    case "$k" in
+      $'\x1b')
+        IFS= read -rsn2 -t 0.08 seq </dev/tty 2>/dev/null || seq=""
+        case "$seq" in '[A'|'OA') [ "$cur" -gt 1 ] && cur=$((cur-1)); typed="" ;; '[B'|'OB') [ "$cur" -lt "$n" ] && cur=$((cur+1)); typed="" ;; esac ;;
+      ""|$'\n'|$'\r')
+        if [ -n "$typed" ] && [[ "$typed" =~ ^[0-9]+$ ]] && [ "$typed" -ge 1 ] && [ "$typed" -le "$n" ]; then cur="$typed"; fi
+        _tty_restore; trap - INT TERM; printf '\n'; PICK="$cur"; return 0 ;;
+      q|Q) _tty_restore; trap - INT TERM; printf '\n'; return 1 ;;
+      [0-9]) typed="${typed}${k}"; if [[ "$typed" =~ ^[0-9]+$ ]] && [ "$typed" -ge 1 ] && [ "$typed" -le "$n" ]; then cur="$typed"; fi ;;
+      $'\x7f'|$'\b') typed="${typed%?}" ;;
     esac
-    [ "$REPLY" -ge 1 ] && [ "$REPLY" -le "${#items[@]}" ] && { PICK="$REPLY"; return 0; }
   done
 }
+
+numbered_pick() { arrow_pick "$@"; }
 
 # ------------------------------------------------- default terminal
 # every candidate checked that it actually exists before trusting it
@@ -448,20 +471,55 @@ update_from_github() {
 }
 
 # ------------------------------------------------------ main menu
-menu() {
+menu_draw() {
   head "main menu"
-  printf '  %stype a number and press Enter · %sq%s cancels%s\n\n' "$DIM" "$B" "$DIM" "$R"
-  printf '  %s1%s) %sinstall / update%s  programs + config + services\n' "$B" "$R" "$B" "$R"
-  printf '  %s2%s) %sreinstall%s         re-pick config, then install\n' "$B" "$R" "$B" "$R"
-  printf '  %s3%s) %supdate from GitHub%s latest official installer\n' "$B" "$R" "$B" "$R"
-  printf '  %s4%s) %sconfig only%s       re-pick earbuds + fallback sink\n' "$B" "$R" "$B" "$R"
-  printf '  %s5%s) %sdoctor%s            what does this machine say?\n' "$B" "$R" "$B" "$R"
-  printf '  %s6%s) %suninstall%s         remove Maid BT (--purge ask)\n' "$B" "$R" "$B" "$R"
-  printf '  %sq%s) %squit%s\n' "$B" "$R" "$B" "$R"
+  printf '  %s↑↓/arrows or type a number · Enter select · q quit/cancel%s\n\n' "$DIM" "$R"
   hr
   printf '  default terminal: %s%s%s   %s(used for log tail + helper windows)%s\n\n' \
     "$B" "${TERMINAL_CMD:-none found}" "$R" "$DIM" "$R"
-  printf '  %s pick [1-6, q or cancel]: %s' "$B" "$R"
+}
+
+menu_pick_action() {
+  # sets REPLY to 1-6 or q
+  local -a labels=("install / update  — programs + config + services"
+                   "reinstall         — re-pick config, then install"
+                   "update from GitHub — latest official installer"
+                   "config only       — re-pick earbuds + fallback sink"
+                   "doctor            — what does this machine say?"
+                   "uninstall         — remove Maid BT (--purge ask)"
+                   "quit")
+  local n=${#labels[@]} cur=1 typed="" k seq i first=1
+  if [ ! -t 0 ] || [ ! -t 1 ]; then
+    printf '  %s pick [1-6, q]: %s' "$B" "$R"; read -r REPLY || REPLY="q"; return 0
+  fi
+  _TTY_SAVED=$(stty -g 2>/dev/null </dev/tty || true)
+  trap '_tty_restore' INT TERM
+  stty -echo -icanon min 1 time 0 2>/dev/null </dev/tty || true
+  printf '\033[?25l\n\033[s'
+  local first=1
+  while :; do
+    printf '\033[u\033[J'
+    i=1
+    for it in "${labels[@]}"; do
+      if [ "$i" -eq "$cur" ]; then printf '  %s❯ %s%s\033[K\n' "$CY$B" "$it" "$R"
+      else printf '    %s%s%s\033[K\n' "$DIM" "$it" "$R"; fi
+      i=$((i+1))
+    done
+    printf '  %s>%s %s\033[K' "$B" "$R" "${typed}"
+    IFS= read -rsn1 k </dev/tty 2>/dev/null || k=""
+    case "$k" in
+      $'\x1b')
+        IFS= read -rsn2 -t 0.08 seq </dev/tty 2>/dev/null || seq=""
+        case "$seq" in '[A'|'OA') [ "$cur" -gt 1 ] && cur=$((cur-1)); typed="" ;; '[B'|'OB') [ "$cur" -lt "$n" ] && cur=$((cur+1)); typed="" ;; esac ;;
+      ""|$'\n'|$'\r')
+        if [ -n "$typed" ] && [[ "$typed" =~ ^[0-9]+$ ]] && [ "$typed" -ge 1 ] && [ "$typed" -le 6 ]; then cur="$typed"; fi
+        _tty_restore; trap - INT TERM; printf '\n'
+        [ "$cur" -eq 7 ] && REPLY="q" || REPLY="$cur"; return 0 ;;
+      q|Q) _tty_restore; trap - INT TERM; printf '\n'; REPLY="q"; return 0 ;;
+      [1-6]) typed="$k"; cur="$k" ;;
+      $'\x7f'|$'\b') typed="" ;;
+    esac
+  done
 }
 
 main() {
@@ -469,8 +527,8 @@ main() {
   detect_terminal
   host_facts
   while :; do
-    menu
-    read -r REPLY
+    menu_draw
+    menu_pick_action
     case "${REPLY:-}" in
       1) do_install ;;
       2) head "reinstall"; hr; host_facts; pick_buds_and_sink && do_install_steps "$REPLY_MAC" "$REPLY_SINK" || pause_or_done ;;
