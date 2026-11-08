@@ -338,53 +338,68 @@ do_uninstall() {
 
 # ------------------------------------------------------ boot intro
 n64_boot() {
-  # "MAIDWARE" letters assemble like the old N64 boot: each slot spins
-  # a little rotor glyph before its letter drops in, then the whole
-  # word cycles colors once and settles bold. Skips entirely (boots
-  # straight up) when the terminal cannot render it: no tty, dumb
-  # TERM, NO_COLOR set, narrow pane, or MAID_FAST=1. Any key skips it.
+  # MAIDWARE boot, sized to the pane: letters fly in from alternating
+  # edges of the screen to landing pads marked by spinning rotors, a
+  # hue wave runs through the word as it assembles, and it all settles
+  # bold. geometry comes from stty on every run, so it centers itself
+  # on any pane. skips (boots straight up) when the terminal cannot
+  # render it: no tty, dumb TERM, NO_COLOR, small pane, MAID_FAST=1.
+  # any key skips ahead.
   [ -t 0 ] && [ -t 1 ] || return 0
   case "${TERM:-}" in "" | dumb | linux) return 0 ;; esac
   [ -z "${NO_COLOR:-}" ] || return 0
   [ "${MAID_FAST:-0}" = "1" ] && return 0
   [ "$COLS" -ge 34 ] 2>/dev/null || return 0
+  [ "$ROWS" -ge 8 ] 2>/dev/null || return 0
 
   local -a letters=(M A I D W A R E)
   local -a rots=('|' '╱' '─' '╲')
   local -a pal=("\033[94m" "\033[96m" "\033[92m" "\033[93m" "\033[95m")
   local n=${#letters[@]}
-  # every slot is exactly 3 columns wide (" M "), so centering is a
-  # constant instead of jittering per frame
-  local pad=$(( (COLS - n * 3) / 2 )); [ "$pad" -ge 0 ] || pad=0
+  local slot=3
+  local pad=$(( (COLS - n * slot) / 2 )); [ "$pad" -ge 0 ] || pad=0
   local -a reveal=()
   local i
   for ((i = 0; i < n; i++)); do reveal[i]=$((2 + i)); done
-  local total=$((reveal[n - 1] + 3))
+  local total=$((reveal[n - 1] + 2))
+  local wordrow=$((ROWS / 2 - 2))
 
   printf '\033[?25l\033[0m'                    # hide cursor
   trap 'printf "\033[?25h\033[0m"' INT TERM    # never eat the cursor
-  local f row spin
+  local f col glyph startcol
   for ((f = 0; f < total; f++)); do
-    row=""
+    printf '\033[%d;1H\033[2K' "$wordrow"      # clear the word row once
     for ((i = 0; i < n; i++)); do
+      col=$(( pad + i * slot + 1 ))              # where this letter lands
       if [ "$f" -ge "${reveal[i]}" ]; then
-        spin="$(printf "${pal[$(( (f + i) % ${#pal[@]} ))]}")"
-        row="$row $spin${letters[i]} "
-      elif [ "$f" -gt 0 ]; then
-        row="$row ${rots[$(( (f + i) % ${#rots[@]} ))]} "
+        # landed - the hue wave runs right to left as assembly grows
+        glyph="$(printf "${pal[$(( (f + n - i) % ${#pal[@]} ))]}")"
+        printf '\033[%d;%dH%s%s\033[0m' "$wordrow" "$col" "$glyph" "${letters[i]}"
+      elif [ "$f" -lt $(( reveal[i] - 2 )) ]; then
+        # landing pad: a dim rotor spins here until the letter moves in
+        [ "$f" -gt 0 ] && printf '\033[%d;%dH\033[2m%s\033[0m' "$wordrow" "$col" \
+          "${rots[$(( (f + i) % ${#rots[@]} ))]}"
       else
-        row="$row   "
+        # flying: two frames from the pane edge to the pad
+        startcol=1; [ $(( i % 2 )) -eq 0 ] || startcol=$COLS
+        [ "$f" -eq $(( reveal[i] - 2 )) ] && col=$startcol || col=$(( (col + startcol) / 2 ))
+        glyph="$(printf "${pal[$(( (f + i) % ${#pal[@]} ))]}")"
+        printf '\033[%d;%dH%s%s\033[0m' "$wordrow" "$col" "$glyph" "${letters[i]}"
       fi
     done
-    printf '\033[%d;1H\033[2K%*s%s' "$((ROWS / 2 - 2))" "$pad" '' "$row"
-    read -t 0.08 -n 1 -s _ 2>/dev/null && break   # any key: skip ahead
+    # pacing + skip: clear k so EOF/timeout never reuses a stale byte.
+    # in this pty env an EOF read returns rc=0 with k=EOT (0x04) - treat
+    # EOT and NUL as "no key", so only a real keypress breaks the loop.
+    k=""
+    read -t 0.08 -n 1 -s k 2>/dev/null || true
+    if [ -n "${k:-}" ] && [ "$k" != $'\004' ] && [ "$k" != $'\000' ]; then break; fi
   done
-  # settle: same slots, bold white, plus a tagline one row down
+  # settle: assembled word, bold white, tagline one row down
   local word=""
   for ((i = 0; i < n; i++)); do word="$word ${letters[i]} "; done
-  printf '\033[%d;1H\033[2K%*s\033[1;97m%s\033[0m' "$((ROWS / 2 - 2))" "$pad" '' "$word"
-  printf '\033[%d;1H\033[2K%*s\033[2m· installer · earbuds · blue ·\033[0m' \
-    "$((ROWS / 2 - 1))" "$(( (COLS - 30) / 2 ))" ''
+  printf '\033[%d;1H\033[2K%*s\033[1;97m%s\033[0m' "$wordrow" "$pad" '' "$word"
+  printf '\033[%d;1H\033[2K%*s\033[2m\u00b7 installer \u00b7 earbuds \u00b7 blue \u00b7\033[0m' \
+    "$((wordrow + 1))" "$(( (COLS - 30) / 2 ))" ''
   sleep 0.45
   printf '\033[?25h\033[0m'
 }
