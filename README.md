@@ -1,4 +1,4 @@
-# Maid BT - bluetooth earbuds switching
+# Maid BT - a linux only seamless Bluetooth earbuds switcher
 
 a command-line helper that ships its own gui: a Plasma tray applet and a small helper window. switch between PC, phone, or off with one command - or one click. routes audio automatically (app-agnostic stream moves, so it works across players and browsers) and stops dual-connection earbuds from fighting your phone. native tools only (bluez, PipeWire/PulseAudio via `pactl`/`pw-*`); no accounts, no telemetry.
 
