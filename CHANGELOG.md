@@ -1,5 +1,23 @@
 # changelog
 
+## unreleased
+
+- `bash <(curl -fsSL ...raw.../install.sh)` works: install.sh falls back to
+  downloading the repo tarball when it is piped through curl, instead of
+  failing on a /dev/fd path.
+- new text-UI installer (`install.sh --tui` or `bin/tui-install.sh`): screens
+  with numbered picks, full install / config-only / doctor / **uninstall**
+  (engine `--uninstall [--purge]`), version facts, and an N64-style
+  MAIDWARE boot animation that auto-skips (no tty, `TERM=dumb`, `NO_COLOR`,
+  narrow, `MAID_FAST=1`) or on any key. detects the default terminal
+  ($TERMINAL/$TERM_PROGRAM → session markers → Plasma kdeglobals → common
+  binaries) and records it as `TERMINAL_CMD=` in bluetooth-buds.conf for
+  log-tail/helper windows.
+- config-only menu choice no longer reruns the engine: it re-picks earbuds
+  + fallback sink, rewrites the conf, and restarts buds-fallback only.
+- suite extended to 33 checks (TUI parse, no-tty refusal, uninstall wiring,
+  boot intro, `--tui` passthrough).
+
 ## Maid BT v1.2.2 (this release)
 
 - the watcher used to wake every single second all day: bluetoothctl

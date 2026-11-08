@@ -6,9 +6,25 @@
 # --prefix installs program files elsewhere (packaging); user config and
 # services still target $HOME unless --no-config skips them entirely.
 set -u
-PKGDIR="$(cd "$(dirname "$0")" && pwd)"
+PKGDIR="$(cd "$(dirname "$0")" && pwd)" 2>/dev/null || PKGDIR=""
+if [ ! -f "$PKGDIR/install.sh" ]; then
+  # piped install (bash <(curl -fsSL ...)): the script is a /dev/fd
+  # stream, so there is no package tree next to it. Fetch the repo
+  # tarball and continue from there - keeps the one-liner honest,
+  # it really installs Maid BT, not a half copy.
+  FETCH_TMP="$(mktemp -d /tmp/maidbt-fetch.XXXXXX)"
+  trap 'rm -rf "$FETCH_TMP"' INT TERM
+  TARBALL_URL="https://github.com/Maidware-Project/Maid-BT/archive/refs/heads/main.tar.gz"
+  curl -fsSL "$TARBALL_URL" -o "$FETCH_TMP/maid-bt.tgz" || {
+    echo "could not download the Maid BT package tree (curl failed)" >&2
+    exit 1
+  }
+  tar -xzf "$FETCH_TMP/maid-bt.tgz" -C "$FETCH_TMP" || exit 1
+  PKGDIR="$(find "$FETCH_TMP" -mindepth 1 -maxdepth 1 -type d -name 'Maid-BT-*' | head -n 1)"
+  [ -f "$PKGDIR/install.sh" ] || { echo "downloaded tree looks wrong" >&2; exit 1; }
+fi
 BACKUP_TS="$(date +%Y%m%d-%H%M%S)"
-CHECK=0; NO_PKGS=0; UNINST=0; PURGE=0; NOCONFIG=0; PREFIX=""
+CHECK=0; NO_PKGS=0; UNINST=0; PURGE=0; NOCONFIG=0; PREFIX=""; TUI=0
 for a in "$@"; do
   case "$a" in
     --check) CHECK=1 ;;
@@ -16,10 +32,15 @@ for a in "$@"; do
     --uninstall) UNINST=1 ;;
     --purge) PURGE=1 ;;
     --no-config) NOCONFIG=1 ;;
+    --tui) TUI=1 ;;
     --prefix=*) PREFIX="${a#--prefix=}" ;;
     *) echo "unknown option: $a (see header)" >&2; exit 2 ;;
   esac
 done
+# the optional text UI: same engine underneath, friendlier on top
+if [ "$TUI" = "1" ]; then
+  exec bash "$PKGDIR/bin/tui-install.sh"
+fi
 if [ -z "$PREFIX" ]; then PREFIX="$HOME/.local"; fi
 if [ "$PREFIX" = "$HOME/.local" ]; then
   USERMODE=1

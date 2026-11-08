@@ -861,6 +861,33 @@ grep -q "pkexec" "$PKGDIR/bin/bluetooth-toggle.sh" || fail "rfkill has no pkexec
 grep -q "rfkill block not permitted" "$PKGDIR/bin/buds-fallback.sh" || fail "sticky-off hides rfkill failures"
 ok "third-party contract"
 
+echo "== TUI =="
+# the TUI is a screen app: it must stay parseable, refuse to draw
+# without a terminal, keep the uninstaller (users expect real removal,
+# not just "stop services"), and hand every menu action to the engine.
+[ -x "$PKGDIR/bin/tui-install.sh" ] || fail "tui-install.sh not executable"
+out="$(printf 'q\n' | MAID_FAST=1 bash "$PKGDIR/bin/tui-install.sh" 2>&1)"
+rc=$?
+[ "$rc" = "2" ] || fail "tui without a tty should exit 2, got $rc"
+case "$out" in
+  *"tui needs a terminal"*) : ;;
+  *) fail "no-tty refusal message missing" ;;
+esac
+# same door from the engine side: install.sh --tui must hand over
+out="$(printf 'q\n' | bash "$PKGDIR/install.sh" --tui 2>&1)"
+rc=$?
+[ "$rc" = "2" ] || fail "install.sh --tui should refuse without tty, got $rc"
+grep -q "do_uninstall" "$PKGDIR/bin/tui-install.sh" || fail "TUI uninstaller missing"
+grep -q -- "--uninstall" "$PKGDIR/bin/tui-install.sh" || fail "TUI uninstall not wired to the engine"
+grep -q -- "--purge" "$PKGDIR/bin/tui-install.sh" || fail "TUI uninstall cannot purge"
+grep -q "detect_terminal" "$PKGDIR/bin/tui-install.sh" || fail "terminal detection missing"
+grep -q "n64_boot" "$PKGDIR/bin/tui-install.sh" || fail "MAIDWARE boot intro missing"
+case "$(sed -n '/^main() {/,/^}/p' "$PKGDIR/bin/tui-install.sh")" in
+  *"n64_boot"*) ok "boot intro runs before the menu" ;;
+  *) fail "n64_boot not called in main()" ;;
+esac
+ok "tui"
+
 echo "== cleanup =="
 rm -rf /tmp/maidbt-t
 ok "cleanup"
