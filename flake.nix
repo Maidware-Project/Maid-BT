@@ -27,7 +27,7 @@
             dontBuild = true;
             installPhase = ''
               runHook preInstall
-              mkdir -p $out/bin $out/libexec/maid-bt $out/share/maid-bt $out/share/applications
+              mkdir -p $out/bin $out/libexec/maid-bt $out/share/maid-bt $out/share/applications $out/share/plasma/plasmoids
               cp -a bin $out/libexec/maid-bt/bin
               cp -a watcher $out/libexec/maid-bt/watcher 2>/dev/null || true
               cp -a systemd $out/share/maid-bt/systemd 2>/dev/null || true
@@ -37,7 +37,7 @@
               cp -a README.md LICENSE THIRD-PARTY-NOTICES.md $out/share/maid-bt/ 2>/dev/null || true
               find $out/libexec/maid-bt/bin -type f -exec chmod +x {} +
               [ -f $out/libexec/maid-bt/watcher/maid-watcher ] && chmod +x $out/libexec/maid-bt/watcher/maid-watcher || true
-              for c in bluetooth-toggle.sh maid-switch maid-bt-helper maid-watcher buds-on.sh buds-off.sh buds-release.sh buds-fallback.sh bt-intent-server.py; do
+              for c in bluetooth-toggle.sh maid-switch maid-bt-helper maid-bt-config maid-soundcore maid-watcher buds-on.sh buds-off.sh buds-release.sh buds-fallback.sh bt-intent-server.py; do
                 if [ -f "$out/libexec/maid-bt/bin/$c" ]; then
                   makeWrapper "$out/libexec/maid-bt/bin/$c" "$out/bin/$c" --prefix PATH : ${runtimePath}:$out/libexec/maid-bt/bin
                 fi
@@ -47,6 +47,17 @@
                 makeWrapper "$out/libexec/maid-bt/watcher/maid-watcher" "$out/bin/maid-watcher" --prefix PATH : ${runtimePath}:$out/libexec/maid-bt/bin
               fi
               [ -d desktop ] && cp -a desktop/*.desktop $out/share/applications/ 2>/dev/null || true
+              # fix desktop entries for Nix (upstream uses @HOME@/.local/bin/...)
+              find $out/share/applications $out/share/maid-bt/desktop -name '*.desktop' -type f 2>/dev/null | while IFS= read -r f; do
+                sed -i "s|@HOME@/.local/bin/||g; s|@HOME@|$HOME|g" "$f"
+              done
+              # install plasmoid for Plasma discovery and patch tool paths for Nix/PATH
+              if [ -d "$out/share/maid-bt/plasmoid/com.local.btearbuds" ]; then
+                cp -a "$out/share/maid-bt/plasmoid/com.local.btearbuds" "$out/share/plasma/plasmoids/"
+                find "$out/share/plasma/plasmoids/com.local.btearbuds" \( -name '*.qml' -o -name '*.js' -o -name '*.json' \) -type f | while IFS= read -r f; do
+                  sed -i "s|@HOME@/.local/bin/||g; s|@HOME@|$HOME|g" "$f"
+                done
+              fi
               runHook postInstall
             '';
             meta = with pkgs.lib; {
