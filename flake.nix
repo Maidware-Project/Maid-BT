@@ -14,10 +14,19 @@
       packages = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          py = pkgs.python3;
+          pythonEnv = pkgs.python3.withPackages (ps: [
+            ps.dbus-python
+            ps.pygobject3
+          ]);
           runtimePath = pkgs.lib.makeBinPath [
             pkgs.bash pkgs.coreutils pkgs.gnugrep pkgs.gnused pkgs.gawk pkgs.findutils pkgs.procps pkgs.util-linux
-            pkgs.bluez pkgs.pulseaudio pkgs.libnotify pkgs.curl pkgs.systemd py
+            pkgs.bluez pkgs.pulseaudio pkgs.libnotify pkgs.curl pkgs.systemd pythonEnv
+            pkgs.glib pkgs.gobject-introspection
+          ];
+          giTypelibPath = pkgs.lib.makeSearchPath "lib/girepository-1.0" [
+            pkgs.glib
+            pkgs.gobject-introspection
+            pkgs.gtk3
           ];
           maid-bt = pkgs.stdenv.mkDerivation {
             pname = "maid-bt";
@@ -39,12 +48,27 @@
               [ -f $out/libexec/maid-bt/watcher/maid-watcher ] && chmod +x $out/libexec/maid-bt/watcher/maid-watcher || true
               for c in bluetooth-toggle.sh maid-switch maid-bt-helper maid-bt-config maid-soundcore maid-watcher buds-on.sh buds-off.sh buds-release.sh buds-fallback.sh bt-intent-server.py; do
                 if [ -f "$out/libexec/maid-bt/bin/$c" ]; then
-                  makeWrapper "$out/libexec/maid-bt/bin/$c" "$out/bin/$c" --prefix PATH : ${runtimePath}:$out/libexec/maid-bt/bin
+                  if [ "$c" = "maid-watcher" ]; then
+                    makeWrapper "$out/libexec/maid-bt/bin/$c" "$out/bin/$c" \
+                      --prefix PATH : ${runtimePath}:$out/libexec/maid-bt/bin \
+                      --prefix GI_TYPELIB_PATH : ${giTypelibPath}
+                  else
+                    makeWrapper "$out/libexec/maid-bt/bin/$c" "$out/bin/$c" --prefix PATH : ${runtimePath}:$out/libexec/maid-bt/bin
+                  fi
                 fi
               done
               # watcher entry may live under watcher/
               if [ -f "$out/libexec/maid-bt/watcher/maid-watcher" ] && [ ! -e "$out/bin/maid-watcher" ]; then
-                makeWrapper "$out/libexec/maid-bt/watcher/maid-watcher" "$out/bin/maid-watcher" --prefix PATH : ${runtimePath}:$out/libexec/maid-bt/bin
+                makeWrapper "$out/libexec/maid-bt/watcher/maid-watcher" "$out/bin/maid-watcher" \
+                  --prefix PATH : ${runtimePath}:$out/libexec/maid-bt/bin:$out/libexec/maid-bt/watcher \
+                  --prefix GI_TYPELIB_PATH : ${giTypelibPath}
+              fi
+              # if bin/maid-watcher existed and was wrapped without GI path, replace with GI-aware wrapper from watcher source when available
+              if [ -f "$out/libexec/maid-bt/watcher/maid-watcher" ] && [ -e "$out/bin/maid-watcher" ]; then
+                rm -f "$out/bin/maid-watcher"
+                makeWrapper "$out/libexec/maid-bt/watcher/maid-watcher" "$out/bin/maid-watcher" \
+                  --prefix PATH : ${runtimePath}:$out/libexec/maid-bt/bin:$out/libexec/maid-bt/watcher \
+                  --prefix GI_TYPELIB_PATH : ${giTypelibPath}
               fi
               [ -d desktop ] && cp -a desktop/*.desktop $out/share/applications/ 2>/dev/null || true
               # fix desktop entries for Nix (upstream uses @HOME@/.local/bin/...)
