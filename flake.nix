@@ -80,7 +80,7 @@
             enable = lib.mkEnableOption "Maid BT (Maidware)";
             package = lib.mkOption {
               type = lib.types.package;
-              default = self.packages.${pkgs.system}.default;
+              default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
               description = "Maid BT package to use.";
             };
           };
@@ -122,6 +122,8 @@
             })
           ];
         };
+
+      homeModules = self.homeManagerModules;
 
       nixosModules.default = { lib, ... }: {
         # Maid BT is primarily a user-session tool; system needs bluetooth/pipewire.
