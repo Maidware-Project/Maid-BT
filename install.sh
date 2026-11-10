@@ -17,7 +17,13 @@ if [ ! -f "$PKGDIR/install.sh" ]; then
   # it really installs Maid BT, not a half copy.
   FETCH_TMP="$(mktemp -d /tmp/maidbt-fetch.XXXXXX)"
   trap 'rm -rf "$FETCH_TMP"' INT TERM
-  TARBALL_URL="https://github.com/Maidware-Project/Maid-BT/archive/refs/heads/main.tar.gz"
+  REPO="Maidware-Project/Maid-BT"
+  LATEST_TAG="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+  if [ -n "$LATEST_TAG" ]; then
+    TARBALL_URL="https://github.com/$REPO/archive/refs/tags/$LATEST_TAG.tar.gz"
+  else
+    TARBALL_URL="https://github.com/$REPO/archive/refs/heads/main.tar.gz"
+  fi
   curl -fsSL "$TARBALL_URL" -o "$FETCH_TMP/maid-bt.tgz" || {
     echo "could not download the Maid BT package tree (curl failed)" >&2
     exit 1

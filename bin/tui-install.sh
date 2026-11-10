@@ -457,11 +457,18 @@ n64_boot() {
 }
 
 update_from_github() {
-  head "update from GitHub (latest)"
+  head "update from GitHub (latest release)"
   hr
-  local url="https://raw.githubusercontent.com/Maidware-Project/Maid-BT/main/install.sh"
-  say "fetching official installer: $url"
   if ! command -v curl >/dev/null 2>&1; then bad "curl not found"; pause_or_done; return 1; fi
+  local repo="Maidware-Project/Maid-BT"
+  local tag url
+  tag="$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+  if [ -n "$tag" ]; then
+    url="https://raw.githubusercontent.com/$repo/$tag/install.sh"
+  else
+    url="https://raw.githubusercontent.com/$repo/main/install.sh"
+  fi
+  say "fetching official installer: $url"
   local tmp; tmp="$(mktemp /tmp/maid-bt-update.XXXXXX.sh)"
   if curl -fsSL "$url" -o "$tmp"; then
     ok "downloaded; running latest installer (--plain, keeps your config flow safe)"
