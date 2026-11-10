@@ -1,6 +1,10 @@
 # changelog
 
-## Maid BT v1.2.3 (this release)
+## Maid BT v1.2.5 (this release)
+
+- Nix packaging: add `maid_core` (`libexec/maid-bt/watcher`) to `PYTHONPATH` in wrappers so Python commands (e.g. `maid-soundcore`, watcher) can import `maid_core`.
+
+## Maid BT v1.2.3
 
 - **NixOS (flakes + home-manager), easy setup:** `flake.nix` with packages/apps, top-level `homeManagerModules.default`/`nixosModules.default`, and declarative options: `programs.maid-bt.enable`, plus `services.maid-bt.watcher.enable`, `services.maid-bt.maidWatcher.enable` (+ `settings` -> `~/.config/maid-watcher/config.json`), and `services.maid-bt.intentListener.enable`. track `github:Maidware-Project/Maid-BT` and rebuild with `--refresh` to auto-update on every `nixos-rebuild`/`home-manager switch`.
 - **relicensed to GPL-3.0-or-later** (forkable, open source). Third-party components retain their own licenses; see `THIRD-PARTY-NOTICES.md`.
