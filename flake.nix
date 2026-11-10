@@ -51,9 +51,12 @@
                   if [ "$c" = "maid-watcher" ]; then
                     makeWrapper "$out/libexec/maid-bt/bin/$c" "$out/bin/$c" \
                       --prefix PATH : ${runtimePath}:$out/libexec/maid-bt/bin \
+                      --prefix PYTHONPATH : $out/libexec/maid-bt/watcher \
                       --prefix GI_TYPELIB_PATH : ${giTypelibPath}
                   else
-                    makeWrapper "$out/libexec/maid-bt/bin/$c" "$out/bin/$c" --prefix PATH : ${runtimePath}:$out/libexec/maid-bt/bin
+                    makeWrapper "$out/libexec/maid-bt/bin/$c" "$out/bin/$c" \
+                      --prefix PATH : ${runtimePath}:$out/libexec/maid-bt/bin \
+                      --prefix PYTHONPATH : $out/libexec/maid-bt/watcher
                   fi
                 fi
               done
@@ -61,6 +64,7 @@
               if [ -f "$out/libexec/maid-bt/watcher/maid-watcher" ] && [ ! -e "$out/bin/maid-watcher" ]; then
                 makeWrapper "$out/libexec/maid-bt/watcher/maid-watcher" "$out/bin/maid-watcher" \
                   --prefix PATH : ${runtimePath}:$out/libexec/maid-bt/bin:$out/libexec/maid-bt/watcher \
+                  --prefix PYTHONPATH : $out/libexec/maid-bt/watcher \
                   --prefix GI_TYPELIB_PATH : ${giTypelibPath}
               fi
               # if bin/maid-watcher existed and was wrapped without GI path, replace with GI-aware wrapper from watcher source when available
@@ -68,6 +72,7 @@
                 rm -f "$out/bin/maid-watcher"
                 makeWrapper "$out/libexec/maid-bt/watcher/maid-watcher" "$out/bin/maid-watcher" \
                   --prefix PATH : ${runtimePath}:$out/libexec/maid-bt/bin:$out/libexec/maid-bt/watcher \
+                  --prefix PYTHONPATH : $out/libexec/maid-bt/watcher \
                   --prefix GI_TYPELIB_PATH : ${giTypelibPath}
               fi
               [ -d desktop ] && cp -a desktop/*.desktop $out/share/applications/ 2>/dev/null || true
