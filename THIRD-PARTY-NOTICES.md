@@ -40,7 +40,6 @@ These must exist on your system; your distribution ships them, Maid BT only runs
 
 Maid BT detects and reports support for common Linux desktop environments, window managers, and shells; core CLI works broadly while some integrations (e.g. Plasma applet) are environment-specific.
 - **KDE Plasma / KWin**, **GNOME**, **XFCE**, **MATE**, **Cinnamon**, **LXQt**, **Hyprland**, **Sway**, **i3** — recognized/supported environments (no DE/WM/compositor code bundled).
-- **[GPUIShell (gpuishell)](https://git.rond.cc/rond/gpui-shell)** (rond.cc / Andre Brandao) — external Wayland desktop shell; recognized/detected when running. Not bundled; no code copied.
 - **[Event Horizon](https://github.com/Event-Horizon-desktop-environment/Event-Horizon)** — external Wayland desktop shell/environment; recognized/detected when running. Not bundled; no code copied.
 
 Everything else in this repository is original Maidware work. Corrections welcome
