@@ -101,8 +101,8 @@ import json, sys
 mac = sys.argv[1]
 print(json.dumps({
   "devices": [{"mac": mac, "name": "My Earbuds", "priority": 1,
-               "auto_reconnect": True, "prefer_profile": "a2dp"}],
-  "reconnect": {"initial_delay_s": 5, "max_delay_s": 120, "give_up_after": 10},
+               "auto_reconnect": False, "prefer_profile": "a2dp"}],
+  "reconnect": {"initial_delay_s": 15, "max_delay_s": 300, "give_up_after": 5},
   "calls": {"enabled": True, "pause_media": True, "mute_discord": True,
             "max_call_mode_s": 300},
   "battery": {"warn_percent": 25, "critical_percent": 12, "poll_s": 120},

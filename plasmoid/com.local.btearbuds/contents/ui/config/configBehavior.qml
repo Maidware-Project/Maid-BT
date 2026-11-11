@@ -27,9 +27,9 @@ Kirigami.ScrollablePage {
 
     function populate() {
         ready = false;
-        initialDelay.value = Number(values.initial_delay_s || 5);
-        maxDelay.value = Number(values.max_delay_s || 120);
-        giveUp.value = Number(values.give_up_after || 10);
+        initialDelay.value = Number(values.initial_delay_s || 15);
+        maxDelay.value = Number(values.max_delay_s || 300);
+        giveUp.value = Number(values.give_up_after || 5);
         cooldown.value = Number(values.op_cooldown_s || 10);
         adapterCycle.checked = values.adapter_cycle !== false;
         callsEnabled.checked = values.calls_enabled !== false;

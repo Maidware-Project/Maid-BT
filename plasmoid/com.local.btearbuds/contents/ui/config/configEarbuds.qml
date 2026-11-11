@@ -96,7 +96,7 @@ Kirigami.ScrollablePage {
         nameField.text = values.name || "";
         shortField.text = values.short || "";
         sinkField.text = values.fallback_sink || "";
-        autoReconnect.checked = values.auto_reconnect !== false;
+        autoReconnect.checked = values.auto_reconnect === true;
         profileBox.currentIndex = values.prefer_profile === "default" ? 1 : 0;
         appCycle.checked = values.app_cycle !== false;
         qualityLock.checked = values.quality_lock === true;

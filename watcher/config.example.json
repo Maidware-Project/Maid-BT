@@ -5,15 +5,15 @@
       "mac": "AA:BB:CC:DD:EE:FF",
       "name": "Your Earbuds",
       "priority": 1,
-      "auto_reconnect": true,
+      "auto_reconnect": false,
       "prefer_profile": "a2dp",
       "short": "Buds 1"
     }
   ],
   "reconnect": {
-    "initial_delay_s": 5,
-    "max_delay_s": 120,
-    "give_up_after": 10
+    "initial_delay_s": 15,
+    "max_delay_s": 300,
+    "give_up_after": 5
   },
   "calls": {
     "enabled": true,

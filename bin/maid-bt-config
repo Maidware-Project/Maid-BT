@@ -31,8 +31,8 @@ WATCHER_CONF = os.path.join(HOME, ".config", "maid-watcher", "config.json")
 
 DEFAULTS = {
     "devices": [],
-    "reconnect": {"initial_delay_s": 5, "max_delay_s": 120,
-                  "give_up_after": 10, "op_cooldown_s": 10},
+    "reconnect": {"initial_delay_s": 15, "max_delay_s": 300,
+                  "give_up_after": 5, "op_cooldown_s": 10},
     "recover": {"adapter_cycle": True},
     "calls": {"enabled": True, "pause_media": True, "mute_discord": True,
               "max_call_mode_s": 300},
@@ -102,7 +102,7 @@ def current():
         "mac": shell["BUDS_MAC"] or dev.get("mac", ""),
         "name": dev.get("name", "My Earbuds"),
         "short": dev.get("short", ""),
-        "auto_reconnect": dev.get("auto_reconnect", True),
+        "auto_reconnect": dev.get("auto_reconnect", False),
         "prefer_profile": dev.get("prefer_profile", "a2dp"),
         "fallback_sink": shell["FALLBACK_SINK"],
         "app_cycle": shell["APP_CYCLE"] != "0",
