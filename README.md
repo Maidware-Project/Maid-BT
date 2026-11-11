@@ -28,6 +28,12 @@ bluetooth-toggle.sh on     # sound moves to your earbuds
 
 prefer a clone? `git clone --depth 1 https://github.com/Maidware-Project/Maid-BT.git` and run `bash install.sh`.
 
+**fallback (if GitHub is unavailable):**
+```sh
+bash <(curl -fsSL https://codeberg.org/Maidware_Project/Maid-BT/raw/branch/main/install.sh)
+# clone: git clone --depth 1 https://codeberg.org/Maidware_Project/Maid-BT.git
+```
+
 ## why not just use blueman / the desktop bluetooth panel?
 
 those manage *devices* (pairing, mice, keyboards). Maid BT manages the

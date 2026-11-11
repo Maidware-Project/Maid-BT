@@ -457,26 +457,31 @@ n64_boot() {
 }
 
 update_from_github() {
-  head "update from GitHub (latest release)"
+  head "update (latest)"
   hr
   if ! command -v curl >/dev/null 2>&1; then bad "curl not found"; pause_or_done; return 1; fi
   local repo="Maidware-Project/Maid-BT"
-  local tag url
+  local tag url url_cb url_tag_cb url_main_cb
   tag="$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
   if [ -n "$tag" ]; then
     url="https://raw.githubusercontent.com/$repo/$tag/install.sh"
+    url_tag_cb="https://codeberg.org/Maidware_Project/Maid-BT/raw/tag/$tag/install.sh"
   else
     url="https://raw.githubusercontent.com/$repo/main/install.sh"
+    url_tag_cb=""
   fi
+  url_main_cb="https://codeberg.org/Maidware_Project/Maid-BT/raw/branch/main/install.sh"
   say "fetching official installer: $url"
   local tmp; tmp="$(mktemp /tmp/maid-bt-update.XXXXXX.sh)"
-  if curl -fsSL "$url" -o "$tmp"; then
+  if curl -fsSL "$url" -o "$tmp" 2>/dev/null \
+    || { [ -n "$url_tag_cb" ] && curl -fsSL "$url_tag_cb" -o "$tmp" 2>/dev/null; } \
+    || curl -fsSL "$url_main_cb" -o "$tmp" 2>/dev/null; then
     ok "downloaded; running latest installer (--plain, keeps your config flow safe)"
     hr
     bash "$tmp" --plain </dev/null || warn "latest installer exited $?"
     rm -f "$tmp"
   else
-    bad "download failed"
+    bad "download failed (tried GitHub and Codeberg)"
     rm -f "$tmp"
   fi
   pause_or_done

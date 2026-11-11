@@ -19,18 +19,22 @@ if [ ! -f "$PKGDIR/install.sh" ]; then
   trap 'rm -rf "$FETCH_TMP"' INT TERM
   REPO="Maidware-Project/Maid-BT"
   LATEST_TAG="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+  _fetched=0
+  _urls=()
   if [ -n "$LATEST_TAG" ]; then
-    TARBALL_URL="https://github.com/$REPO/archive/refs/tags/$LATEST_TAG.tar.gz"
-  else
-    TARBALL_URL="https://github.com/$REPO/archive/refs/heads/main.tar.gz"
+    _urls+=("https://github.com/$REPO/archive/refs/tags/$LATEST_TAG.tar.gz")
+    _urls+=("https://codeberg.org/Maidware_Project/Maid-BT/archive/${LATEST_TAG}.tar.gz")
   fi
-  curl -fsSL "$TARBALL_URL" -o "$FETCH_TMP/maid-bt.tgz" || {
-    echo "could not download the Maid BT package tree (curl failed)" >&2
-    exit 1
-  }
-  tar -xzf "$FETCH_TMP/maid-bt.tgz" -C "$FETCH_TMP" || exit 1
-  PKGDIR="$(find "$FETCH_TMP" -mindepth 1 -maxdepth 1 -type d -name 'Maid-BT-*' | head -n 1)"
-  [ -f "$PKGDIR/install.sh" ] || { echo "downloaded tree looks wrong" >&2; exit 1; }
+  _urls+=("https://github.com/$REPO/archive/refs/heads/main.tar.gz")
+  _urls+=("https://codeberg.org/Maidware_Project/Maid-BT/archive/main.tar.gz")
+  for TARBALL_URL in "${_urls[@]}"; do
+    if curl -fsSL "$TARBALL_URL" -o "$FETCH_TMP/maid-bt.tgz" 2>/dev/null && tar -xzf "$FETCH_TMP/maid-bt.tgz" -C "$FETCH_TMP" 2>/dev/null; then
+      PKGDIR="$(find "$FETCH_TMP" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+      [ -f "$PKGDIR/install.sh" ] && { _fetched=1; break; }
+    fi
+    rm -rf "$FETCH_TMP"/* 2>/dev/null || true
+  done
+  [ "$_fetched" = "1" ] || { echo "could not download the Maid BT package tree (tried GitHub and Codeberg)" >&2; exit 1; }
   # the script stream came through a pipe: stdin is still the user's
   # tty, so never trust [ -t 0 ] alone here - stay silent by default
   PIPED=1
