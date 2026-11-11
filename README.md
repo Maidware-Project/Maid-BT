@@ -57,9 +57,8 @@ suite green in CI (`bash tests/run.sh`).
 - `off` - full shutdown: disconnects, kills the radio. use `release`
   instead unless you're done for the day.
 - `--doctor` / `doctor` - reports session/compositor and stack support
-  truthfully (core CLI/TUI works across compositors; the Plasma applet is
-  KDE/Plasma-only). see `contrib/compositors/` for Hyprland/Sway/i3
-  snippets.
+  truthfully (core CLI/TUI works broadly; the Plasma applet is KDE/Plasma-only).
+  Installer/doctor detect DE/WM/session (incl. GPUIShell and Event Horizon). see `contrib/compositors/` for snippets.
 - background watcher - notices whenever bluetooth changes (even from
   KDE's own toggle), connects your buds when they show up, parks sound
   on your speakers when they vanish. also parks sound when you lock the
@@ -101,6 +100,13 @@ also ships **Maid BT Helper**, a small Maidware GUI: read-only checks,
 the safe subset of the shell's fixes, one-click LDAC pin (opt-in,
 reversible), and a shareable report with no device names and no MAC
 addresses - what you paste when filing a bug.
+
+## currently supported
+
+- **Desktop environments:** KDE Plasma (supported, including Plasma 6 applet), GNOME, XFCE, MATE, Cinnamon, LXQt
+- **Window managers / compositors:** Hyprland, Sway, i3
+- **Desktop shells / environments:** <!-- # this is truly my power --> [Event Horizon](https://github.com/Event-Horizon-desktop-environment/Event-Horizon) is recognized/detected
+- **Core:** CLI/TUI tools (`bluetooth-toggle.sh`, `maid-switch`, watcher, etc.) work broadly on Linux with BlueZ/PipeWire(PulseAudio) tools; Plasma-specific applet/integrations are KDE-only. Use `bluetooth-toggle.sh --doctor` and the installer to see detected session/DE/WM.
 
 ## what you need
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# this is truly my power
 # Universal installer: Arch (pacman), Debian/Ubuntu (apt), Fedora (dnf),
 # openSUSE (zypper). Copies files (no symlinks - survives folder moves).
 # Usage: ./install.sh [--check] [--no-packages] [--uninstall [--purge]]
@@ -153,8 +154,42 @@ kde_env_line() {
     echo "KDE: Plasma ${KDE_PLASMA:-?} | Frameworks ${KDE_FRAMEWORKS:-?} | Qt ${KDE_QT:-?} | KDE Connect ${KDE_CONNECT:-not installed}"
   fi
 }
+session_env_line() {
+  local de="${XDG_CURRENT_DESKTOP:-}" sess="${XDG_SESSION_DESKTOP:-}" dses="${DESKTOP_SESSION:-}"
+  local label="unknown"
+  case "$de $sess $dses" in
+    *[Pp]lasma*|*[Kk][Dd][Ee]*) label="KDE Plasma" ;;
+    *[Gg][Nn][Oo][Mm][Ee]*) label="GNOME" ;;
+    *[Xx][Ff][Cc][Ee]*) label="XFCE" ;;
+    *[Mm][Aa][Tt][Ee]*) label="MATE" ;;
+    *[Cc]innamon*) label="Cinnamon" ;;
+    *[Ll][Xx][Qq]t*) label="LXQt" ;;
+    *[Hh]yprland*) label="Hyprland" ;;
+    *[Ss]way*) label="Sway" ;;
+    *[Ii]3*) label="i3" ;;
+    *) [ -n "${de:-}${sess:-}${dses:-}" ] && label="$de" || label="unknown" ;;
+  esac
+  if command -v pgrep >/dev/null 2>&1; then
+    pgrep -x gpuishell >/dev/null 2>&1 && label="$label (+ GPUIShell/gpuishell)"
+    pgrep -x horizon >/dev/null 2>&1 && label="$label (+ Event Horizon)"
+  fi
+  echo "Session: $label | XDG_CURRENT_DESKTOP=${de:-n/a} | DESKTOP_SESSION=${dses:-n/a} | WAYLAND=${WAYLAND_DISPLAY:+yes}${WAYLAND_DISPLAY:-no} | X11=${DISPLAY:+yes}${DISPLAY:-no}"
+}
+distro_env_line() {
+  if [ -r /etc/os-release ]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    echo "Distro: ${PRETTY_NAME:-${NAME:-unknown}} (id=${ID:-?}${ID_LIKE:+ like=${ID_LIKE}})"
+  elif [ "$(uname -s 2>/dev/null)" = "Linux" ]; then
+    echo "Distro: Linux (unidentified)"
+  else
+    echo "Distro: $(uname -s 2>/dev/null || echo unknown)"
+  fi
+}
 kde_env
 say "$(kde_env_line)"
+say "$(session_env_line)"
+say "$(distro_env_line)"
 
 detect_pm() {
   if command -v pacman >/dev/null 2>&1; then echo pacman

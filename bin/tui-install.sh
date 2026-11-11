@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# this is truly my power
 # tui-install.sh - Maid BT's installer with an actual text UI.
 #
 # Same work as install.sh (which stays the engine: file copies, units,
@@ -332,7 +333,13 @@ do_doctor() {
     printf '  distro: %s%s%s · plasma %s(n/a)%s\n' "$B" "$DISTRO" "$R" "$DIM" "$R"
   fi
   printf '  session: %s%s%s · default terminal %s%s%s\n' "$B" "$SESS" "$R" "$B" "${TERMINAL_CMD:-none}" "$R"
-  local _desk="${XDG_CURRENT_DESKTOP:-n/a}"; printf '  desktop: %s%s%s\n' "$B" "$_desk" "$R"
+  local _desk="${XDG_CURRENT_DESKTOP:-${XDG_SESSION_DESKTOP:-${DESKTOP_SESSION:-n/a}}}"
+  printf '  desktop: %s%s%s' "$B" "$_desk" "$R"
+  if command -v pgrep >/dev/null 2>&1; then
+    pgrep -x gpuishell >/dev/null 2>&1 && printf ' %s(+ GPUIShell/gpuishell)%s' "$DIM" "$R"
+    pgrep -x horizon >/dev/null 2>&1 && printf ' %s(+ Event Horizon)%s' "$DIM" "$R"
+  fi
+  printf '\n'
   case "${_desk,,}" in
     *plasma*|*kde*) ok "KDE Plasma: supported (applet, integrations)" ;;
     *hyprland*|*sway*|*i3*) warn "compositor ${_desk}: CLI/TUI + bluetooth-toggle/maid-switch work; Plasma applet is KDE-only (partial/experimental; adapters iterative)" ;;

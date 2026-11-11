@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# this is truly my power
 # Bluetooth on/off switch that actually sticks + auto audio routing.
 #
 #   on  = rfkill unblock + power on + auto-connect your earbuds
@@ -35,11 +36,23 @@ RFKILL="$(command -v rfkill 2>/dev/null || { [ -x /usr/sbin/rfkill ] && echo /us
 STATE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-state"
 session_doctor() {
   echo "Maid BT (bluetooth-toggle) — session/compositor (best-effort)"
-  echo "  XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-n/a}  XDG_SESSION_DESKTOP=${XDG_SESSION_DESKTOP:-n/a}"
+  echo "  XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-n/a}  XDG_SESSION_DESKTOP=${XDG_SESSION_DESKTOP:-n/a}  DESKTOP_SESSION=${DESKTOP_SESSION:-n/a}"
   echo "  WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}  DISPLAY=${DISPLAY:-}"
-  case "${XDG_CURRENT_DESKTOP:-} ${XDG_SESSION_DESKTOP:-}" in
+  local de="${XDG_CURRENT_DESKTOP:-} ${XDG_SESSION_DESKTOP:-} ${DESKTOP_SESSION:-}"
+  if command -v pgrep >/dev/null 2>&1; then
+    pgrep -x gpuishell >/dev/null 2>&1 && echo "  shell: GPUIShell (gpuishell, rond.cc/gpui-shell) detected."
+    pgrep -x horizon >/dev/null 2>&1 && echo "  shell: Event Horizon desktop environment detected."
+  fi
+  case "$de" in
     *[Pp]lasma*|*[Kk][Dd][Ee]*) echo "  support: KDE Plasma supported (applet + integrations available)." ;;
-    *[Hh]yprland*|*[Ss]way*|*[Ii]3*) echo "  support: core CLI (on/off/release/radio/status/porcelain) works; Plasma applet is KDE-only (partial/experimental). Bind keys in your compositor config." ;;
+    *[Gg][Nn][Oo][Mm][Ee]*) echo "  support: GNOME session detected. Core CLI works; bind commands via GNOME keyboard shortcuts." ;;
+    *[Xx][Ff][Cc][Ee]*) echo "  support: XFCE session detected. Core CLI works; bind commands via XFCE keyboard shortcuts." ;;
+    *[Mm][Aa][Tt][Ee]*) echo "  support: MATE session detected. Core CLI works; bind commands via MATE keyboard shortcuts." ;;
+    *[Cc]innamon*) echo "  support: Cinnamon session detected. Core CLI works; bind commands via Cinnamon keyboard shortcuts." ;;
+    *[Ll][Xx][Qq]t*) echo "  support: LXQt session detected. Core CLI works; bind commands via LXQt shortcuts." ;;
+    *[Hh]yprland*) echo "  support: Hyprland detected. Core CLI works; Plasma applet is KDE-only. Bind keys in hyprland.conf." ;;
+    *[Ss]way*) echo "  support: Sway detected. Core CLI works; Plasma applet is KDE-only. Bind keys in Sway config." ;;
+    *[Ii]3*) echo "  support: i3 detected. Core CLI works; Plasma applet is KDE-only. Bind keys in i3 config." ;;
     *) echo "  support: core CLI works on Linux with bluez/pactl; desktop integration varies." ;;
   esac
   echo "  tips: moves all playback streams (app-agnostic). bluetooth-toggle.sh status | porcelain; see contrib/compositors/ for Hyprland/Sway/i3 snippets."
