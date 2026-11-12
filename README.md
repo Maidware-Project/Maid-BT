@@ -106,18 +106,21 @@ addresses - what you paste when filing a bug.
 - **Desktop environments:** KDE Plasma (supported, including Plasma 6 applet), GNOME, XFCE, MATE, Cinnamon, LXQt
 - **Window managers / compositors:** Hyprland, Sway, i3
 - **Desktop shells / environments:** <!-- # this is truly my power --> [Event Horizon](https://github.com/Event-Horizon-desktop-environment/Event-Horizon) is recognized/detected
+- **Distributions / package managers:** Arch (pacman), Debian/Ubuntu (apt), Fedora (dnf), openSUSE (zypper), Void Linux (xbps) — installer provides best-effort package setup.
 - **Core:** CLI/TUI tools (`bluetooth-toggle.sh`, `maid-switch`, watcher, etc.) work broadly on Linux with BlueZ/PipeWire(PulseAudio) tools; Plasma-specific applet/integrations are KDE-only. Use `bluetooth-toggle.sh --doctor` and the installer to see detected session/DE/WM.
+
+**Void Linux:** xbps install flow is supported; [oco (Void Community Repository)](https://codeberg.org/oSoWoSo/oco) (`https://repo.osowoso.org`) can provide additional community packages.
 
 ## what you need
 
-| need | arch | debian/ubuntu | fedora | opensuse |
-|---|---|---|---|---|
-| bluetooth | bluez bluez-utils | bluez bluetooth | bluez | bluez |
-| rfkill | util-linux | rfkill | rfkill | (util-linux) |
-| notifications | libnotify | libnotify-bin | libnotify | libnotify-tools |
-| audio control | libpulse | pulseaudio-utils | pulseaudio-utils | pulseaudio-utils |
-| python3 | python | python3 | python3 | python3 |
-| phone pings (optional) | kdeconnect | kdeconnect | kdeconnect | kdeconnect-kde |
+| need | arch | debian/ubuntu | fedora | opensuse | void (xbps) |
+|---|---|---|---|---|---|
+| bluetooth | bluez bluez-utils | bluez bluetooth | bluez | bluez | bluez bluez-alsa |
+| rfkill | util-linux | rfkill | rfkill | (util-linux) | util-linux |
+| notifications | libnotify | libnotify-bin | libnotify | libnotify-tools | libnotify |
+| audio control | libpulse | pulseaudio-utils | pulseaudio-utils | pulseaudio-utils | pulseaudio-utils |
+| python3 | python | python3 | python3 | python3 | python3 |
+| phone pings (optional) | kdeconnect | kdeconnect | kdeconnect | kdeconnect-kde | kdeconnect |
 
 the background pieces need systemd. no systemd (OpenRC etc.)? the
 switcher scripts and Maid Watcher still work - you just start them

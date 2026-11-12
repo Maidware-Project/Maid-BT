@@ -42,5 +42,8 @@ Maid BT detects and reports support for common Linux desktop environments, windo
 - **KDE Plasma / KWin**, **GNOME**, **XFCE**, **MATE**, **Cinnamon**, **LXQt**, **Hyprland**, **Sway**, **i3** — recognized/supported environments (no DE/WM/compositor code bundled).
 - **[Event Horizon](https://github.com/Event-Horizon-desktop-environment/Event-Horizon)** — external Wayland desktop shell/environment; recognized/detected when running. Not bundled; no code copied.
 
+## Void Linux / community repositories (referenced, not bundled)
+- **[oco (vOid Community repOsitory)](https://codeberg.org/oSoWoSo/oco)** (oSoWoSo) — Void Linux xbps-src templates/community binary repository (`https://repo.osowoso.org`); referenced for Void Linux package availability/support. Not bundled.
+
 Everything else in this repository is original Maidware work. Corrections welcome
 (see CONTRIBUTING.md); if a credit is missing or wrong, open an issue or pull request.

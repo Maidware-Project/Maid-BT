@@ -193,6 +193,7 @@ say "$(distro_env_line)"
 
 detect_pm() {
   if command -v pacman >/dev/null 2>&1; then echo pacman
+  elif command -v xbps-install >/dev/null 2>&1; then echo xbps
   elif command -v apt-get >/dev/null 2>&1; then echo apt
   elif command -v dnf >/dev/null 2>&1; then echo dnf
   elif command -v zypper >/dev/null 2>&1; then echo zypper
@@ -205,6 +206,7 @@ install_pkgs() {
     # NOTE: full -Syu, never -Sy alone - Arch does not support partial
     # upgrades (refreshed db + old packages breaks).
     pacman) sudo pacman -Syu --needed --noconfirm "$@" ;;
+    xbps) sudo xbps-install -Sy "$@" ;;
     apt) sudo apt-get update && sudo apt-get install -y "$@" ;;
     dnf) sudo dnf install -y "$@" ;;
     zypper) sudo zypper --non-interactive install "$@" ;;
@@ -219,6 +221,7 @@ do_packages() {
   local pm="$1"
   case "$pm" in
     pacman) REQ=(bluez bluez-utils util-linux libnotify libpulse python) ;;
+    xbps) REQ=(bluez bluez-alsa util-linux libnotify pulseaudio-utils python3) ;;
     apt) REQ=(bluez bluetooth rfkill libnotify-bin pulseaudio-utils python3) ;;
     dnf) REQ=(bluez rfkill libnotify pulseaudio-utils python3) ;;
     zypper) REQ=(bluez rfkill libnotify-tools pulseaudio-utils python3) ;;
@@ -231,6 +234,7 @@ do_packages() {
   # Maid Watcher (optional component) needs python dbus/gi bindings.
   case "$pm" in
     pacman) WATCHREQ=(python-dbus python-gobject) ;;
+    xbps) WATCHREQ=(python3-dbus python3-gobject) ;;
     apt) WATCHREQ=(python3-dbus python3-gi) ;;
     dnf) WATCHREQ=(python3-dbus python3-gobject) ;;
     zypper) WATCHREQ=(python3-dbus python3-gobject) ;;
@@ -242,13 +246,16 @@ do_packages() {
   fi
   # kdeconnect is optional (phone pings only): try it, tolerate absence.
   case "$pm" in
-    pacman|apt|dnf) OPT=(kdeconnect) ;;
+    pacman|apt|dnf|xbps) OPT=(kdeconnect) ;;
     zypper) OPT=(kdeconnect-kde) ;;
     *) OPT=() ;;
   esac
   if [ "${#OPT[@]}" -gt 0 ]; then
     say "trying optional (phone pings): ${OPT[*]}"
     install_pkgs "$pm" "${OPT[@]}" >/dev/null 2>&1 || say "optional kdeconnect skipped"
+  fi
+  if [ "$pm" = "xbps" ]; then
+    say "Void Linux: oco (Void Community Repository) - https://codeberg.org/oSoWoSo/oco (binary repo: https://repo.osowoso.org)"
   fi
 }
 
