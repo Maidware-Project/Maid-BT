@@ -30,6 +30,8 @@ Kirigami.ScrollablePage {
     property string detailText: ""
     property var deviceState: null
     property var eqBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    property var modelCandidates: []
+    property int modelCandidateIndex: 0
     readonly property var bandNames: ["31", "62", "125", "250", "500",
                                       "1k", "2k", "4k", "8k", "16k"]
     readonly property var ancModes: [
@@ -47,12 +49,40 @@ Kirigami.ScrollablePage {
 
     function checkSupport() {
         supported = false;
-        // full alias first (it is the DB key), short name as fallback
-        const n = String(values.name || values.short || "").trim();
-        if (n === "") {
+        const seen = {};
+        const candidates = [];
+        function addCandidate(v) {
+            const s = String(v || "").trim();
+            if (s === "" || seen[s])
+                return;
+            seen[s] = true;
+            candidates.push(s);
+        }
+        // try specific/configured names first, then short/generic fallbacks
+        addCandidate(values.name);
+        addCandidate(values.short);
+        // common case: config stores generic brand "Soundcore" while BT alias is "soundcore <model>"
+        if (values.name && values.name.toLowerCase() === "soundcore" && values.short)
+            addCandidate("soundcore " + values.short);
+        modelCandidates = candidates;
+        modelCandidateIndex = 0;
+        if (modelCandidates.length === 0) {
             statusText = "Pick your earbuds on the Earbuds page first.";
             return;
         }
+        tryNextModelCandidate();
+    }
+
+    function tryNextModelCandidate() {
+        if (modelCandidateIndex >= modelCandidates.length) {
+            supported = false;
+            busy = false;
+            statusText = "This model is not in Maid BT's database yet (or not recognized for device control).";
+            detailText = "Set the earbud name to the exact model name in Earbuds settings, then retry.";
+            return;
+        }
+        const n = modelCandidates[modelCandidateIndex];
+        modelCandidateIndex += 1;
         // argv style: maid-watcher model <name> (main() joins words)
         execSource.connectSource(modelTool + " model " + n);
     }
@@ -141,12 +171,22 @@ Kirigami.ScrollablePage {
                 }
             } else if (src.indexOf(" model ") !== -1) {
                 // line: "<name> -> <brand> <model>  quirks: a, b, c"
-                page.supported = out.indexOf("device-control") >= 0;
-                if (!page.supported) {
+                const hasControl = out.indexOf("device-control") >= 0;
+                const notFound = out.indexOf("not in the model database") !== -1;
+                if (hasControl) {
+                    page.supported = true;
+                    page.statusText = "";
+                    page.detailText = "";
+                } else if (page.modelCandidateIndex < page.modelCandidates.length && (notFound || out === "")) {
+                    // try next candidate name before declaring unsupported
+                    page.tryNextModelCandidate();
+                } else {
+                    page.supported = false;
                     page.busy = false;
-                    page.statusText = out.indexOf("not in the model database") !== -1
+                    page.statusText = notFound
                         ? "This model is not in Maid BT's database yet - tell Maidware the name so it can be added."
-                        : "Could not reach the model database.";
+                        : (out === "" ? "Could not reach the model database." : "Device control is not available for this model.");
+                    page.detailText = notFound ? "Tip: set the earbud name to the exact model (e.g. 'soundcore Liberty 5') in Earbuds settings." : "";
                 }
             } else if (src === page.soundTool + " info --json") {
                 page.busy = false;
@@ -248,9 +288,15 @@ Kirigami.ScrollablePage {
                     QQC2.ButtonGroup.group: modeGroup
                     enabled: !page.busy
                     text: modelData.label
-                    checked: page.deviceState
-                             && page.deviceState.anc
-                             && page.deviceState.anc.ambient === modelData.key
+                    checked: page.deviceState && page.deviceState.anc && (
+                        modelData.key === "vocal"
+                            ? (page.deviceState.anc.ambient === "transparency"
+                               && page.deviceState.anc.transparency === "vocal")
+                        : modelData.key === "transparency"
+                            ? (page.deviceState.anc.ambient === "transparency"
+                               && page.deviceState.anc.transparency !== "vocal")
+                        : page.deviceState.anc.ambient === modelData.key
+                    )
                     onClicked: page.applyAnc(modelData.key)
                 }
             }
