@@ -338,6 +338,7 @@ do_doctor() {
   if command -v pgrep >/dev/null 2>&1; then
     pgrep -x gpuishell >/dev/null 2>&1 && printf ' %s(+ GPUIShell/gpuishell)%s' "$DIM" "$R"
     pgrep -x horizon >/dev/null 2>&1 && printf ' %s(+ Event Horizon)%s' "$DIM" "$R"
+    pgrep -x kineticwe >/dev/null 2>&1 && printf ' %s(+ KineticWE)%s' "$DIM" "$R"
   fi
   printf '\n'
   case "${_desk,,}" in

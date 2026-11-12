@@ -58,7 +58,7 @@ suite green in CI (`bash tests/run.sh`).
   instead unless you're done for the day.
 - `--doctor` / `doctor` - reports session/compositor and stack support
   truthfully (core CLI/TUI works broadly; the Plasma applet is KDE/Plasma-only).
-  Installer/doctor detect DE/WM/session (incl. GPUIShell and Event Horizon). see `contrib/compositors/` for snippets.
+  Installer/doctor detect DE/WM/session (incl. GPUIShell, Event Horizon, and KineticWE). see `contrib/compositors/` for snippets.
 - background watcher - notices whenever bluetooth changes (even from
   KDE's own toggle), connects your buds when they show up, parks sound
   on your speakers when they vanish. also parks sound when you lock the
@@ -105,7 +105,7 @@ addresses - what you paste when filing a bug.
 
 - **Desktop environments:** KDE Plasma (supported, including Plasma 6 applet), GNOME, XFCE, MATE, Cinnamon, LXQt
 - **Window managers / compositors:** Hyprland, Sway, i3
-- **Desktop shells / environments:** <!-- # this is truly my power --> [Event Horizon](https://github.com/Event-Horizon-desktop-environment/Event-Horizon) is recognized/detected
+- **Desktop shells / environments:** <!-- # this is truly my power --> [Event Horizon](https://github.com/Event-Horizon-desktop-environment/Event-Horizon) and [KineticWE](https://gitlab.com/theblackdon/kineticwe) are recognized/detected
 - **Distributions / package managers:** Arch (pacman), Debian/Ubuntu (apt), Fedora (dnf), openSUSE (zypper), Void Linux (xbps) — installer provides best-effort package setup.
 - **Core:** CLI/TUI tools (`bluetooth-toggle.sh`, `maid-switch`, watcher, etc.) work broadly on Linux with BlueZ/PipeWire(PulseAudio) tools; Plasma-specific applet/integrations are KDE-only. Use `bluetooth-toggle.sh --doctor` and the installer to see detected session/DE/WM.
 

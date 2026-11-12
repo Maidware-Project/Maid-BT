@@ -172,6 +172,7 @@ session_env_line() {
   if command -v pgrep >/dev/null 2>&1; then
     pgrep -x gpuishell >/dev/null 2>&1 && label="$label (+ GPUIShell/gpuishell)"
     pgrep -x horizon >/dev/null 2>&1 && label="$label (+ Event Horizon)"
+    pgrep -x kineticwe >/dev/null 2>&1 && label="$label (+ KineticWE)"
   fi
   echo "Session: $label | XDG_CURRENT_DESKTOP=${de:-n/a} | DESKTOP_SESSION=${dses:-n/a} | WAYLAND=${WAYLAND_DISPLAY:+yes}${WAYLAND_DISPLAY:-no} | X11=${DISPLAY:+yes}${DISPLAY:-no}"
 }

@@ -42,6 +42,7 @@ session_doctor() {
   if command -v pgrep >/dev/null 2>&1; then
     pgrep -x gpuishell >/dev/null 2>&1 && echo "  shell: GPUIShell (gpuishell, rond.cc/gpui-shell) detected."
     pgrep -x horizon >/dev/null 2>&1 && echo "  shell: Event Horizon desktop environment detected."
+    pgrep -x kineticwe >/dev/null 2>&1 && echo "  shell: KineticWE compositor/session detected."
   fi
   case "$de" in
     *[Pp]lasma*|*[Kk][Dd][Ee]*) echo "  support: KDE Plasma supported (applet + integrations available)." ;;
