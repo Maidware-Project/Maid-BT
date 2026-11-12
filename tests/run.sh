@@ -162,7 +162,7 @@ print("flap watch passed")
 PYEOF2
 ok "flap storm stands down"
 mkdir -p /tmp/btstub
-printf '#!/bin/bash\necho "2: bnep0: <UP> mtu 1500"\necho "    inet 192.0.2.1/24 scope global bnep0"\n' > /tmp/btstub/ip
+printf '#!/usr/bin/env bash\necho "2: bnep0: <UP> mtu 1500"\necho "    inet 192.0.2.1/24 scope global bnep0"\n' > /tmp/btstub/ip
 chmod +x /tmp/btstub/ip
 PATH=/tmp/btstub:/usr/bin:/bin ${PYTHON3:-python3} - "$PKGDIR/watcher" <<'PYEOF2' || fail "bnep detect failed"
 import os
@@ -194,7 +194,7 @@ rm -rf /tmp/btstub
 ok "bluetooth fallback link detect"
 mkdir -p /tmp/micstub
 cat > /tmp/micstub/pw-dump <<'STUBEOF'
-#!/bin/bash
+#!/usr/bin/env bash
 cat <<'JSONEOF'
 [{"id": 7, "type": "PipeWire:Interface:Node", "info": {"state": "running", "props": {"media.class": "Stream/Input/Audio", "application.name": "Vesktop", "node.name": "chromium_capture"}}},
 {"id": 9, "type": "PipeWire:Interface:Node", "info": {"state": "suspended", "props": {"media.class": "Stream/Input/Audio", "application.name": "Firefox", "node.name": "x"}}}
@@ -248,7 +248,7 @@ echo "== porcelain state readout =="
 # stubbed like the rest of the suite: no real bluez/pulse needed here
 rm -rf /tmp/maidbt-p && mkdir -p /tmp/maidbt-p/stubs /tmp/maidbt-p/.config
 cat > /tmp/maidbt-p/stubs/bluetoothctl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 # fake adapter: powered, buds never connected
 case "$*" in
   *show*) echo "Controller AA:BB:CC:DD:EE:FF test"; echo "Powered: yes" ;;
@@ -256,11 +256,11 @@ case "$*" in
   *) exit 1 ;;
 esac
 EOF
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-p/stubs/pactl
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-p/stubs/pactl
 # stub rfkill too: the toggle resolves /usr/sbin/rfkill outside PATH, so
 # without one the host's real radio state (blocked or not) leaks into
 # the suite and "hardware-free" becomes host-dependent
-printf '#!/bin/bash\necho "0: hci0: Bluetooth"; echo "Soft blocked: no"; echo "Hard blocked: no"\n' > /tmp/maidbt-p/stubs/rfkill
+printf '#!/usr/bin/env bash\necho "0: hci0: Bluetooth"; echo "Soft blocked: no"; echo "Hard blocked: no"\n' > /tmp/maidbt-p/stubs/rfkill
 chmod +x /tmp/maidbt-p/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-p/.config/bluetooth-buds.conf
 # XDG_RUNTIME_DIR is isolated with the rest: without it the porcelain
@@ -276,15 +276,15 @@ rm -rf /tmp/maidbt-p
 echo "== porcelain knows phone vs PC =="
 rm -rf /tmp/maidbt-ph && mkdir -p /tmp/maidbt-ph/stubs /tmp/maidbt-ph/.config
 cat > /tmp/maidbt-ph/stubs/bluetoothctl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 case "$*" in
   *show*) echo "Controller AA:BB:CC:DD:EE:FF test"; echo "Powered: yes" ;;
   *info*) echo "Device 11:22:33:44:55:66 (public)"; echo "Connected: yes" ;;
   *) exit 1 ;;
 esac
 EOF
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-ph/stubs/pactl
-printf '#!/bin/bash\necho "0: hci0: Bluetooth"; echo "Soft blocked: no"; echo "Hard blocked: no"\n' > /tmp/maidbt-ph/stubs/rfkill
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-ph/stubs/pactl
+printf '#!/usr/bin/env bash\necho "0: hci0: Bluetooth"; echo "Soft blocked: no"; echo "Hard blocked: no"\n' > /tmp/maidbt-ph/stubs/rfkill
 chmod +x /tmp/maidbt-ph/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-ph/.config/bluetooth-buds.conf
 printf '%s 1200\n' "$(date +%s)" > /tmp/maidbt-ph/bt-hands-off
@@ -314,15 +314,15 @@ echo "== porcelain steady with noisy adapter =="
 # what actually gets exercised (the cache must not mask real regressions).
 rm -rf /tmp/maidbt-noise && mkdir -p /tmp/maidbt-noise/stubs /tmp/maidbt-noise/.config
 cat > /tmp/maidbt-noise/stubs/bluetoothctl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 case "$*" in
   *show*) echo "Controller AA:BB:CC:DD:EE:FF test"; echo "Powered: yes"; seq 1 20000 ;;
   *info*) echo "Device 11:22:33:44:55:66 (public)"; echo "Connected: yes"; seq 1 20000 ;;
   *) exit 1 ;;
 esac
 EOF
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-noise/stubs/pactl
-printf '#!/bin/bash\necho "0: hci0: Bluetooth"; echo "Soft blocked: no"; echo "Hard blocked: no"\n' > /tmp/maidbt-noise/stubs/rfkill
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-noise/stubs/pactl
+printf '#!/usr/bin/env bash\necho "0: hci0: Bluetooth"; echo "Soft blocked: no"; echo "Hard blocked: no"\n' > /tmp/maidbt-noise/stubs/rfkill
 chmod +x /tmp/maidbt-noise/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-noise/.config/bluetooth-buds.conf
 for i in 1 2 3 4 5; do
@@ -338,8 +338,8 @@ echo "== unconfigured daemon refuses =="
 # config, so without stubs this test passes or fails on whatever the host has
 # installed - ubuntu ci has no bluez and never reached the refusal we want.
 rm -rf /tmp/maidbt-t; mkdir -p /tmp/maidbt-t/stubs
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-t/stubs/bluetoothctl
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-t/stubs/pactl
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-t/stubs/bluetoothctl
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-t/stubs/pactl
 chmod +x /tmp/maidbt-t/stubs/*
 out=$(PATH="/tmp/maidbt-t/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-t HOME=/tmp/maidbt-t timeout 3 bash "$PKGDIR/bin/buds-fallback.sh" 2>&1 || true)
 echo "$out" | grep -q "not configured" || fail "refusal message missing: $out"
@@ -348,7 +348,7 @@ ok "unconfigured refusal"
 echo "== hands-off suppresses auto-grab =="
 rm -rf /tmp/maidbt-t; mkdir -p /tmp/maidbt-t/stubs /tmp/maidbt-t/.config
 cat > /tmp/maidbt-t/stubs/bluetoothctl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 # fake adapter: always powered, buds never connected, connects always fail
 case "$*" in
   *show*) echo "Controller AA:BB:CC:DD:EE:FF test"; echo "	Powered: yes" ;;
@@ -358,11 +358,11 @@ case "$*" in
 esac
 EOF
 # silence cross-boundary side effects: no real phone pings, no real popups.
-printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-t/stubs/kdeconnect-cli
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-t/stubs/notify-send
+printf '#!/usr/bin/env bash\nexit 1\n' > /tmp/maidbt-t/stubs/kdeconnect-cli
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-t/stubs/notify-send
 # pactl is the daemon's second hard requirement, and ubuntu ci has no
 # pulseaudio-utils - without this stub the daemon quits before ever trying.
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-t/stubs/pactl
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-t/stubs/pactl
 chmod +x /tmp/maidbt-t/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\n' > /tmp/maidbt-t/.config/bluetooth-buds.conf
 export PATH="/tmp/maidbt-t/stubs:$PATH"
@@ -379,7 +379,7 @@ ok "retry fires when free"
 echo "== generic headset auto-switch =="
 rm -rf /tmp/maidbt-g; mkdir -p /tmp/maidbt-g/stubs /tmp/maidbt-g/.config /tmp/maidbt-g/state
 cat > /tmp/maidbt-g/stubs/bluetoothctl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 case "$*" in
   *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
   *Paired*) echo "Device AA:BB:CC:DD:EE:FF Test Headset" ;;
@@ -392,7 +392,7 @@ esac
 exit 0
 EOF
 cat > /tmp/maidbt-g/stubs/pactl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 S="${STUBSTATE:-/tmp}"
 case "$*" in
   *short*sinks*) cat "$S/sinks" 2>/dev/null ;;
@@ -407,8 +407,8 @@ exit 0
 EOF
 chmod +x /tmp/maidbt-g/stubs/*
 # silence cross-boundary side effects: no real phone pings, no real popups.
-printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-g/stubs/kdeconnect-cli
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-g/stubs/notify-send
+printf '#!/usr/bin/env bash\nexit 1\n' > /tmp/maidbt-g/stubs/kdeconnect-cli
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-g/stubs/notify-send
 chmod +x /tmp/maidbt-g/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="testsink-fallback"\n' > /tmp/maidbt-g/.config/bluetooth-buds.conf
 export STUBSTATE=/tmp/maidbt-g/state
@@ -442,7 +442,7 @@ unset STUBSTATE
 echo "== stale sink index fails loud =="
 rm -rf /tmp/maidbt-x; mkdir -p /tmp/maidbt-x/stubs /tmp/maidbt-x/.config /tmp/maidbt-x/state
 cat > /tmp/maidbt-x/stubs/bluetoothctl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 case "$*" in
   *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
   *info*) printf 'Alias: Test Buds\n\tConnected: no\n' ;;
@@ -452,7 +452,7 @@ esac
 exit 0
 EOF
 cat > /tmp/maidbt-x/stubs/pactl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 S="${STUBSTATE:-/tmp}"
 case "$*" in
   *short*sinks*) cat "$S/sinks" 2>/dev/null ;;
@@ -465,8 +465,8 @@ exit 0
 EOF
 chmod +x /tmp/maidbt-x/stubs/*
 # silence cross-boundary side effects: no real phone pings, no real popups.
-printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-x/stubs/kdeconnect-cli
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-x/stubs/notify-send
+printf '#!/usr/bin/env bash\nexit 1\n' > /tmp/maidbt-x/stubs/kdeconnect-cli
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-x/stubs/notify-send
 chmod +x /tmp/maidbt-x/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="3543"\n' > /tmp/maidbt-x/.config/bluetooth-buds.conf
 echo "77 bluez_output.11_22_33_44_55_66.1" > /tmp/maidbt-x/state/sinks
@@ -486,7 +486,7 @@ rm -rf /tmp/maidbt-x
 echo "== quality lock pins LDAC =="
 rm -rf /tmp/maidbt-q; mkdir -p /tmp/maidbt-q/stubs /tmp/maidbt-q/.config /tmp/maidbt-q/state
 cat > /tmp/maidbt-q/stubs/bluetoothctl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 case "$*" in
   *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
   *11:22:33:44:55:66*) printf 'Device 11:22:33:44:55:66 Test Buds\n\tConnected: yes\n' ;;
@@ -495,7 +495,7 @@ esac
 exit 0
 EOF
 cat > /tmp/maidbt-q/stubs/pactl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 S="${STUBSTATE:-/tmp}"
 case "$*" in
   *short*cards*) echo "99 bluez_card.11_22_33_44_55_66" ;;
@@ -510,8 +510,8 @@ exit 0
 EOF
 chmod +x /tmp/maidbt-q/stubs/*
 # silence cross-boundary side effects: no real phone pings, no real popups.
-printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-q/stubs/kdeconnect-cli
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-q/stubs/notify-send
+printf '#!/usr/bin/env bash\nexit 1\n' > /tmp/maidbt-q/stubs/kdeconnect-cli
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-q/stubs/notify-send
 chmod +x /tmp/maidbt-q/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\nQUALITY_LOCK=1\n' > /tmp/maidbt-q/.config/bluetooth-buds.conf
 STUBSTATE=/tmp/maidbt-q/state PATH="/tmp/maidbt-q/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-q \
@@ -524,7 +524,7 @@ rm -rf /tmp/maidbt-q
 echo "== hsp rescue needs free mic =="
 rm -rf /tmp/maidbt-h; mkdir -p /tmp/maidbt-h/stubs /tmp/maidbt-h/.config /tmp/maidbt-h/state
 cat > /tmp/maidbt-h/stubs/bluetoothctl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 case "$*" in
   *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
   *11:22:33:44:55:66*) printf 'Device 11:22:33:44:55:66 Test Buds\n\tConnected: yes\n' ;;
@@ -533,7 +533,7 @@ esac
 exit 0
 EOF
 cat > /tmp/maidbt-h/stubs/pactl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 S="${STUBSTATE:-/tmp}"
 case "$*" in
   *short*cards*) echo "99 bluez_card.11_22_33_44_55_66" ;;
@@ -554,8 +554,8 @@ exit 0
 EOF
 chmod +x /tmp/maidbt-h/stubs/*
 # silence cross-boundary side effects: no real phone pings, no real popups.
-printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-h/stubs/kdeconnect-cli
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-h/stubs/notify-send
+printf '#!/usr/bin/env bash\nexit 1\n' > /tmp/maidbt-h/stubs/kdeconnect-cli
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-h/stubs/notify-send
 chmod +x /tmp/maidbt-h/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\nQUALITY_LOCK=1\n' > /tmp/maidbt-h/.config/bluetooth-buds.conf
 # free mic: stuck HSP gets rescued to LDAC
@@ -575,7 +575,7 @@ rm -rf /tmp/maidbt-h
 echo "== multipoint release parks all day =="
 rm -rf /tmp/maidbt-m; mkdir -p /tmp/maidbt-m/stubs /tmp/maidbt-m/.config
 cat > /tmp/maidbt-m/stubs/bluetoothctl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 case "$*" in
   *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
   *11:22:33:44:55:66*) printf 'Device 11:22:33:44:55:66 Test Buds\n\tConnected: yes\n' ;;
@@ -584,16 +584,16 @@ esac
 exit 0
 EOF
 cat > /tmp/maidbt-m/stubs/pactl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 case "$*" in
   *info*) echo "Default Sink: testsink" ;;
   *short*sinks*) echo "77 bluez_output.11_22_33_44_55_66.1" ;;
 esac
 exit 0
 EOF
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-m/stubs/systemctl
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-m/stubs/notify-send
-printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-m/stubs/kdeconnect-cli
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-m/stubs/systemctl
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-m/stubs/notify-send
+printf '#!/usr/bin/env bash\nexit 1\n' > /tmp/maidbt-m/stubs/kdeconnect-cli
 chmod +x /tmp/maidbt-m/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="test-sink"\nMULTIPOINT=1\n' > /tmp/maidbt-m/.config/bluetooth-buds.conf
 PATH="/tmp/maidbt-m/stubs:$PATH" XDG_RUNTIME_DIR=/tmp/maidbt-m HOME=/tmp/maidbt-m \
@@ -632,7 +632,7 @@ echo "== model db auto-recognize =="
 # name hunt. stub bluetoothctl answers one MAC and stays silent on another.
 rm -rf /tmp/maidbt-m && mkdir -p /tmp/maidbt-m/stubs /tmp/maidbt-m/.config/maid-watcher
 cat > /tmp/maidbt-m/stubs/bluetoothctl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 for a in "$@"; do
   case "$a" in
     11:22:33:44:55:66)
@@ -688,7 +688,7 @@ echo "== volume resume remembers and returns =="
 # hand it back on the way in - but never guess on a first ever pairing.
 rm -rf /tmp/maidbt-v; mkdir -p /tmp/maidbt-v/stubs /tmp/maidbt-v/.config /tmp/maidbt-v/state
 cat > /tmp/maidbt-v/stubs/bluetoothctl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 case "$*" in
   *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
   *connect*) echo "Connection successful" ;;
@@ -699,7 +699,7 @@ esac
 exit 0
 EOF
 cat > /tmp/maidbt-v/stubs/pactl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 S="${STUBSTATE:-/tmp/maidbt-v/state}"
 case "$*" in
   *short*sinks*) cat "$S/sinks" 2>/dev/null ;;
@@ -716,9 +716,9 @@ case "$*" in
 esac
 exit 0
 EOF
-printf '#!/bin/bash\necho "0: hci0: Bluetooth"; echo "Soft blocked: no"; echo "Hard blocked: no"\n' > /tmp/maidbt-v/stubs/rfkill
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-v/stubs/notify-send
-printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-v/stubs/kdeconnect-cli
+printf '#!/usr/bin/env bash\necho "0: hci0: Bluetooth"; echo "Soft blocked: no"; echo "Hard blocked: no"\n' > /tmp/maidbt-v/stubs/rfkill
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-v/stubs/notify-send
+printf '#!/usr/bin/env bash\nexit 1\n' > /tmp/maidbt-v/stubs/kdeconnect-cli
 chmod +x /tmp/maidbt-v/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="testsink-fallback"\n' > /tmp/maidbt-v/.config/bluetooth-buds.conf
 printf 'agent-Bluetooth\n' > /tmp/maidbt-v/agent
@@ -750,7 +750,7 @@ echo "== controllers never count as headsets =="
 # speaker caps - the any-headset grab must leave it alone entirely.
 rm -rf /tmp/maidbt-c2; mkdir -p /tmp/maidbt-c2/stubs /tmp/maidbt-c2/.config /tmp/maidbt-c2/state
 cat > /tmp/maidbt-c2/stubs/bluetoothctl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 case "$*" in
   *show*) printf 'Controller STUB\n\tPowered: yes\n' ;;
   *info*11:22:33:44:55:66*) printf 'Device 11:22:33:44:55:66 (public)\n\tAlias: soundcore Liberty 5\n\tConnected: yes\n' ;;
@@ -761,7 +761,7 @@ esac
 exit 0
 EOF
 cat > /tmp/maidbt-c2/stubs/pactl <<'EOF'
-#!/bin/bash
+#!/usr/bin/env bash
 S="${STUBSTATE:-/tmp/maidbt-c2/state}"
 case "$*" in
   *short*sinks*) cat "$S/sinks" 2>/dev/null ;;
@@ -774,8 +774,8 @@ case "$*" in
 esac
 exit 0
 EOF
-printf '#!/bin/bash\nexit 0\n' > /tmp/maidbt-c2/stubs/notify-send
-printf '#!/bin/bash\nexit 1\n' > /tmp/maidbt-c2/stubs/kdeconnect-cli
+printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/maidbt-c2/stubs/notify-send
+printf '#!/usr/bin/env bash\nexit 1\n' > /tmp/maidbt-c2/stubs/kdeconnect-cli
 chmod +x /tmp/maidbt-c2/stubs/*
 printf 'BUDS_MAC="11:22:33:44:55:66"\nFALLBACK_SINK="testsink-fallback"\n' > /tmp/maidbt-c2/.config/bluetooth-buds.conf
 printf '11 testsink\n50 testsink-fallback\n' > /tmp/maidbt-c2/state/sinks
