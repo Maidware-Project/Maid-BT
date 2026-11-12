@@ -4,6 +4,7 @@
 set -u
 PKGDIR="$(cd "$(dirname "$0")/.." && pwd)"
 PASS=0
+PYTHON3="$(command -v python3 2>/dev/null || echo python3)"
 ok()   { PASS=$((PASS+1)); echo "ok $PASS - $1"; }
 fail() { echo "NOT OK - $1"; exit 1; }
 
@@ -12,7 +13,7 @@ for f in "$PKGDIR"/bin/*.sh "$PKGDIR"/install.sh; do
   bash -n "$f" || fail "bash -n $f"
 done
 command -v shellcheck >/dev/null 2>&1 && shellcheck -S error "$PKGDIR"/bin/*.sh "$PKGDIR"/install.sh || true
-python3 -m py_compile "$PKGDIR"/watcher/maid-watcher "$PKGDIR"/watcher/maid_core/*.py || fail "watcher py_compile"
+"$PYTHON3" -m py_compile "$PKGDIR"/watcher/maid-watcher "$PKGDIR"/watcher/maid_core/*.py || fail "watcher py_compile"
 ok "syntax"
 
 echo "== personal data =="
@@ -31,7 +32,7 @@ ok "no personal data"
 
 echo "== watcher extras =="
 [ -x "$PKGDIR/watcher/maid-watcher" ] || fail "watcher not executable"
-python3 - <<EOF || fail "watcher unit checks"
+"$PYTHON3" - <<EOF || fail "watcher unit checks"
 import json
 import sys
 sys.path.insert(0, "$PKGDIR/watcher")
@@ -89,7 +90,7 @@ ok "watcher extras"
 grep -q "fallback_grab" "$PKGDIR/watcher/config.example.json" || fail "grab config missing"
 grep -q "phones_up" "$PKGDIR/watcher/maid-watcher" || fail "grab logic missing"
 ok "fallback grab present"
-/usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF2' || fail "router unit failed"
+"$PYTHON3" - "$PKGDIR/watcher" <<'PYEOF2' || fail "router unit failed"
 import sys
 sys.path.insert(0, sys.argv[1])
 from maid_core import audio
@@ -125,7 +126,7 @@ assert audio.audible_now() is True, "uncorked and unmuted: sounding"
 print("router unit passed")
 PYEOF2
 ok "comms router unit"
-/usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF2' || fail "flap watch failed"
+"$PYTHON3" - "$PKGDIR/watcher" <<'PYEOF2' || fail "flap watch failed"
 import sys
 sys.path.insert(0, sys.argv[1])
 from maid_core.flaps import CALM_S, HOLD_S, LIMIT, WINDOW_S, FlapWatch
@@ -163,7 +164,7 @@ ok "flap storm stands down"
 mkdir -p /tmp/btstub
 printf '#!/bin/bash\necho "2: bnep0: <UP> mtu 1500"\necho "    inet 192.0.2.1/24 scope global bnep0"\n' > /tmp/btstub/ip
 chmod +x /tmp/btstub/ip
-PATH=/tmp/btstub:/usr/bin:/bin /usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF2' || fail "bnep detect failed"
+PATH=/tmp/btstub:/usr/bin:/bin ${PYTHON3:-python3} - "$PKGDIR/watcher" <<'PYEOF2' || fail "bnep detect failed"
 import os
 import sys
 import types
@@ -176,7 +177,7 @@ exec(compile(open(os.path.join(sys.argv[1], "maid-watcher")).read(), "maid-watch
 assert g["Daemon"]._bnep_up() is True, "bnep with inet not detected"
 print("bnep detect passed")
 PYEOF2
-PATH=/usr/bin:/bin /usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF3' || fail "bnep absent misdetected"
+PATH=/usr/bin:/bin ${PYTHON3:-python3} - "$PKGDIR/watcher" <<'PYEOF3' || fail "bnep absent misdetected"
 import os
 import sys
 import types
@@ -201,7 +202,7 @@ cat <<'JSONEOF'
 JSONEOF
 STUBEOF
 chmod +x /tmp/micstub/pw-dump
-PATH=/tmp/micstub:/usr/bin:/bin /usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF2' || fail "mic holder detect failed"
+PATH=/tmp/micstub:/usr/bin:/bin ${PYTHON3:-python3} - "$PKGDIR/watcher" <<'PYEOF2' || fail "mic holder detect failed"
 import sys
 sys.path.insert(0, sys.argv[1])
 from maid_core import audio
@@ -223,7 +224,7 @@ code=$?
 grep -q "missing required tool: bluetoothctl" /tmp/maidbt-deg.out || fail "no clean missing-tool message"
 ! grep -q "command not found" /tmp/maidbt-deg.out || fail "tool noise leaked"
 ok "clean failure without bluetoothctl"
-/usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF2' || fail "watcher degraded helpers crashed"
+"$PYTHON3" - "$PKGDIR/watcher" <<'PYEOF2' || fail "watcher degraded helpers crashed"
 import os, sys
 os.environ["PATH"] = "/tmp/maidbt-emptybin"
 sys.path.insert(0, sys.argv[1])
@@ -608,9 +609,9 @@ rm -rf /tmp/maidbt-m
 
 echo "== intent server auth =="
 rm -rf /tmp/maidbt-i; mkdir -p /tmp/maidbt-i/.config
-python3 -c "import secrets; print(secrets.token_urlsafe(24))" > /tmp/maidbt-i/.config/bt-intent.token
+"$PYTHON3" -c "import secrets; print(secrets.token_urlsafe(24))" > /tmp/maidbt-i/.config/bt-intent.token
 chmod 600 /tmp/maidbt-i/.config/bt-intent.token
-HOME=/tmp/maidbt-i MAID_INTENT_PORT=8891 python3 "$PKGDIR/bin/bt-intent-server.py" > /tmp/maidbt-i/srv.log 2>&1 &
+HOME=/tmp/maidbt-i MAID_INTENT_PORT=8891 "$PYTHON3" "$PKGDIR/bin/bt-intent-server.py" > /tmp/maidbt-i/srv.log 2>&1 &
 SRV=$!
 sleep 2
 TOK=$(cat /tmp/maidbt-i/.config/bt-intent.token)
@@ -652,7 +653,7 @@ cat > /tmp/maidbt-m/.config/maid-watcher/config.json <<'EOF'
    "priority": 2}
 ]}
 EOF
-PATH="/tmp/maidbt-m/stubs:$PATH" HOME=/tmp/maidbt-m /usr/bin/python3 - "$PKGDIR/watcher" <<'PYEOF5' || fail "model autorecognize failed"
+PATH="/tmp/maidbt-m/stubs:$PATH" HOME=/tmp/maidbt-m ${PYTHON3:-python3} - "$PKGDIR/watcher" <<'PYEOF5' || fail "model autorecognize failed"
 import io, os, sys
 from unittest.mock import MagicMock
 sys.path.insert(0, sys.argv[1])
@@ -802,7 +803,7 @@ printf '%s\n' '# keep this comment' \
   'BUDS_MAC="AA:BB:CC:DD:EE:FF"' 'FALLBACK_SINK=""' \
   'APP_CYCLE=1' 'QUALITY_LOCK=0' 'MULTIPOINT=0' \
   > /tmp/maidbt-c/.config/bluetooth-buds.conf
-python3 - "$PKGDIR/bin/maid-bt-config" <<'PYEOF' || fail "settings helper failed"
+"$PYTHON3" - "$PKGDIR/bin/maid-bt-config" <<'PYEOF' || fail "settings helper failed"
 import json, os, stat, subprocess, sys, urllib.parse
 tool = sys.argv[1]
 home = "/tmp/maidbt-c"
