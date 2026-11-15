@@ -1,274 +1,124 @@
-# Maid BT - a linux only seamless Bluetooth earbuds switcher
+# Maid BT
 
-a command-line helper that ships its own gui: a Plasma tray applet and a small helper window. switch between PC, phone, or off with one command - or one click. routes audio automatically (app-agnostic stream moves, so it works across players and browsers) and stops dual-connection earbuds from fighting your phone. native tools only (bluez, PipeWire/PulseAudio via `pactl`/`pw-*`); no accounts, no telemetry.
+Maid BT is a Linux Bluetooth audio workflow tool for switching between **PC**, **phone/release**, and **off/radio** states quickly and reliably. It includes CLI tools, optional background services/watchers, and a Plasma tray integration (where applicable).
 
-```
-bin/            the switcher scripts (on/off/release, background watcher)
-watcher/        Maid Watcher daemon (calls, reconnects, battery)
-wireplumber/    optional fix for the 1-second late start (see notes)
-systemd/        background services (auto-connect watcher, phone listener)
-plasmoid/       the Plasma 6 tray widget with PC / phone / off buttons
-desktop/        launcher icons you can pin to your panel
-phone/          phone remote setup (MacroDroid/Tasker, optional)
-contrib/        compositor keybind/Waybar snippets (Hyprland/Sway/i3)
-tests/          suite tests (run with `bash tests/run.sh`)
-install.sh      installer - Arch, Debian/Ubuntu (incl. Mint), Fedora, openSUSE
-```
+- **No accounts, no telemetry**
+- **Native stack:** BlueZ + PipeWire/PulseAudio tools (`pactl`, `pw-*`)
+- **Designed for real-world earbud behavior:** fast switching, safe handoff (`release`), and mitigations for dual-connection/device quirks
 
-## quick start
+## Why Maid BT?
+Desktop Bluetooth panels manage pairing/devices. Maid BT focuses on the **daily earbuds workflow**:
+- Move audio to/from earbuds with one command/click
+- Prefer `release` (warm handoff) over full disconnects to reduce reconnect lag and instability
+- Handle common pitfalls (codec/profile issues, silent streams, dual-connection conflicts) with optional configs/helpers
+- Provide diagnostics (`--doctor`) and optional phone/watcher integrations
 
+## Features
+- **Core commands:** `on`, `off`, `release`, `radio`, `toggle`, `status`, `porcelain`
+- **Automatic routing:** moves app streams (app-agnostic) to the selected sink when possible
+- **Doctor/reporting:** `bluetooth-toggle.sh --doctor` for session/compositor/stack visibility
+- **Optional services:**
+  - background watcher (auto-connect/park behavior on BT state changes)
+  - Maid Watcher daemon (calls/music behavior, reconnect/battery features)
+  - phone remote/listener (opt-in, LAN-based intents)
+- **Optional audio/profile helpers:** warm-link, max-quality/LDAC lock, A2DP-only configs (see notes/docs)
+- **Plasma integration:** tray widget and Maid BT Helper GUI (KDE Plasma-specific components)
+
+## Quick start
+
+### Install
 ```sh
-# one line, straight from GitHub:
+# GitHub (primary)
 bash <(curl -fsSL https://raw.githubusercontent.com/Maidware-Project/Maid-BT/main/install.sh)
 
-bash install.sh            # installs everything, asks you questions
-bash install.sh --tui      # menu: install, config, doctor, uninstall
-bluetooth-toggle.sh on     # sound moves to your earbuds
+# Codeberg (fallback)
+bash <(curl -fsSL https://codeberg.org/Maidware-Project/Maid-BT/raw/branch/main/install.sh)
 ```
 
-prefer a clone? `git clone --depth 1 https://github.com/Maidware-Project/Maid-BT.git` and run `bash install.sh`.
-
-**fallback (if GitHub is unavailable):**
+Or clone and run:
 ```sh
-bash <(curl -fsSL https://codeberg.org/Maidware_Project/Maid-BT/raw/branch/main/install.sh)
-# clone: git clone --depth 1 https://codeberg.org/Maidware_Project/Maid-BT.git
+git clone --depth 1 https://github.com/Maidware-Project/Maid-BT.git
+cd Maid-BT
+bash install.sh
 ```
 
-## why not just use blueman / the desktop bluetooth panel?
+### First steps
+1. Pair and trust your earbuds (`bluetoothctl pair` / `trust`)
+2. Run a switch command:
+   ```sh
+   bluetooth-toggle.sh on
+   bluetooth-toggle.sh release
+   bluetooth-toggle.sh status
+   ```
+3. (Plasma) Add the Maid BT widget to your panel if desired
 
-those manage *devices* (pairing, mice, keyboards). Maid BT manages the
-*earbuds workflow*: one click moves you PC → phone → off, sound follows
-automatically, dual-connection buds stop fighting the phone, and quality
-stays at your buds' stock settings unless you opt into the LDAC lock.
-keep your bluetooth manager for pairing; use this for daily switching.
+## Usage
 
-tested daily on openSUSE Tumbleweed (KDE Plasma, PipeWire, LDAC
-earbuds). installer covers Arch, Debian/Ubuntu (incl. Mint), Fedora.
-suite green in CI (`bash tests/run.sh`).
-
-## what it does
-
-- `on` - turns bluetooth on, connects your earbuds, moves all sound to
-  them (works with every app/player). switching takes about a second.
-- `release` - hands the buds to your phone without fully disconnecting,
-  so switching back is instant. use this every day. dual-connection buds
-  (phone+PC at once): set `MULTIPOINT=1` once and release parks the PC
-  for the day instead of minutes.
-- `off` - full shutdown: disconnects, kills the radio. use `release`
-  instead unless you're done for the day.
-- `--doctor` / `doctor` - reports session/compositor and stack support
-  truthfully (core CLI/TUI works broadly; the Plasma applet is KDE/Plasma-only).
-  Installer/doctor detect DE/WM/session (incl. GPUIShell, Event Horizon, and KineticWE). see `contrib/compositors/` for snippets.
-- background watcher - notices whenever bluetooth changes (even from
-  KDE's own toggle), connects your buds when they show up, parks sound
-  on your speakers when they vanish. also parks sound when you lock the
-  screen and restores it on unlock.
-- phone remote (optional, off unless you enable it) - an app on your
-  phone (MacroDroid/Tasker) can tell the PC "I'm playing music" or "call
-  started" over wifi. see `phone/` and the
-  [MacroDroid/Tasker source](https://github.com/Maidware-Project/Maid-BT/blob/main/phone/README-macrodroid-tasker.md);
-  the phone remote is part of Maid BT (documented in the BT guide).
-- battery boost (optional, off unless you enable it) - picks the sound
-  quality based on earbud battery to save power. test first: on some
-  systems switching quality crashes the desktop.
-- any headset - if a *different* bluetooth headset connects, it gets
-  sound automatically. yours always win when they appear.
-- tray widget + launcher icons - buttons for PC / phone / off. the
-  applet's Configure dialog covers the MAC, fallback speakers, retry
-  timings, calls, battery warnings, saver, laptop mode, mic routing, and
-  the fallback toggles.
-- **Maid Watcher** (optional) - when a phone call comes in, it pauses
-  your music and mutes Discord, then restores everything on hangup. also
-  reconnects up to 2 earbuds in priority order and warns you at low
-  battery. works on any init system.
-- volume memory - the buds' level is remembered while they play and
-  handed back on the next arrival, so a reconnect (or unlock, or reboot)
-  never comes back too quiet. a fresh pairing keeps the buds' own default.
-- controller respect - a bluetooth gamepad (DualSense and friends) never
-  counts as a headset; wired pads (InputPlumber / joycond) are untouched.
-- every switch can also ping your phone over KDE Connect (skipped quietly
-  if you don't have it paired).
-
-## plasma applet + Maid BT Helper
-
-the installer offers a compact Plasma 6 tray applet: tiles for this PC,
-phone, other devices and off, codec + battery on the header, and one
-line that says where the sound is right now. add it from the system tray
-once installed.
-
-also ships **Maid BT Helper**, a small Maidware GUI: read-only checks,
-the safe subset of the shell's fixes, one-click LDAC pin (opt-in,
-reversible), and a shareable report with no device names and no MAC
-addresses - what you paste when filing a bug.
-
-## currently supported
-
-- **Desktop environments:** KDE Plasma (supported, including Plasma 6 applet), GNOME, XFCE, MATE, Cinnamon, LXQt
-- **Window managers / compositors:** Hyprland, Sway, i3
-- **Desktop shells / environments:** <!-- # this is truly my power --> [Event Horizon](https://github.com/Event-Horizon-desktop-environment/Event-Horizon) and [KineticWE](https://gitlab.com/theblackdon/kineticwe) are recognized/detected
-- **Distributions / package managers:** Arch (pacman), Debian/Ubuntu (apt), Fedora (dnf), openSUSE (zypper), Void Linux (xbps) — installer provides best-effort package setup.
-- **Core:** CLI/TUI tools (`bluetooth-toggle.sh`, `maid-switch`, watcher, etc.) work broadly on Linux with BlueZ/PipeWire(PulseAudio) tools; Plasma-specific applet/integrations are KDE-only. Use `bluetooth-toggle.sh --doctor` and the installer to see detected session/DE/WM.
-
-**Void Linux:** xbps install flow is supported; [oco (Void Community Repository)](https://codeberg.org/oSoWoSo/oco) (`https://repo.osowoso.org`) can provide additional community packages.
-
-## what you need
-
-| need | arch | debian/ubuntu | fedora | opensuse | void (xbps) |
-|---|---|---|---|---|---|
-| bluetooth | bluez bluez-utils | bluez bluetooth | bluez | bluez | bluez bluez-alsa |
-| rfkill | util-linux | rfkill | rfkill | (util-linux) | util-linux |
-| notifications | libnotify | libnotify-bin | libnotify | libnotify-tools | libnotify |
-| audio control | libpulse | pulseaudio-utils | pulseaudio-utils | pulseaudio-utils | pulseaudio-utils |
-| python3 | python | python3 | python3 | python3 | python3 |
-| phone pings (optional) | kdeconnect | kdeconnect | kdeconnect | kdeconnect-kde | kdeconnect |
-
-the background pieces need systemd. no systemd (OpenRC etc.)? the
-switcher scripts and Maid Watcher still work - you just start them
-yourself instead of getting auto-start.
-
-## installation
-
-```sh
-bash install.sh                # installs everything, asks you questions
-bash install.sh --check        # dry run: shows what it would do
-bash install.sh --no-packages  # skip installing packages
-```
-
-the installer copies files into place (never symlinks), asks for your
-earbuds, offers the optional extras (phone remote, Maid Watcher,
-warm-link audio), and backs up anything it replaces. it downloads
-nothing - everything comes from your distro's own packages.
-
-then: pair + trust your earbuds (`bluetoothctl pair` + `trust`), add the
-"Maid BT" widget to your panel. if it does not appear yet, restart
-plasmashell; a full logout is not needed. if you use the phone remote,
-also open TCP port 8899 in your firewall.
-
-## usage
-
+### Common commands
 ```sh
 bluetooth-toggle.sh on|off|release|radio|toggle|status|porcelain
-bluetooth-toggle.sh --doctor   # session/compositor + stack report
-buds-on.sh / buds-off.sh / buds-release.sh   # shortcuts
-maid-watcher status            # connection, profile, battery
+bluetooth-toggle.sh --doctor
+
+# shortcuts
+buds-on.sh
+buds-off.sh
+buds-release.sh
+
+# watcher (if installed/enabled)
+maid-watcher status
 ```
 
-## notes (please read)
+### Recommended daily workflow
+- Use **`release`** to hand audio back to phone/park connection for fast return
+- Use **`off`** only when you want full shutdown/radio off
+- Use **`--doctor`** to inspect session/compositor and audio/Bluetooth stack behavior when troubleshooting
 
-**KDE can crash when bluetooth audio dies suddenly.** that's a system
-bug, not this package (`spa.bluez5: Failure` → desktop crash). the whole
-setup is designed around it: `release` keeps the link warm instead of
-tearing it down, reconnects back off instead of hammering. prefer
-`release` over `off` every day.
+## Supported environments (best effort)
+- **Distros/package managers:** Arch (pacman), Debian/Ubuntu/Mint (apt), Fedora (dnf), openSUSE (zypper), Void Linux (xbps)
+- **Desktops:** KDE Plasma (including Plasma applet), GNOME, XFCE, MATE, Cinnamon, LXQt
+- **WM/compositors:** Hyprland, Sway, i3
+- **Shells/environments:** Event Horizon and KineticWE detected/reported where applicable
 
-**some apps go silent after a switch** (Spotify, Discord, browsers).
-their sound engine can stall when bluetooth changes quality underneath
-them - not our routing. fix: pause, switch, play. the scripts do that
-automatically and make an app-agnostic pass over streams; if one app
-stays dead, restart just that app (opt out with `APP_CYCLE=0`).
+> Core CLI/TUI tools work broadly on Linux with BlueZ and PipeWire/PulseAudio tooling. Plasma-specific UI components are KDE-only.
 
-**sound delays, and what helps:**
+## Important notes & troubleshooting
+- **Prefer `release` over `off`:** abrupt BT audio teardown can trigger desktop/audio stack instability on some systems.
+- **Some apps may stall after audio route/profile changes:** pause/resume or restart the affected app if needed (Maid BT includes mitigation passes; behavior can vary by app/stack).
+- **Latency/codec behavior is hardware/stack-dependent:** SBC/AAC/LDAC tradeoffs differ; optional warm-link and quality-lock configs can help specific cases but may increase power use.
+- **Fallback sink:** `FALLBACK_SINK` should be a sink **name** (from `pactl list short sinks`), not a transient numeric index.
+- **USB reverse tethering:** [gnirehtet](https://github.com/Genymobile/gnirehtet) is a useful ADB companion (separate from Maid BT's Bluetooth workflow).
 
-- late start (~1 second cut after silence): bluetooth naps when idle.
-  fix is the optional warm-link config (installer offers it; costs a
-  little earbud battery).
-- thin sound after a switch (stuck on SBC): the card can land on a low
-  codec and stay there. fix is the optional max-quality config (pins
-  LDAC first, unlocks SBC-XQ) plus `QUALITY_LOCK=1` in
-  `~/.config/bluetooth-buds.conf` to enforce LDAC after every switch.
-  costs earbud battery; needs LDAC buds. the lock also rescues a card
-  stuck on HSP/HFP with nobody on the mic (a live call mic is never touched).
-- fully silent dual-mode buds: newer stacks may try LE Audio transports
-  first; without working ISO sockets they fail while classic A2DP would
-  be fine. fix is the optional a2dp-only config, then reconnect once.
-- lip-sync lag: bluetooth sound always trails video a bit (SBC/AAC
-  ~0.2s, LDAC ~0.3s). nothing on the PC removes it - nudge it in your
-  player (VLC: J/K keys, mpv: `--audio-delay=-0.2`).
-- switch gap: reconnecting + rerouting takes a few seconds by nature.
+See in-repo docs for more details:
+- [`docs/wiki/`](docs/wiki/Home.md) (quick wiki)
+- [`docs/DEVICE-SUPPORT.md`](docs/DEVICE-SUPPORT.md)
+- [`docs/REVIEW.md`](docs/REVIEW.md)
 
-**the fallback sink must be a name.** `FALLBACK_SINK` in
-`~/.config/bluetooth-buds.conf` wants a NAME from `pactl list short
-sinks`, not the number on its left - numbers are per-session and go
-stale.
-
-**USB reverse tethering (optional, ADB).** [gnirehtet](https://github.com/Genymobile/gnirehtet)
-can share your PC's internet connection to your phone over USB/ADB
-(reverse tethering). it is separate from Maid BT's Bluetooth workflow,
-but useful as a companion tool for ADB-based/mobile workflows.
-
-## Linux Mint (incl. older releases)
-
-Mint is Ubuntu underneath, so the `apt` installer path handles it
-(Cinnamon, MATE, Xfce). PulseAudio (not PipeWire) on most Mint installs
-is handled automatically via `pactl` fallbacks. Older BlueZ (e.g. 5.53 on
-Mint 20.x): battery reporting may be absent (shown as unknown), HFP
-wideband needs 5.65+ and falls back to CVSD silently, A2DP SBC always
-works.
-
-## RAM budget (measured live)
-
-| piece | idle memory | notes |
-|---|---|---|
-| background watcher | ~4 MB | tiny script, sleeps until needed |
-| Maid Watcher daemon | ~29 MB | calls, reconnects, battery |
-| phone listener | ~24 MB | only runs if you enable phone remote |
-| tray widget | ~0 MB extra | lives inside the desktop itself |
-| **everything together** | **~57 MB** | ~1.4% of a 4 GB machine |
-
-on 4 GB machines: leave phone remote off unless you use it, leave the
-idle saver off (default). Fedora/openSUSE already compress RAM (zram).
-
-## NixOS (flakes & home-manager)
-
-the easy way (flakes + home-manager). add to your flake inputs and import the module:
-
+## NixOS (flakes & Home Manager)
 ```nix
-# flake.nix (your config)
-inputs.maid-bt.url = "github:Maidware-Project/Maid-BT"; # tracks main
-
-# home-manager
+inputs.maid-bt.url = "github:Maidware-Project/Maid-BT";
 imports = [ inputs.maid-bt.homeManagerModules.default ];
 programs.maid-bt.enable = true;
-services.maid-bt.watcher.enable = true;      # optional: buds fallback watcher
-services.maid-bt.maidWatcher.enable = true;   # optional: calls/battery/reconnect
-# services.maid-bt.intentListener.enable = true; # optional: phone intent (LAN, only if you use it)
+# services.maid-bt.watcher.enable = true;
+# services.maid-bt.maidWatcher.enable = true;
+# services.maid-bt.intentListener.enable = true;
 ```
 
-**auto-update on every rebuild/switch (important):** keep the input tracking `main` (as above) and rebuild with refresh so the latest is fetched:
-
+Try without installing:
 ```sh
-nix flake update maid-bt && sudo nixos-rebuild switch --flake .#<host>
-# or: home-manager switch --flake .#<user> --refresh
-# or rebuild with: sudo nixos-rebuild switch --flake .#<host> --refresh
+nix run github:Maidware-Project/Maid-BT -- status
 ```
 
-quick try without installing: `nix run github:Maidware-Project/Maid-BT -- status`.
-bluez/pipewire (or pulseaudio-compat), rfkill, and notifications come from your NixOS config; the Plasma plasmoid is session-specific (install/manage it per your desktop setup).
-
-## uninstall
-
+## Uninstall
 ```sh
-bash install.sh --uninstall            # everything out, asks about settings
-bash install.sh --uninstall --purge    # everything out including settings, no questions
+bash install.sh --uninstall
+# or
+bash install.sh --uninstall --purge
 ```
 
-or by hand: stop the background services, delete the installed files
-and the widget (see `install.sh --uninstall` for the exact list; it also
-removes the Maid Watcher, its autostart entry, and the warm-link audio
-config).
-
-## works with the Maid suite
-
-Maid BT stands alone. it works well with [Maid Suite](https://github.com/Maidware-Project/Maid-Suite),
-the canonical Maidware front end (TUI/GUI) which embeds the Helper and
-AU updater cores and can install/update Maid BT and the rest of the
-suite. the standalone Maid Helper and Maid AU repos are archived; their
-cores live in Maid Suite. the bundled Maid Watcher shares your KDE
-Connect phone pairing with Maidshare.
+## Documentation & links
+- Website/guides: https://maidware-project.github.io/guides/
+- Maid Suite (front end): https://github.com/Maidware-Project/Maid-Suite
+- Fallback org mirror: https://codeberg.org/Maidware_Project
 
 ## License
-
-GPL-3.0-or-later — forkable and open source. See `LICENSE`. Third-party
-notices and credits: `THIRD-PARTY-NOTICES.md` (names what Maid BT
-references or depends on; third-party components keep their own
-licenses). Part of the Maidware Project.
+GPL-3.0-or-later. See [`LICENSE`](LICENSE) and [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). Part of the [Maidware Project](https://maidware-project.github.io/).
