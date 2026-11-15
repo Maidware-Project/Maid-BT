@@ -191,6 +191,11 @@ stays dead, restart just that app (opt out with `APP_CYCLE=0`).
 sinks`, not the number on its left - numbers are per-session and go
 stale.
 
+**USB reverse tethering (optional, ADB).** [gnirehtet](https://github.com/Genymobile/gnirehtet)
+can share your PC's internet connection to your phone over USB/ADB
+(reverse tethering). it is separate from Maid BT's Bluetooth workflow,
+but useful as a companion tool for ADB-based/mobile workflows.
+
 ## Linux Mint (incl. older releases)
 
 Mint is Ubuntu underneath, so the `apt` installer path handles it
