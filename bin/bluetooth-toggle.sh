@@ -44,14 +44,12 @@ session_doctor() {
     pgrep -x horizon >/dev/null 2>&1 && echo "  shell: Event Horizon desktop environment detected."
     pgrep -x kineticwe >/dev/null 2>&1 && echo "  shell: KineticWE compositor/session detected."
     pgrep -x instantwm >/dev/null 2>&1 && echo "  shell: instantWM compositor/session detected."
-    pgrep -x velvet-compositor >/dev/null 2>&1 && echo "  shell: Velvet compositor/session detected."
     pgrep -x niri >/dev/null 2>&1 && echo "  shell: Niri compositor detected."
   fi
   case "$de" in
     *[Pp]lasma*|*[Kk][Dd][Ee]*) echo "  support: KDE Plasma supported (applet + integrations available)." ;;
     *[Gg][Nn][Oo][Mm][Ee]*) echo "  support: GNOME session detected. Core CLI works; bind commands via GNOME keyboard shortcuts." ;;
     *[Xx][Ff][Cc][Ee]*) echo "  support: XFCE session detected. Core CLI works; bind commands via XFCE keyboard shortcuts." ;;
-    *[Vv]elvet*) echo "  support: Velvet session detected. Core CLI works; bind commands via compositor keybinds/IPC." ;;
     *[Nn]iri*) echo "  support: Niri session detected. Core CLI works; bind commands via compositor config." ;;
     *[Ii]nstant*) echo "  support: instantOS/instantWM session detected. Core CLI works; bind commands via instantWM config." ;;
     *[Mm][Aa][Tt][Ee]*) echo "  support: MATE session detected. Core CLI works; bind commands via MATE keyboard shortcuts." ;;
