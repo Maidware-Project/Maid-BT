@@ -1,5 +1,9 @@
 # changelog
 
+## Maid BT v1.2.6
+
+- `bluetooth-toggle.sh --doctor`: expanded diagnostics for session/compositor detection (KineticWE, GPUiShell, Horizon, instantWM, Niri, Hyprland/Sway/i3 variants) and runtime health (XDG session type/runtime dir, PipeWire/Pulse audio server, default sink and sink count, Bluetooth adapter powered/name, configured buds/fallback sink, and state file path) with clearer troubleshooting hints.
+
 ## Maid BT v1.2.5 (this release)
 
 - Nix packaging: add `maid_core` (`libexec/maid-bt/watcher`) to `PYTHONPATH` in wrappers so Python commands (e.g. `maid-soundcore`, watcher) can import `maid_core`.
