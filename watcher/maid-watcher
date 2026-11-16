@@ -80,6 +80,10 @@ class Daemon:
         else:
             self.watcher = None
         self.battery = BatteryWatch(cfg, self.monitor)
+        # Cached external probes (subprocess-heavy): avoid repeated
+        # kdeconnect/ip calls every tick when fallback features run.
+        self._phones_cache = (0.0, True)   # (ts, reachable)
+        self._bnep_cache = (0.0, False)    # (ts, up)
 
     # -- connection management -----------------------------------------
     def on_conn_change(self, mac, connected):
@@ -547,16 +551,21 @@ class Daemon:
                 self._phone_down_ticks = 0
                 self._bt_offered = False
 
-    @staticmethod
-    def _bnep_up():
+    def _bnep_up(self, ttl_s=20):
         import subprocess
+        now = time.time()
+        ts, val = getattr(self, "_bnep_cache", (0.0, False))
+        if now - ts < ttl_s:
+            return val
         try:
             p = subprocess.run(["ip", "-o", "addr", "show"],
                                capture_output=True, text=True, timeout=10)
+            up = any("bnep" in line and "inet " in line
+                     for line in (p.stdout or "").splitlines())
         except (subprocess.SubprocessError, FileNotFoundError):
-            return False
-        return any("bnep" in line and "inet " in line
-                   for line in (p.stdout or "").splitlines())
+            up = False
+        self._bnep_cache = (now, up)
+        return up
 
     def _route_after_connect(self):
         self.route_comms()
@@ -575,18 +584,22 @@ class Daemon:
         if moved:
             notify.audit(f"routed {moved} chat stream(s) to default sink")
 
-    def phones_up(self):
-        """True if any paired KDE Connect phone is reachable."""
+    def phones_up(self, ttl_s=30):
+        """True if any paired KDE Connect phone is reachable (cached)."""
+        now = time.time()
+        ts, val = getattr(self, "_phones_cache", (0.0, True))
+        if now - ts < ttl_s:
+            return val
         import subprocess
         try:
             p = subprocess.run(["kdeconnect-cli", "-l"],
                                capture_output=True, text=True, timeout=15)
+            reachable = any("reachable" in line.lower()
+                            for line in p.stdout.splitlines())
         except (subprocess.SubprocessError, FileNotFoundError):
-            return True  # can't tell: assume up, never grab blindly
-        for line in p.stdout.splitlines():
-            if "reachable" in line.lower():
-                return True
-        return False
+            reachable = True  # can't tell: assume up, never grab blindly
+        self._phones_cache = (now, reachable)
+        return reachable
 
     def fallback_grab(self):
         # Phone-down fallback (opt-in): if no phone is reachable and a

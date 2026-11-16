@@ -30,7 +30,7 @@
           ];
           maid-bt = pkgs.stdenv.mkDerivation {
             pname = "maid-bt";
-            version = "1.2.5";
+            version = "1.2.7";
             src = self;
             nativeBuildInputs = [ pkgs.makeWrapper ];
             dontBuild = true;
@@ -106,6 +106,28 @@
       checks = forAllSystems (system: {
         package = self.packages.${system}.default;
       });
+
+      devShells = forAllSystems (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          pythonEnv = pkgs.python3.withPackages (ps: [ ps.dbus-python ps.pygobject3 ]);
+        in {
+          default = pkgs.mkShell {
+            packages = with pkgs; [
+              bash coreutils gnugrep gnused gawk findutils procps util-linux
+              bluez pulseaudio libnotify curl systemd pythonEnv
+              glib gobject-introspection gtk3 shellcheck nixfmt-rfc-style
+            ];
+            GI_TYPELIB_PATH = pkgs.lib.makeSearchPath "lib/girepository-1.0" [
+              pkgs.glib pkgs.gobject-introspection pkgs.gtk3
+            ];
+            shellHook = ''
+              echo "Maid BT dev shell (nix develop)"
+            '';
+          };
+        });
+
+      formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt-rfc-style);
 
       # easy home-manager: imports = [ inputs.maid-bt.homeManagerModules.default ];
       # then: programs.maid-bt.enable = true; services.maid-bt.watcher.enable = true;

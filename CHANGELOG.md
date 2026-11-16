@@ -1,5 +1,10 @@
 # changelog
 
+## Maid BT v1.2.7
+
+- **Watcher efficiency:** cache KDE Connect reachability and Bluetooth PAN (bnep) probes in the daemon to avoid repeated subprocess calls during periodic fallback checks.
+- **Nix:** add `shell.nix`, `devShells`, and `formatter` outputs; update `flake.lock` and package metadata for better native Nix/NixOS development and usage.
+
 ## Maid BT v1.2.6
 
 - `bluetooth-toggle.sh --doctor`: expanded diagnostics for session/compositor detection (KineticWE, GPUiShell, Horizon, instantWM, Niri, Hyprland/Sway/i3 variants) and runtime health (XDG session type/runtime dir, PipeWire/Pulse audio server, default sink and sink count, Bluetooth adapter powered/name, configured buds/fallback sink, and state file path) with clearer troubleshooting hints.
