@@ -37,10 +37,12 @@ STATE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-state"
 session_doctor() {
   echo "Maid BT (bluetooth-toggle) — session/compositor (best-effort)"
   echo "  XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-n/a}  XDG_SESSION_DESKTOP=${XDG_SESSION_DESKTOP:-n/a}  DESKTOP_SESSION=${DESKTOP_SESSION:-n/a}"
+  echo "  XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-n/a}"
   echo "  WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}  DISPLAY=${DISPLAY:-}"
+  echo "  XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-n/a}"
   local de="${XDG_CURRENT_DESKTOP:-} ${XDG_SESSION_DESKTOP:-} ${DESKTOP_SESSION:-}"
   if command -v pgrep >/dev/null 2>&1; then
-    pgrep -x gpuishell >/dev/null 2>&1 && echo "  shell: GPUIShell (gpuishell, rond.cc/gpui-shell) detected."
+    pgrep -x gpuishell >/dev/null 2>&1 && echo "  shell: GPUIShell (gpuishell) detected."
     pgrep -x horizon >/dev/null 2>&1 && echo "  shell: Event Horizon desktop environment detected."
     pgrep -x kineticwe >/dev/null 2>&1 && echo "  shell: KineticWE compositor/session detected."
     pgrep -x instantwm >/dev/null 2>&1 && echo "  shell: instantWM compositor/session detected."
@@ -60,7 +62,32 @@ session_doctor() {
     *[Ii]3*) echo "  support: i3 detected. Core CLI works; Plasma applet is KDE-only. Bind keys in i3 config." ;;
     *) echo "  support: core CLI works on Linux with bluez/pactl; desktop integration varies." ;;
   esac
-  echo "  tips: moves all playback streams (app-agnostic). bluetooth-toggle.sh status | porcelain; see contrib/compositors/ for Hyprland/Sway/i3 snippets."
+  # Audio stack diagnostics
+  if command -v pactl >/dev/null 2>&1; then
+    local pw_server default_sink sink_count
+    pw_server="$(pactl info 2>/dev/null | grep -i 'Server Name' | head -1 | cut -d: -f2- | xargs 2>/dev/null)" || pw_server=""
+    echo "  audio server: ${pw_server:-unknown}"
+    default_sink="$(pactl get-default-sink 2>/dev/null)" || default_sink=""
+    [ -n "$default_sink" ] && echo "  default sink: $default_sink"
+    sink_count="$(pactl list short sinks 2>/dev/null | wc -l | tr -d ' ')" || sink_count="?"
+    echo "  sinks: ${sink_count}"
+  else
+    echo "  audio: pactl not found (install pulseaudio-utils / libpulse / pipewire-pulse)"
+  fi
+  # Bluetooth adapter diagnostics
+  if command -v bluetoothctl >/dev/null 2>&1; then
+    local bt_powered bt_name
+    bt_powered="$(bluetoothctl show 2>/dev/null | grep -i 'Powered:' | head -1 | awk '{print $2}')" || bt_powered="unknown"
+    bt_name="$(bluetoothctl show 2>/dev/null | grep -i 'Name:' | head -1 | cut -d: -f2- | xargs 2>/dev/null)" || bt_name=""
+    echo "  bluetooth: powered=${bt_powered}${bt_name:+ name=$bt_name}"
+  else
+    echo "  bluetooth: bluetoothctl not found (install bluez)"
+  fi
+  # State/config
+  echo "  state file: ${STATE:-n/a}"
+  [ -n "${BUDS_MAC:-}" ] && [ "$BUDS_MAC" != "AA:BB:CC:DD:EE:FF" ] && echo "  configured buds: $BUDS_MAC" || echo "  configured buds: (not set - run install.sh or edit bluetooth-buds.conf)"
+  [ -n "${FALLBACK_SINK:-}" ] && echo "  fallback sink: $FALLBACK_SINK" || echo "  fallback sink: (not set)"
+  echo "  tips: bluetooth-toggle.sh status | porcelain; see contrib/compositors/ for Hyprland/Sway/i3 snippets."
 }
 
 ACTION="${1:-toggle}"
