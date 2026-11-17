@@ -21,6 +21,7 @@ Desktop Bluetooth panels manage pairing/devices. Maid BT focuses on the **daily 
   - background watcher (auto-connect/park behavior on BT state changes)
   - Maid Watcher daemon (calls/music behavior, reconnect/battery features)
   - phone remote/listener (opt-in, LAN-based intents)
+- **BlueV Protocol (WIP):** Maid Watcher Bluetooth state persistence/restore (adapter power and managed device connections) across sleep/resume and startup
 - **Optional audio/profile helpers:** warm-link, max-quality/LDAC lock, A2DP-only configs (see notes/docs)
 - **Plasma integration:** tray widget and Maid BT Helper GUI (KDE Plasma-specific components)
 
