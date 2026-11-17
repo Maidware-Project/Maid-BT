@@ -1,5 +1,36 @@
 # changelog
 
+## Maid BT v1.3.0 (unreleased)
+
+### BlueV Protocol (Maid Watcher)
+
+BlueV is Maid Watcher’s Bluetooth state persistence and ownership-aware recovery layer, built to keep earbud behavior predictable across sleep/resume, startup, and phone/PC handoff scenarios.
+
+- **MVP: BT state persistence & restore (BlueV):**
+  - Persist adapter power state and connected managed devices to `~/.local/state/maid-watcher/bt-state.json` (atomic writes).
+  - Snapshot on meaningful changes (device connect/disconnect, adapter `Powered` changes) and immediately before suspend via logind `PrepareForSleep`.
+  - Restore on startup and after resume: wait for BlueZ/adapter readiness, restore saved adapter power intent, and reconnect saved managed devices with staggered, best-effort retries.
+  - Respect prior intent: if the adapter was intentionally off before sleep, BlueV leaves it off on restore.
+  - New audit log trail for restore/snapshot actions (`BlueV:` entries).
+
+- **BlueV expansion (next-level groundwork):**
+  - **State/confidence model (`maid_core.bluev`):** per-device state tracking with `connected_to_pc`, `connected_to_phone`, `out_available`, `docked`, and `unknown`, driven by PC connection state, local probe evidence, and phone hints.
+  - **Phone-reported hints (PC/intent side):** `bt-intent-server.py` accepts `GET /phone_device?token=...&mac=...&state=connected|disconnected` and stores hints in `/run/user/<uid>/maid-bluev-phone.json` for Maid Watcher consumption (generic, brand-agnostic channel; Android-side reporter/integration can feed this).
+  - **Probe smoothing / dock confidence:** silent “in case” detection now requires confirmation over multiple probe observations within a time window before declaring `docked`, reducing false docked states; out/advertising evidence clears docked state quickly.
+  - **Policy integration:** reconnect, fallback-grab, dock handling, and case rewatch consult BlueV state — e.g. defer/retry differently when the phone hint indicates `connected_to_phone`, avoid claiming docked without sufficient evidence, and keep unconfirmed-silent devices eligible for rechecks.
+
+- **Fixes/refinements in this cycle:**
+  - Fixed reconnect defer handling when a phone hint is active to keep retry-source tracking consistent and rate-limit repeated “deferring reconnect” audit noise.
+  - Improved restore reconnect staggering for saved devices.
+  - Clarified dock verdict handling for “out/available but not connected” probe results to avoid misleading logs/state transitions.
+
+- **Docs:**
+  - README features now list **BlueV Protocol (WIP)**.
+
+### Notes / known scope
+- BlueV is **WIP** and currently focuses on PC-side persistence/restore, hint ingestion, and policy/state groundwork. A phone-side reporter (to emit per-device connection state over the existing intent/KDE Connect path) is still needed to fully benefit from `connected_to_phone` hints on “any Android”.
+- Default adapter assumptions and per-device behavior may need further tuning (multi-adapter support, richer hint payloads, UI/observability, and vendor-specific enhancements can be layered later).
+
 ## Maid BT v1.2.7
 
 - **Watcher efficiency:** cache KDE Connect reachability and Bluetooth PAN (bnep) probes in the daemon to avoid repeated subprocess calls during periodic fallback checks.
