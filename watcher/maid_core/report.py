@@ -6,7 +6,7 @@ import json
 
 
 def text(ct, laptop, rows):
-    "The terminal layout exactly as it always printed (unchanged for people)."
+    "The terminal layout (backward-compatible) with optional BlueV observability."
     lines = [f"chassis:   {ct} (laptop mode {'on' if laptop else 'off'})"]
     for r in rows:
         lines.append(f"{r['name']} [{r['mac']}]")
@@ -16,6 +16,13 @@ def text(ct, laptop, rows):
         lines.append(f"  battery:   {r['battery']}%")
         if r["case"] is not None:
             lines.append(f"  case:      {r['case']}")
+        bluev = r.get("bluev")
+        if bluev:
+            state = bluev.get("state")
+            reason = bluev.get("reason")
+            if state:
+                suffix = f" ({reason})" if reason else ""
+                lines.append(f"  bluev:     {state}{suffix}")
     if not rows:
         lines.append("no devices configured - copy config.example.json to "
                      "~/.config/maid-watcher/config.json")
@@ -35,5 +42,6 @@ def shape(ct, laptop, rows):
             "mic_holders": list(r.get("holders") or []),
             "battery": r["battery"],
             "case": r["case"],
+            **({"bluev": r.get("bluev")} if r.get("bluev") is not None else {}),
         } for r in rows],
     })

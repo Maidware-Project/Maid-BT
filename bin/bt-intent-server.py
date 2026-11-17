@@ -18,7 +18,11 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(os.environ.get("MAID_INTENT_PORT", "8899"))
+BIND_ADDR = os.environ.get("MAID_INTENT_BIND", "0.0.0.0")
 HOME = os.path.expanduser("~")
+RATE_LIMIT_WINDOW_S = int(os.environ.get("MAID_INTENT_RATE_WINDOW_S", "10"))
+RATE_LIMIT_MAX = int(os.environ.get("MAID_INTENT_RATE_MAX", "30"))
+_RATE = {}  # ip -> [window_start, count]
 TOGGLE = (shutil.which("bluetooth-toggle.sh")
           or os.path.expanduser("~/.local/bin/bluetooth-toggle.sh")
           or "/usr/bin/bluetooth-toggle.sh")
@@ -98,9 +102,14 @@ def update_bluev_phone_hint(mac, state):
     data["devices"] = devices
     try:
         tmp = BLUEV_PHONE_HINTS + ".tmp"
-        with open(tmp, "w") as f:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
             json.dump(data, f)
         os.replace(tmp, BLUEV_PHONE_HINTS)
+        try:
+            os.chmod(BLUEV_PHONE_HINTS, 0o600)
+        except OSError:
+            pass
         return True, "ok"
     except OSError as e:
         return False, str(e)
@@ -118,6 +127,21 @@ class Handler(BaseHTTPRequestHandler):
         safe = [a.split("?", 1)[0] if isinstance(a, str) else a for a in args]
         print(f"[bt-intent] {self.client_address[0]} {fmt % tuple(safe)}", flush=True)
 
+    def _rate_limited(self):
+        ip = self.client_address[0]
+        now = time.time()
+        win_start, count = _RATE.get(ip, (now, 0))
+        if now - win_start >= RATE_LIMIT_WINDOW_S:
+            win_start, count = now, 0
+        count += 1
+        _RATE[ip] = (win_start, count)
+        # opportunistic cleanup
+        if len(_RATE) > 512:
+            stale = [k for k, v in _RATE.items() if now - v[0] >= RATE_LIMIT_WINDOW_S * 2]
+            for k in stale:
+                _RATE.pop(k, None)
+        return count > RATE_LIMIT_MAX
+
     def _token_ok(self):
         # preferred: X-Token header (never appears in logs).
         # legacy: ?token= query (still accepted, never logged).
@@ -130,6 +154,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802 - http.server naming
         parts = urllib.parse.urlparse(self.path)
+        if self._rate_limited():
+            self.send_response(429)
+            self.end_headers()
+            self.wfile.write(b"rate limited")
+            return
         if not self._token_ok():
             self.send_response(403)
             self.end_headers()
@@ -179,6 +208,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print(f"[bt-intent] listening on 0.0.0.0:{PORT}", flush=True)
+    srv = ThreadingHTTPServer((BIND_ADDR, PORT), Handler)
+    print(f"[bt-intent] listening on {BIND_ADDR}:{PORT}", flush=True)
     srv.serve_forever()

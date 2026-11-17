@@ -137,7 +137,10 @@ class Daemon:
 
     # -- Maid BT: Maid Watcher BlueV Protocol (state persistence/restore) --
     def _adapter_path(self):
-        return "/org/bluez/hci0"
+        try:
+            return getattr(self.bluev, "adapter_path", None) or ((self.cfg.get("bluev") or {}).get("adapter_path")) or "/org/bluez/hci0"
+        except Exception:
+            return "/org/bluez/hci0"
 
     def _get_adapter_powered(self):
         try:
@@ -803,12 +806,18 @@ class Daemon:
                 self._phone_down_ticks = 0
                 self._bt_offered = False
 
-    def _bnep_up(self, ttl_s=20):
+    def _bnep_up(self=None, ttl_s=20):
         import subprocess
+        # Backward-compatible: allow Daemon._bnep_up() in tests.
+        if self is None or isinstance(self, (int, float)):
+            if isinstance(self, (int, float)):
+                ttl_s = self
+            self = None
         now = time.time()
-        ts, val = getattr(self, "_bnep_cache", (0.0, False))
-        if now - ts < ttl_s:
-            return val
+        if self is not None:
+            ts, val = getattr(self, "_bnep_cache", (0.0, False))
+            if now - ts < ttl_s:
+                return val
         try:
             p = subprocess.run(["ip", "-o", "addr", "show"],
                                capture_output=True, text=True, timeout=10)
@@ -816,7 +825,8 @@ class Daemon:
                      for line in (p.stdout or "").splitlines())
         except (subprocess.SubprocessError, FileNotFoundError):
             up = False
-        self._bnep_cache = (now, up)
+        if self is not None:
+            self._bnep_cache = (now, up)
         return up
 
     def _route_after_connect(self):
@@ -913,6 +923,12 @@ def cmd_status(cfg, as_json=False):
     laptop = config_mod.laptop_mode(cfg)
     probe_case = cfg.get("case_detect", {}).get("enabled", True)
     probe_s = cfg.get("case_detect", {}).get("probe_s", 8)
+    bluev = None
+    try:
+        bluev = BlueV(cfg)
+        bluev.refresh_hints()
+    except Exception:
+        bluev = None
     rows = []
     for dev in cfg["devices"]:
         mac = dev["mac"]
@@ -920,18 +936,26 @@ def cmd_status(cfg, as_json=False):
         holders = audio.mic_holders()
         connected = mon.is_connected(mac)
         battery = mon.battery_percent(mac)
+        probe = None
         if connected:
             case = "n/a (connected)"
         elif probe_case:
             try:
-                live = DockProbe(mac).visible(window_s=probe_s)
+                probe = DockProbe(mac).visible(window_s=probe_s)
             except Exception:
-                live = None
+                probe = None
             case = {True: "out of case (advertising)",
                     False: "in charging case (silent)",
-                    None: "unknown (scan unavailable)"}[live]
+                    None: "unknown (scan unavailable)"}[probe]
         else:
             case = None
+        bluev_info = None
+        if bluev is not None:
+            try:
+                bstate, breason = bluev.resolve(mac, connected, probe)
+                bluev_info = {"state": bstate, "reason": breason}
+            except Exception:
+                bluev_info = None
         rows.append({
             "name": dev.get("name", mac),
             "mac": mac,
@@ -941,6 +965,7 @@ def cmd_status(cfg, as_json=False):
             "holders": [n for a, n in holders],
             "battery": battery,
             "case": case,
+            "bluev": bluev_info,
         })
     if as_json:
         print(report.shape(ct, laptop, rows))

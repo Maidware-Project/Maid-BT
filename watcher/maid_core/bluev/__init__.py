@@ -86,9 +86,11 @@ class BlueV:
         self.devices = {}  # mac -> DeviceState
         self._hints_mtime = None
         self._hints = {}
-        self._hints_ttl_s = int((self.cfg.get("bluev") or {}).get("phone_hint_ttl_s", DEFAULT_HINT_TTL_S))
-        self._docked_confirmations = int((self.cfg.get("bluev") or {}).get("docked_confirmations", 2))
-        self._docked_confirm_window_s = int((self.cfg.get("bluev") or {}).get("docked_confirm_window_s", 600))
+        bcfg = self.cfg.get("bluev") or {}
+        self._hints_ttl_s = int(bcfg.get("phone_hint_ttl_s", DEFAULT_HINT_TTL_S))
+        self._docked_confirmations = max(1, int(bcfg.get("docked_confirmations", 2)))
+        self._docked_confirm_window_s = max(60, int(bcfg.get("docked_confirm_window_s", 600)))
+        self.adapter_path = str(bcfg.get("adapter_path") or "/org/bluez/hci0")
 
     def ensure(self, mac):
         st = self.devices.get(mac)

@@ -14,6 +14,7 @@ DEFAULTS = {
     "fallback_grab": {"enabled": False},
     "bt_fallback": {"enabled": False},
     "case_detect": {"enabled": True, "probe_s": 8, "recheck_s": 120},
+    "bluev": {"phone_hint_ttl_s": 300, "docked_confirmations": 2, "docked_confirm_window_s": 600, "adapter_path": "/org/bluez/hci0"},
     "route_comms": {"enabled": True},
     "laptop": {"mode": "auto"},
 }

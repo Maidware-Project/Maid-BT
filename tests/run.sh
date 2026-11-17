@@ -162,7 +162,7 @@ print("flap watch passed")
 PYEOF2
 ok "flap storm stands down"
 mkdir -p /tmp/btstub
-printf '#!/usr/bin/env bash\necho "2: bnep0: <UP> mtu 1500"\necho "    inet 192.0.2.1/24 scope global bnep0"\n' > /tmp/btstub/ip
+printf '#!/bin/sh\necho "2: bnep0: <UP> mtu 1500"\necho "    inet 192.0.2.1/24 scope global bnep0"\n' > /tmp/btstub/ip
 chmod +x /tmp/btstub/ip
 PATH=/tmp/btstub:/usr/bin:/bin ${PYTHON3:-python3} - "$PKGDIR/watcher" <<'PYEOF2' || fail "bnep detect failed"
 import os
