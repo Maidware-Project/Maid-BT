@@ -1,6 +1,6 @@
 # changelog
 
-## Maid BT v1.3.0 (unreleased)
+## Maid BT v1.3.0
 
 ### BlueV Protocol (Maid Watcher)
 
