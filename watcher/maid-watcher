@@ -254,6 +254,7 @@ class Daemon:
         if self._get_adapter_powered() is False:
             self._restoring = False
             return False
+        stagger = 0
         for mac in saved_connected:
             if mac not in self.devices:
                 continue
@@ -266,13 +267,14 @@ class Daemon:
                 continue
             if not dev.get("auto_reconnect", True):
                 continue
+            stagger += 1
             notify.audit(f"BlueV: reconnect {dev.get('name', mac)}")
             self.retry[mac] = [0, time.time()]
             if self._retry_src.get(mac) is None:
                 # Stagger slightly per device; _maybe_reconnect also serializes.
-                delay = 1 + list(self.devices.keys()).index(mac) if mac in self.devices else 1
+                delay = max(1, min(stagger, 5))
                 self._retry_src[mac] = GLib.timeout_add_seconds(
-                    max(1, min(delay, 5)), self._maybe_reconnect, mac)
+                    delay, self._maybe_reconnect, mac)
         self._restoring = False
         if self._restore_pending:
             self._restore_pending = False
@@ -426,8 +428,11 @@ class Daemon:
         # BlueV: phone hint says connected to phone -> don't race it.
         try:
             if self.bluev.phone_state(mac) == "connected_to_phone":
-                notify.audit(f"BlueV: {self.devices.get(mac, {}).get('name', mac)} connected to phone, deferring reconnect")
-                GLib.timeout_add_seconds(30, self._maybe_reconnect, mac)
+                now = time.time()
+                if now - self._last_op.get((mac, "bluev_defer_log"), 0) >= 120:
+                    self._last_op[(mac, "bluev_defer_log")] = now
+                    notify.audit(f"BlueV: {self.devices.get(mac, {}).get('name', mac)} connected to phone, deferring reconnect")
+                self._retry_src[mac] = GLib.timeout_add_seconds(30, self._maybe_reconnect, mac)
                 return False
         except Exception:
             pass
@@ -534,7 +539,12 @@ class Daemon:
                 # keep prior docked belief until contradicted, but don't strengthen
                 return False
 
-        # verdict True but not previously docked, or other non-docked outcome: keep manual retry UX quiet
+        # verdict True but not previously docked: device is/was advertising (out/available).
+        # Avoid claiming docked; keep UX quiet and let normal reconnect logic apply if applicable.
+        if verdict is True:
+            notify.audit(f"BlueV: {name} out/available (not docked)")
+            return False
+        # verdict None or other non-docked outcome: keep manual retry UX quiet
         notify.audit(f"reconnect gave up: {name}")
         return False
 
