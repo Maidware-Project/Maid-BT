@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """maid-watcher - earbuds manager daemon for KDE Plasma (BlueZ + PipeWire).
+Maid BT: Maid Watcher BlueV Protocol - BT state persistence/restore across sleep, resume, and startup.
 
 XDG-autostart friendly, no systemd/OpenRC dependency. Uses only APIs that
 are stable across Plasma versions (BlueZ D-Bus, MPRIS, freedesktop
@@ -41,6 +42,32 @@ from maid_core.calls import CallWatcher
 from maid_core.flaps import CALM_S, FlapWatch
 
 DISCORD_PATTERNS = ("discord", "vesktop", "webcord", "vencord")
+
+STATE_PATH = os.path.join(
+    os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")),
+    "maid-watcher", "bt-state.json")
+
+
+def _load_bt_state():
+    try:
+        with open(STATE_PATH) as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {}
+        return data
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def _save_bt_state(data):
+    try:
+        os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
+        tmp = STATE_PATH + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp, STATE_PATH)
+    except OSError:
+        pass
 
 
 class Daemon:
@@ -84,6 +111,170 @@ class Daemon:
         # kdeconnect/ip calls every tick when fallback features run.
         self._phones_cache = (0.0, True)   # (ts, reachable)
         self._bnep_cache = (0.0, False)    # (ts, up)
+        # Maid BT: Maid Watcher BlueV Protocol - BT state persistence + restore.
+        self._bt_state = _load_bt_state()
+        self._restoring = False
+        self._restore_pending = False
+        self._save_state_idle = None
+        try:
+            self.system_bus.add_signal_receiver(
+                self._on_adapter_props_changed,
+                signal_name="PropertiesChanged",
+                dbus_interface="org.freedesktop.DBus.Properties",
+                arg0="org.bluez.Adapter1")
+        except Exception:
+            pass
+        try:
+            self.system_bus.add_signal_receiver(
+                self._on_prepare_for_sleep,
+                signal_name="PrepareForSleep",
+                dbus_interface="org.freedesktop.login1.Manager")
+        except Exception:
+            pass
+
+    # -- Maid BT: Maid Watcher BlueV Protocol (state persistence/restore) --
+    def _adapter_path(self):
+        return "/org/bluez/hci0"
+
+    def _get_adapter_powered(self):
+        try:
+            obj = self.system_bus.get_object("org.bluez", self._adapter_path())
+            props = dbus.Interface(obj, "org.freedesktop.DBus.Properties")
+            return bool(props.Get("org.bluez.Adapter1", "Powered"))
+        except Exception:
+            return None
+
+    def _set_adapter_powered(self, powered):
+        try:
+            obj = self.system_bus.get_object("org.bluez", self._adapter_path())
+            props = dbus.Interface(obj, "org.freedesktop.DBus.Properties")
+            props.Set("org.bluez.Adapter1", "Powered", dbus.Boolean(bool(powered)))
+            return True
+        except Exception:
+            return False
+
+    def _current_state_snapshot(self):
+        connected = [mac for mac in self.devices if self.monitor.is_connected(mac)]
+        return {"adapter_powered": self._get_adapter_powered(),
+                "connected": connected}
+
+    def _save_state_now(self):
+        self._save_state_idle = None
+        try:
+            self._bt_state = self._current_state_snapshot()
+            _save_bt_state(self._bt_state)
+        except Exception:
+            pass
+        return False
+
+    def _schedule_save_state(self, delay_s=2):
+        if self._save_state_idle is not None:
+            try:
+                GLib.source_remove(self._save_state_idle)
+            except Exception:
+                pass
+        self._save_state_idle = GLib.timeout_add_seconds(delay_s, self._save_state_now)
+
+    def _on_adapter_props_changed(self, iface, changed, invalidated=None, path=None):
+        if iface != "org.bluez.Adapter1":
+            return
+        if "Powered" in changed:
+            self._schedule_save_state(1)
+
+    def _on_prepare_for_sleep(self, sleeping):
+        try:
+            sleeping = bool(sleeping)
+        except Exception:
+            return
+        if sleeping:
+            notify.audit("BlueV: sleep - snapshotting BT state")
+            # Snapshot immediately (best effort) before suspend.
+            self._save_state_now()
+        else:
+            notify.audit("BlueV: resume - restoring BT state")
+            self._schedule_restore(initial_delay_s=3)
+
+    def _schedule_restore(self, initial_delay_s=2):
+        if self._restoring:
+            self._restore_pending = True
+            return
+        GLib.timeout_add_seconds(initial_delay_s, self._begin_restore)
+
+    def _begin_restore(self):
+        self._restoring = True
+        self._restore_pending = False
+        self._restore_attempt = 0
+        self._do_restore_step()
+        return False
+
+    def _do_restore_step(self):
+        # Wait for adapter/BlueZ to be ready, then restore state.
+        powered = self._get_adapter_powered()
+        if powered is None:
+            self._restore_attempt += 1
+            if self._restore_attempt <= 15:
+                GLib.timeout_add_seconds(2, self._do_restore_step)
+                return False
+            # Give up waiting; still try reconnect logic for currently known state.
+            notify.audit("BlueV: adapter not ready, giving up wait")
+            self._restoring = False
+            if self._restore_pending:
+                self._restore_pending = False
+                self._schedule_restore(2)
+            return False
+
+        state = self._bt_state or {}
+        saved_powered = state.get("adapter_powered")
+        saved_connected = state.get("connected") or []
+        if not isinstance(saved_connected, list):
+            saved_connected = []
+
+        # Restore adapter power if we know the previous state.
+        if saved_powered is True and powered is False:
+            notify.audit("BlueV: powering adapter on")
+            self._set_adapter_powered(True)
+            GLib.timeout_add_seconds(3, self._restore_connect_saved, saved_connected)
+            return False
+        if saved_powered is False:
+            notify.audit("BlueV: adapter was off before sleep, leaving off")
+            self._restoring = False
+            if self._restore_pending:
+                self._restore_pending = False
+                self._schedule_restore(2)
+            return False
+
+        # powered is True (or unknown intent but adapter on): reconnect saved devices.
+        self._restore_connect_saved(saved_connected)
+        return False
+
+    def _restore_connect_saved(self, saved_connected):
+        if self._get_adapter_powered() is False:
+            self._restoring = False
+            return False
+        for mac in saved_connected:
+            if mac not in self.devices:
+                continue
+            dev = self.devices[mac]
+            if self.monitor.is_connected(mac):
+                continue
+            if mac in self._docked:
+                continue
+            if self.flap.hot(mac, time.time()):
+                continue
+            if not dev.get("auto_reconnect", True):
+                continue
+            notify.audit(f"BlueV: reconnect {dev.get('name', mac)}")
+            self.retry[mac] = [0, time.time()]
+            if self._retry_src.get(mac) is None:
+                # Stagger slightly per device; _maybe_reconnect also serializes.
+                delay = 1 + list(self.devices.keys()).index(mac) if mac in self.devices else 1
+                self._retry_src[mac] = GLib.timeout_add_seconds(
+                    max(1, min(delay, 5)), self._maybe_reconnect, mac)
+        self._restoring = False
+        if self._restore_pending:
+            self._restore_pending = False
+            self._schedule_restore(2)
+        return False
 
     # -- connection management -----------------------------------------
     def on_conn_change(self, mac, connected):
@@ -95,6 +286,7 @@ class Daemon:
                 self._dock_next.pop(mac, None)
                 notify.audit(f"case state cleared: {name} connected again")
             notify.audit(f"connected: {name}")
+            self._schedule_save_state(2)
             # no popup: buds returning is not news (the fallback parks a
             # notice on the disconnect). every radio blink popping a
             # balloon read as the watcher being annoying.
@@ -120,6 +312,7 @@ class Daemon:
                 GLib.timeout_add_seconds(4, self._route_after_connect)
         else:
             notify.audit(f"disconnected: {name}")
+            self._schedule_save_state(2)
             # no popup here: buds-fallback.sh already fires the one
             # "Earbuds disconnected / audio parked" notice - two daemons
             # popping duplicates reads like a glitch
@@ -639,6 +832,9 @@ class Daemon:
                 self.retry[mac] = [0, time.time() + delay]
                 GLib.timeout_add_seconds(delay + 1, self._maybe_reconnect,
                                          mac)
+
+        # Maid BT: Maid Watcher BlueV Protocol - restore BT state on startup.
+        self._schedule_restore(initial_delay_s=2)
         names = ", ".join(config_mod.short_name(d)
                         for d in self.devices.values()) or "no devices"
         notify.send("Maid Watcher started", f"watching: {names}")
