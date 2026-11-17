@@ -40,6 +40,7 @@ from maid_core import audio
 from maid_core import media
 from maid_core.calls import CallWatcher
 from maid_core.flaps import CALM_S, FlapWatch
+from maid_core.bluev import BlueV
 
 DISCORD_PATTERNS = ("discord", "vesktop", "webcord", "vencord")
 
@@ -116,6 +117,8 @@ class Daemon:
         self._restoring = False
         self._restore_pending = False
         self._save_state_idle = None
+        # BlueV: state/confidence model (phone hints + local probing/policy).
+        self.bluev = BlueV(cfg)
         try:
             self.system_bus.add_signal_receiver(
                 self._on_adapter_props_changed,
@@ -286,6 +289,7 @@ class Daemon:
                 self._dock_next.pop(mac, None)
                 notify.audit(f"case state cleared: {name} connected again")
             notify.audit(f"connected: {name}")
+            self.bluev.note_connected_pc(mac)
             self._schedule_save_state(2)
             # no popup: buds returning is not news (the fallback parks a
             # notice on the disconnect). every radio blink popping a
@@ -312,6 +316,7 @@ class Daemon:
                 GLib.timeout_add_seconds(4, self._route_after_connect)
         else:
             notify.audit(f"disconnected: {name}")
+            self.bluev.note_pc_disconnected(mac)
             self._schedule_save_state(2)
             # no popup here: buds-fallback.sh already fires the one
             # "Earbuds disconnected / audio parked" notice - two daemons
@@ -418,6 +423,14 @@ class Daemon:
             return False
         if self.flap.hot(mac, time.time()):
             return False     # tug-of-war: never race the phone for the buds
+        # BlueV: phone hint says connected to phone -> don't race it.
+        try:
+            if self.bluev.phone_state(mac) == "connected_to_phone":
+                notify.audit(f"BlueV: {self.devices.get(mac, {}).get('name', mac)} connected to phone, deferring reconnect")
+                GLib.timeout_add_seconds(30, self._maybe_reconnect, mac)
+                return False
+        except Exception:
+            pass
         # Serialize connects: BlueZ rejects overlapping connects
         # (InProgress) and parallel A2DP setups flap PipeWire. Highest
         # priority pending device goes first; the rest wait their turn.
@@ -471,54 +484,90 @@ class Daemon:
 
     def _dock_verdict(self, mac, verdict):
         if self.monitor.is_connected(mac):
+            self.bluev.note_connected_pc(mac)
             return False  # live again: beats any verdict
         dev = self.devices.get(mac, {})
         name = dev.get("name", mac)
-        if verdict is True:
-            if mac not in self._docked:
-                self._docked.add(mac)
-                self._dock_next[mac] = 0.0
-                notify.audit(f"buds docked: {name} "
-                             "(in charging case, standing down)")
-                notify.send(f"{config_mod.short_name(dev)} is in its case",
-                            "Standing down. They reconnect on their own "
-                            "when you take them out.")
-            return False
-        if verdict is False and mac in self._docked:
-            # was docked, now advertising: the case opened. Fast resume.
-            self._docked.discard(mac)
-            self._dock_next.pop(mac, None)
-            notify.audit(f"case opened: {name} advertising again, "
-                         "reconnecting")
-            self.retry[mac] = [0, time.time()]
-            GLib.timeout_add_seconds(1, self._maybe_reconnect, mac)
-            return False
-        # False (out of the case but still refusing to connect) or None
-        # (could not scan - adapter off/not ready): keep the manual
-        # retry UX; never claim docked off an unknown probe.
-        def _retry_now(_key, _mac=mac):
-            self.retry[_mac] = [0, time.time()]
-            GLib.timeout_add_seconds(1, self._maybe_reconnect, _mac)
+        try:
+            self.bluev.refresh_hints()
+            bstate, breason = self.bluev.resolve(mac, False, verdict)
+        except Exception:
+            bstate, breason = (None, None)
 
+        # Phone hint: if connected to phone, do not claim docked or give-up-reconnect; defer.
+        if bstate == "connected_to_phone":
+            if mac in self._docked:
+                self._docked.discard(mac)
+                self._dock_next.pop(mac, None)
+            notify.audit(f"BlueV: {name} connected to phone, not docked")
+            return False
+
+        if verdict is True:
+            self.bluev.note_out_evidence(mac, "probe_advertising")
+            if mac in self._docked:
+                # was docked, now advertising: the case opened. Fast resume.
+                self._docked.discard(mac)
+                self._dock_next.pop(mac, None)
+                notify.audit(f"case opened: {name} advertising again, reconnecting")
+                self.retry[mac] = [0, time.time()]
+                GLib.timeout_add_seconds(1, self._maybe_reconnect, mac)
+                return False
+            # out/available but refusing to connect: keep existing give-up UX path below if this came from give-up flow
+            # (caller context varies; fall through to manual handling)
+        elif verdict is False:
+            # Silent probe: use BlueV smoothing/confirmations before declaring docked.
+            if bstate == "docked":
+                if mac not in self._docked:
+                    self._docked.add(mac)
+                    self._dock_next[mac] = 0.0
+                    notify.audit(f"buds docked (BlueV): {name} (silent probes, standing down)")
+                    notify.send(f"{config_mod.short_name(dev)} is in its case",
+                                "Standing down. They reconnect on their own when you take them out.")
+                return False
+            # not yet confirmed docked: recheck later without claiming docked
+            self._dock_next[mac] = time.time() + self.cfg.get("case_detect", {}).get("recheck_s", 120)
+            notify.audit(f"BlueV: {name} silent but unconfirmed ({breason}), will recheck")
+            return False
+        else:
+            # Unknown probe result (scan unavailable): never claim docked
+            if mac in self._docked:
+                # keep prior docked belief until contradicted, but don't strengthen
+                return False
+
+        # verdict True but not previously docked, or other non-docked outcome: keep manual retry UX quiet
         notify.audit(f"reconnect gave up: {name}")
-        # no balloon and no button: the drift eats popups for breakfast
-        # (a walk away from the PC means give-up once or twice a day).
-        # going quiet; the MaidLogs trail keeps the when-and-what.
         return False
 
     def case_rewatch(self):
         """Docked devices: slow lid-open recheck, self-connect backstop
         for when buds wake up and join the phone instead of this PC."""
         cd = self.cfg.get("case_detect", {})
-        if not cd.get("enabled", True) or not self._docked:
+        if not cd.get("enabled", True):
             return
         interval = cd.get("recheck_s", 120)
         window = cd.get("probe_s", 8)
         now = time.time()
-        for mac in list(self._docked):
+        try:
+            self.bluev.refresh_hints()
+        except Exception:
+            pass
+        # Recheck docked devices and also devices in unconfirmed-silent state tracked by _dock_next
+        macs = set(self._docked)
+        for mac, st in getattr(self.bluev, "devices", {}).items():
+            if st.state in ("unknown",) and st.docked_silent_count > 0:
+                macs.add(mac)
+        if not macs:
+            return
+        for mac in list(macs):
             if self.monitor.is_connected(mac):
                 self._docked.discard(mac)
                 continue
+            try:
+                if self.bluev.phone_state(mac) == "connected_to_phone":
+                    self._docked.discard(mac)
+                    continue
+            except Exception:
+                pass
             if now < self._dock_next.get(mac, 0):
                 continue
             self._dock_next[mac] = now + interval + window
@@ -803,6 +852,11 @@ class Daemon:
         if self.phones_up():
             return
         for mac, dev in self.devices.items():
+            try:
+                if self.bluev.phone_state(mac) == "connected_to_phone":
+                    continue
+            except Exception:
+                pass
             if dev.get("auto_reconnect", True) \
                     and not self.monitor.is_connected(mac) \
                     and mac not in self.retry \

@@ -6,7 +6,10 @@
 #   GET /call_start?token=...    -> park PC audio, hands-off 2h (calls win)
 #   GET /call_end?token=...      -> clear hands-off
 #   GET /health?token=...        -> ok (connectivity test from MacroDroid)
+#   GET /phone_device?token=...&mac=...&state=connected|disconnected
+#                                -> BlueV phone hint for Maid Watcher
 import hmac
+import json
 import os
 import shutil
 import subprocess
@@ -20,6 +23,7 @@ TOGGLE = (shutil.which("bluetooth-toggle.sh")
           or os.path.expanduser("~/.local/bin/bluetooth-toggle.sh")
           or "/usr/bin/bluetooth-toggle.sh")
 HANDS = os.path.join("/run/user", str(os.getuid()), "bt-hands-off")
+BLUEV_PHONE_HINTS = os.path.join("/run/user", str(os.getuid()), "maid-bluev-phone.json")
 
 
 def load_token():
@@ -55,6 +59,51 @@ def clear_handsoff():
         os.remove(HANDS)
     except OSError:
         pass
+
+
+def _norm_mac(mac):
+    mac = (mac or "").strip().upper().replace("-", ":")
+    parts = mac.split(":")
+    if len(parts) == 6 and all(len(p) == 2 for p in parts):
+        return ":".join(parts)
+    return None
+
+
+def update_bluev_phone_hint(mac, state):
+    """Persist phone-reported device connection hint for Maid Watcher BlueV."""
+    mac = _norm_mac(mac)
+    if mac is None:
+        return False, "bad mac"
+    state = (state or "").strip().lower()
+    if state in ("connected", "connected_to_phone", "up", "on"):
+        state = "connected"
+    elif state in ("disconnected", "disconnected_from_phone", "down", "off"):
+        state = "disconnected"
+    else:
+        return False, "bad state"
+    try:
+        if os.path.exists(BLUEV_PHONE_HINTS):
+            with open(BLUEV_PHONE_HINTS) as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                data = {}
+        else:
+            data = {}
+    except (OSError, ValueError, TypeError):
+        data = {}
+    devices = data.get("devices")
+    if not isinstance(devices, dict):
+        devices = {}
+    devices[mac] = {"state": state, "ts": time.time(), "source": "phone"}
+    data["devices"] = devices
+    try:
+        tmp = BLUEV_PHONE_HINTS + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp, BLUEV_PHONE_HINTS)
+        return True, "ok"
+    except OSError as e:
+        return False, str(e)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -104,6 +153,17 @@ class Handler(BaseHTTPRequestHandler):
             body = "hands-off cleared"
         elif path == "/health":
             body = "ok"
+        elif path == "/phone_device":
+            qs = urllib.parse.parse_qs(parts.query)
+            mac = (qs.get("mac") or [""])[0]
+            state = (qs.get("state") or [""])[0]
+            ok, msg = update_bluev_phone_hint(mac, state)
+            if not ok:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(msg.encode())
+                return
+            body = f"bluev {mac} {state}"
         else:
             self.send_response(404)
             self.end_headers()
