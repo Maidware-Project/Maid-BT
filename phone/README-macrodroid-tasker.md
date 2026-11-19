@@ -29,10 +29,24 @@ from `~/.config/bt-intent.token`. base: `http://PC_IP:8899`.
 | music stops | `/phone_paused` | hands-off cleared, PC may grab back |
 | call starts | `/call_start` | parks audio, hands off 2h |
 | call ends | `/call_end` | hands-off cleared |
+| buds connected/disconnected on phone (BlueV hint) | `/phone_device?mac=AA:BB:CC:DD:EE:FF&state=connected` (or `disconnected`) | stores per-device phone-connection hint for Maid Watcher BlueV policy |
 | testing | `/health` | returns `ok` |
 
 send the token as an `X-Token` header. `?token=` still works but rides
 in the URL, so prefer the header.
+
+### BlueV phone hints (per-device, WIP groundwork)
+
+Maid Watcher can use phone-reported per-device connection hints to avoid
+racing reconnects when the buds are currently owned by the phone and to
+improve dock/availability confidence.
+
+- Endpoint: `GET /phone_device?token=...&mac=AA:BB:CC:DD:EE:FF&state=connected|disconnected`
+  - `mac`: the earbuds' Bluetooth MAC address (same one managed by Maid BT)
+  - `state`: `connected` when the phone is connected to that device, `disconnected` when it is not
+- Hints are stored in `/run/user/<uid>/maid-bluev-phone.json` and consumed by Maid Watcher (TTL/configurable via `bluev.phone_hint_ttl_s`).
+- **Automatic reporting (recommended):** in MacroDroid/Tasker, add triggers for Bluetooth connected/disconnected to the specific earbuds MAC/name and call `/phone_device` with the matching `mac` and `state`. This works over the existing intent server path and does not require a custom Android app.
+- **KDE Connect-assisted/manual:** you can also expose PC-side "Run Command" actions in KDE Connect that hit the local intent server for a known MAC (e.g. via `curl -H "X-Token: $(cat ~/.config/bt-intent.token)" "http://127.0.0.1:8899/phone_device?mac=AA:BB:CC:DD:EE:FF&state=connected"`), useful for quick manual hints; automatic per-device state detection still needs an Android-side trigger/app.
 
 MacroDroid (free fits, 4 macros): trigger `Music/Sound Playing`
 (Playing/Stopped), `Call Active` (Any), `Call Ended`; constrain to
@@ -56,3 +70,5 @@ exempt the app or it dies in background).
 token rides plain HTTP on your own LAN - fine at home, never expose
 8899 past your router. phone stuff is off by default at install; core
 switching never touches the network.
+
+BlueV phone hints are currently PC-side groundwork: richer hint payloads (source/confidence/adapter context), multi-adapter support, deeper UI/observability, and vendor-specific enhancements are planned follow-ups.
