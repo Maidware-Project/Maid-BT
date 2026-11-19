@@ -40,7 +40,7 @@ def load_phone_hints(path=PHONE_HINTS_PATH):
         return {}
 
 
-def phone_hint_state(hints, mac, ttl_s=DEFAULT_HINT_TTL_S, now=None):
+def phone_hint_record(hints, mac, ttl_s=DEFAULT_HINT_TTL_S, now=None):
     now = _now() if now is None else now
     rec = hints.get(mac) or hints.get(mac.upper()) or hints.get(mac.lower())
     if not isinstance(rec, dict):
@@ -53,15 +53,26 @@ def phone_hint_state(hints, mac, ttl_s=DEFAULT_HINT_TTL_S, now=None):
         return None
     st = str(rec.get("state", ""))
     if st == "connected":
-        return "connected_to_phone"
-    if st == "disconnected":
-        return "disconnected_from_phone"
-    return None
+        state = "connected_to_phone"
+    elif st == "disconnected":
+        state = "disconnected_from_phone"
+    else:
+        return None
+    out = dict(rec)
+    out["_resolved_state"] = state
+    out["_age_s"] = max(0.0, now - ts)
+    return out
+
+
+def phone_hint_state(hints, mac, ttl_s=DEFAULT_HINT_TTL_S, now=None):
+    rec = phone_hint_record(hints, mac, ttl_s=ttl_s, now=now)
+    return rec.get("_resolved_state") if rec else None
 
 
 class DeviceState:
     __slots__ = ("mac", "state", "updated_at", "docked_silent_count",
-                 "docked_silent_since", "last_out_evidence", "reason")
+                 "docked_silent_since", "last_out_evidence", "reason",
+                 "last_phone_hint")
 
     def __init__(self, mac):
         self.mac = mac
@@ -71,6 +82,7 @@ class DeviceState:
         self.docked_silent_since = None
         self.last_out_evidence = 0.0
         self.reason = "init"
+        self.last_phone_hint = None
 
     def set_state(self, state, reason="", now=None):
         now = _now() if now is None else now
@@ -78,6 +90,18 @@ class DeviceState:
             self.state = state
             self.reason = reason or self.reason
         self.updated_at = now
+
+    def snapshot(self, now=None):
+        now = _now() if now is None else now
+        return {
+            "state": self.state,
+            "reason": self.reason,
+            "updated_at": self.updated_at,
+            "age_s": max(0.0, now - self.updated_at) if self.updated_at else None,
+            "docked_silent_count": self.docked_silent_count,
+            "last_out_evidence": self.last_out_evidence,
+            "phone_hint": self.last_phone_hint,
+        }
 
 
 class BlueV:
@@ -109,8 +133,15 @@ class BlueV:
         self._hints = load_phone_hints(PHONE_HINTS_PATH)
 
     def phone_state(self, mac, now=None):
+        rec = self.phone_hint(mac, now=now)
+        return rec.get("_resolved_state") if rec else None
+
+    def phone_hint(self, mac, now=None):
         self.refresh_hints()
-        return phone_hint_state(self._hints, mac, ttl_s=self._hints_ttl_s, now=now)
+        rec = phone_hint_record(self._hints, mac, ttl_s=self._hints_ttl_s, now=now)
+        st = self.ensure(mac)
+        st.last_phone_hint = rec
+        return rec
 
     def note_connected_pc(self, mac, now=None):
         now = _now() if now is None else now
@@ -142,7 +173,8 @@ class BlueV:
         """
         now = _now() if now is None else now
         st = self.ensure(mac)
-        phone = self.phone_state(mac, now=now)
+        hint = self.phone_hint(mac, now=now)
+        phone = hint.get("_resolved_state") if hint else None
 
         if pc_connected:
             st.set_state("connected_to_pc", "pc_connected", now)
@@ -187,6 +219,10 @@ class BlueV:
         elif phone == "disconnected_from_phone" and st.state == "unknown":
             st.reason = "phone_disconnected"
         return st.state, st.reason
+
+    def status_snapshot(self, now=None):
+        now = _now() if now is None else now
+        return {mac: st.snapshot(now=now) for mac, st in self.devices.items()}
 
     def should_suppress_reconnect(self, mac, now=None):
         state, _ = self.resolve(mac, pc_connected=False, probe_verdict=None, now=now)

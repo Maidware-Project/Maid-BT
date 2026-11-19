@@ -8,6 +8,12 @@ BUDS_MAC="AA:BB:CC:DD:EE:FF"
 FALLBACK_SINK=""
 # Opt out of the app pause/resume cycle with: APP_CYCLE=0
 # Opt out of auto-connecting other paired headsets with: AUDIO_PRIORITY=0
+# Allow LE Audio (BAP/LC3) profiles when supported by BlueZ/PipeWire/hardware.
+# Default 0 keeps classic A2DP-first behavior; set LE_AUDIO=1 to prefer/allow
+# LE Audio where available (and avoid installing/enabling the A2DP-only guard).
+# Requires LE Audio-capable stack (BlueZ experimental/LE audio support, adapter,
+# and earbuds). QUALITY_LOCK is A2DP/codec-pinning and is skipped on BAP profiles.
+#   LE_AUDIO=1
 # Pin LDAC after every switch (needs LDAC headset) with: QUALITY_LOCK=1
 # Dual-connection buds (phone+PC at once, PC stops fighting) with: MULTIPOINT=1
 # Dock away: hand audio to the output that was default before the buds

@@ -70,20 +70,43 @@ def pactl_bluez_card_index(mac):
     return None
 
 
-def set_profile_a2dp(mac):
-    """Force high-fidelity A2DP sink profile on the BT card.
+def _le_audio_enabled():
+    try:
+        # shell config is authoritative when present
+        import os
+        p = os.path.expanduser("~/.config/bluetooth-buds.conf")
+        if os.path.exists(p):
+            with open(p) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("LE_AUDIO="):
+                        return line.split("=", 1)[1].strip().strip('"\'') == "1"
+    except Exception:
+        pass
+    return os.environ.get("LE_AUDIO") == "1"
 
-    Card object ids go stale across reconnects and the bare
-    'a2dp-sink' alias does not always stick, so re-resolve the card and
-    walk explicit codec profiles until one holds. Never leaves the card
-    worse than found: restores the previous profile on failure.
+
+def set_profile_a2dp(mac):
+    """Prefer a high-fidelity audio profile on the BT card.
+
+    For classic A2DP devices, forces A2DP sink profiles. If LE Audio is
+    enabled/active (BAP), treat BAP profiles as valid and avoid forcing
+    A2DP. Card object ids go stale across reconnects and profile names
+    vary, so re-resolve the card and walk known profiles until one holds.
+    Never leaves the card worse than found: restores previous profile on failure.
     """
     import time
-    prev = active_profile(mac)
-    if (prev or "").startswith("a2dp"):
+    prev = active_profile(mac) or ""
+    if prev.startswith("a2dp") or prev.startswith("bap"):
         return True
-    for profile in ("a2dp-sink", "a2dp_sink",
-                    "a2dp-sink-aac", "a2dp-sink-sbc"):
+    le = _le_audio_enabled()
+    # If LE Audio is enabled, try BAP profiles first (useful when card is off
+    # or stack selected an undesired profile), then fall back to A2DP.
+    profiles = []
+    if le:
+        profiles += ["bap-sink", "bap-duplex", "bap_sink", "bap_duplex"]
+    profiles += ["a2dp-sink", "a2dp_sink", "a2dp-sink-aac", "a2dp-sink-sbc"]
+    for profile in profiles:
         card = bluez_card_id(mac)
         if card is None:
             continue
@@ -91,18 +114,20 @@ def set_profile_a2dp(mac):
         if not (p and p.returncode == 0):
             continue
         # Transport setup is not instant. Re-check patiently instead of
-        # switching to the next codec on top of a forming transport:
-        # profile churn is what wedges dual-mode cards (2026-10-19).
+        # switching to the next codec/profile on top of a forming transport.
         for _ in range(3):
             time.sleep(2)
-            if (active_profile(mac) or "").startswith("a2dp"):
+            cur = active_profile(mac) or ""
+            if cur.startswith("a2dp") or cur.startswith("bap"):
                 return True
-    # PulseAudio fallback (Mint, or wpctl failing): underscore names.
-    # Harmless on PipeWire too - pactl speaks to the same server.
+    # PulseAudio fallback (Mint, or wpctl failing): pactl profile names.
     import subprocess
     card_name = "bluez_card." + mac.upper().replace(":", "_")
-    for profile in ("a2dp_sink", "a2dp_sink_aac", "a2dp_sink_sbc",
-                    "a2dp_sink_ldac"):
+    pa_profiles = []
+    if le:
+        pa_profiles += ["bap_sink", "bap_duplex", "bap-sink", "bap-duplex"]
+    pa_profiles += ["a2dp_sink", "a2dp_sink_aac", "a2dp_sink_sbc", "a2dp_sink_ldac"]
+    for profile in pa_profiles:
         try:
             r = subprocess.run(
                 ["pactl", "set-card-profile", card_name, profile],
@@ -112,13 +137,20 @@ def set_profile_a2dp(mac):
         if r.returncode != 0:
             continue
         time.sleep(1)
-        if (active_profile(mac) or "").startswith("a2dp"):
+        cur = active_profile(mac) or ""
+        if cur.startswith("a2dp") or cur.startswith("bap"):
             return True
-    if (active_profile(mac) or "off") == "off" \
-            and (prev or "off") != "off":
+    cur = active_profile(mac) or "off"
+    if cur == "off" and (prev or "off") != "off":
         card = bluez_card_id(mac)
         if card is not None:
             _run("wpctl", "set-profile", str(card), prev)
+        else:
+            try:
+                subprocess.run(["pactl", "set-card-profile", card_name, prev],
+                               capture_output=True, timeout=10)
+            except Exception:
+                pass
     return False
 
 
@@ -467,8 +499,12 @@ CODEC_LATENCY = {
 
 
 def codec_of_profile(profile):
-    """'aac' from 'a2dp-sink-aac'; None for non-A2DP profiles."""
-    if not profile or not profile.startswith("a2dp"):
+    """Codec hint from profile name (e.g. 'aac' from 'a2dp-sink-aac', 'lc3' for BAP/LE)."""
+    if not profile:
+        return None
+    if profile.startswith("bap"):
+        return "lc3"
+    if not profile.startswith("a2dp"):
         return None
     parts = profile.split("a2dp-sink", 1)
     if len(parts) < 2 or not parts[1].strip("-_"):

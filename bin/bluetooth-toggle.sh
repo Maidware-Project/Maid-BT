@@ -99,12 +99,15 @@ FALLBACK_SINK=""
 APP_CYCLE=1
 QUALITY_LOCK=0
 MULTIPOINT=0
+LE_AUDIO=0
 # Fill these via ~/.config/bluetooth-buds.conf (install.sh prompts for them):
 #   BUDS_MAC="..." and FALLBACK_SINK="..."
 # Opt out of the app pause/resume cycle with: APP_CYCLE=0
 # Pin LDAC after every switch (needs LDAC headset) with: QUALITY_LOCK=1
 # Dual-connection buds (phone+PC at once) with: MULTIPOINT=1
+# Allow/prefer LE Audio (BAP) profiles when available with: LE_AUDIO=1
 [ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
+LE_AUDIO="${LE_AUDIO:-0}"
 command -v validate_conf >/dev/null 2>&1 && validate_conf
 CONNECT_TIMEOUT=20   # seconds to retry bluetoothctl connect
 SINK_WAIT=15         # seconds to wait for bluez sink to appear
@@ -333,12 +336,20 @@ park_on_fallback() {
 
 switch_to_buds() {
   local waited=0 sink=""
-  # re-acquire A2DP if a previous off-cycle left the card on profile off
+  # re-acquire audio profile if a previous off-cycle left the card on profile off
   local c active
   for c in $(pactl list short cards 2>/dev/null | grep -i "bluez" | awk '{print $2}'); do
     active=$(pactl list cards 2>/dev/null | awk -v card="$c" 'index($0, card) {f=1} f && /Active Profile:/ {print; exit}')
     case "$active" in
-      *": off"*) pactl set-card-profile "$c" a2dp-sink 2>/dev/null || true ;;
+      *": off"*)
+        if [ "${LE_AUDIO:-0}" = "1" ]; then
+          pactl set-card-profile "$c" bap-sink 2>/dev/null \
+            || pactl set-card-profile "$c" bap-duplex 2>/dev/null \
+            || pactl set-card-profile "$c" a2dp-sink 2>/dev/null || true
+        else
+          pactl set-card-profile "$c" a2dp-sink 2>/dev/null || true
+        fi
+        ;;
     esac
   done
   while [ "$waited" -lt "$SINK_WAIT" ]; do
@@ -371,13 +382,17 @@ enforce_quality() {
   # quality lock (opt-in): pin A2DP to LDAC. manual run = explicit
   # intent, so no cooldown. HSP/HFP with a live BT mic means a call:
   # hands off. HSP with a free mic means stuck: rescue to LDAC.
+  # LE Audio (BAP) profiles are handled by the stack; A2DP codec pinning
+  # does not apply the same way, so skip forcing A2DP when BAP is active.
   [ "${QUALITY_LOCK:-0}" = "1" ] || return 0
   local cur card
   cur=$(current_profile)
   case "$cur" in
+    bap*) return 0 ;;
     "a2dp-sink"|"") return 0 ;;
     headset*|handsfree*)
       bt_mic_in_use && return 0
+      if [ "${LE_AUDIO:-0}" = "1" ]; then return 0; fi
       card="bluez_card.${BUDS_MAC//:/_}"
       if pactl set-card-profile "$card" a2dp-sink 2>/dev/null; then
         echo "Quality lock rescued HSP -> LDAC (mic free)"

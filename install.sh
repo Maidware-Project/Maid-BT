@@ -538,23 +538,49 @@ if [ "$QLOCK_ON" = "1" ]; then
 else
   say "max-quality audio off (enable: copy wireplumber/52-bt-max-quality.conf to ~/.config/wireplumber/wireplumber.conf.d/, restart wireplumber)"
 fi
-# A2DP-only: newer stacks try LE Audio transports first on dual-mode
-# buds when the adapter's ISO sockets are weak - those transports keep
-# failing and the buds go silent while classic A2DP works. Opt-in,
-# off by default.
+# LE Audio vs A2DP-only guard:
+# - 53-bt-a2dp-only.conf disables LE Audio to avoid silent dual-mode buds on
+#   adapters/stacks with broken ISO/LE Audio transports (safe default off).
+# - 54-bt-le-audio.conf enables LE Audio (BAP/LC3 roles/codecs) for capable
+#   stacks/devices. Do not enable both at once.
 A2DP_ON=0
+LEAUDIO_ON=0
 if [ "$PIPED" = "0" ] && [ -t 0 ]; then
-  printf 'Lock buds to classic A2DP (fixes silent LE Audio buds)? [y/N]: '
+  printf 'Enable LE Audio (BAP/LC3) support instead of A2DP-only guard? [y/N]: '
   read -r _wans4
-  case "$_wans4" in [Yy]*) A2DP_ON=1 ;; esac
+  case "$_wans4" in
+    [Yy]*)
+      LEAUDIO_ON=1
+      ;;
+    *)
+      printf 'Lock buds to classic A2DP (fixes silent LE Audio buds)? [y/N]: '
+      read -r _wans4b
+      case "$_wans4b" in [Yy]*) A2DP_ON=1 ;; esac
+      ;;
+  esac
 fi
-if [ "$A2DP_ON" = "1" ]; then
+if [ "$LEAUDIO_ON" = "1" ]; then
+  mkdir -p "$HOME/.config/wireplumber/wireplumber.conf.d"
+  copy_one "$PKGDIR/wireplumber/54-bt-le-audio.conf" \
+    "$HOME/.config/wireplumber/wireplumber.conf.d/54-bt-le-audio.conf"
+  # avoid conflicting guard
+  rm -f "$HOME/.config/wireplumber/wireplumber.conf.d/53-bt-a2dp-only.conf" 2>/dev/null || true
+  if [ -f "$CONF" ]; then
+    if grep -q '^LE_AUDIO=' "$CONF" 2>/dev/null; then
+      sed -i 's/^LE_AUDIO=.*/LE_AUDIO=1/' "$CONF" 2>/dev/null || true
+    else
+      printf '\nLE_AUDIO=1\n' >> "$CONF" 2>/dev/null || true
+    fi
+  fi
+  say "LE Audio enabled (54-bt-le-audio.conf, LE_AUDIO=1). Restart wireplumber to apply: systemctl --user restart wireplumber"
+elif [ "$A2DP_ON" = "1" ]; then
   mkdir -p "$HOME/.config/wireplumber/wireplumber.conf.d"
   copy_one "$PKGDIR/wireplumber/53-bt-a2dp-only.conf" \
     "$HOME/.config/wireplumber/wireplumber.conf.d/53-bt-a2dp-only.conf"
+  rm -f "$HOME/.config/wireplumber/wireplumber.conf.d/54-bt-le-audio.conf" 2>/dev/null || true
   say "a2dp-only on - restart wireplumber to apply: systemctl --user restart wireplumber"
 else
-  say "a2dp-only off (enable: copy wireplumber/53-bt-a2dp-only.conf to ~/.config/wireplumber/wireplumber.conf.d/, restart wireplumber)"
+  say "LE Audio/A2DP guard unchanged (enable LE Audio with 54-bt-le-audio.conf + LE_AUDIO=1, or A2DP-only with 53-bt-a2dp-only.conf)"
 fi
 command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 

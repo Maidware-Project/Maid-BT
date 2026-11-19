@@ -16,7 +16,7 @@ model-specific caveat - there is no Maid BT layer to fail.
 | aptX, aptX HD, aptX Adaptive | PipeWire | codecs listed per model below |
 | LDAC | PipeWire (libldac) | on LDAC-labeled models below; Maid BT pins it with QUALITY_LOCK=1 |
 | HFP / HSP (mic) | BlueZ + PipeWire | works; Maid BT routes chat-app mics off it (route-mic) |
-| LE Audio (Auracast/ISO) | experimental | PipeWire supports it, most BT adapters lack ISO - Buds can go silent; Maid BT ships 53-bt-a2dp-only.conf as the guard |
+| LE Audio (BAP/LC3, Auracast/ISO) | optional/experimental | Supported on capable BlueZ/PipeWire/WirePlumber stacks, adapters, and earbuds. Enable with `LE_AUDIO=1` and opt-in `wireplumber/54-bt-le-audio.conf`; if LE Audio transports are unstable on your setup, use `53-bt-a2dp-only.conf` as the A2DP-only guard |
 | AVRCP battery | BlueZ Battery1 | Maid-watcher shows it; depth varies by vendor |
 
 Also native, though not codec work:

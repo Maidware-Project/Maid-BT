@@ -142,27 +142,122 @@ class Daemon:
         except Exception:
             return "/org/bluez/hci0"
 
-    def _get_adapter_powered(self):
+    def _list_adapter_paths(self):
+        paths = []
         try:
-            obj = self.system_bus.get_object("org.bluez", self._adapter_path())
+            obj = self.system_bus.get_object("org.bluez", "/")
+            om = dbus.Interface(obj, "org.freedesktop.DBus.ObjectManager")
+            objs = om.GetManagedObjects()
+            for path, ifaces in objs.items():
+                if "org.bluez.Adapter1" in ifaces:
+                    paths.append(str(path))
+        except Exception:
+            pass
+        if not paths:
+            # fallback to configured/default adapter
+            paths = [self._adapter_path()]
+        # prefer configured adapter first for backward-compatible behavior
+        pref = self._adapter_path()
+        paths = sorted(set(paths), key=lambda p: (0 if p == pref else 1, p))
+        return paths
+
+    def _get_adapter_powered_at(self, path):
+        try:
+            obj = self.system_bus.get_object("org.bluez", path)
             props = dbus.Interface(obj, "org.freedesktop.DBus.Properties")
             return bool(props.Get("org.bluez.Adapter1", "Powered"))
         except Exception:
             return None
 
-    def _set_adapter_powered(self, powered):
+    def _set_adapter_powered_at(self, path, powered):
         try:
-            obj = self.system_bus.get_object("org.bluez", self._adapter_path())
+            obj = self.system_bus.get_object("org.bluez", path)
             props = dbus.Interface(obj, "org.freedesktop.DBus.Properties")
             props.Set("org.bluez.Adapter1", "Powered", dbus.Boolean(bool(powered)))
             return True
         except Exception:
             return False
 
+    def _get_adapter_powered(self):
+        return self._get_adapter_powered_at(self._adapter_path())
+
+    def _set_adapter_powered(self, powered):
+        return self._set_adapter_powered_at(self._adapter_path(), powered)
+
+    def _connected_devices_on_adapter(self, adapter_path):
+        # Best-effort: infer from managed BlueZ device objects under adapter.
+        connected = []
+        want = set(self.devices.keys())
+        try:
+            obj = self.system_bus.get_object("org.bluez", "/")
+            om = dbus.Interface(obj, "org.freedesktop.DBus.ObjectManager")
+            objs = om.GetManagedObjects()
+            prefix = str(adapter_path).rstrip("/") + "/dev_"
+            for path, ifaces in objs.items():
+                if not str(path).startswith(prefix):
+                    continue
+                dev = ifaces.get("org.bluez.Device1") or {}
+                addr = str(dev.get("Address", "")).upper()
+                if addr in want and bool(dev.get("Connected", False)):
+                    connected.append(addr)
+        except Exception:
+            # fallback to monitor check (single-adapter style)
+            for mac in self.devices:
+                if self.monitor.is_connected(mac):
+                    connected.append(mac)
+        # dedupe preserving order
+        seen = set()
+        out = []
+        for m in connected:
+            if m not in seen:
+                seen.add(m)
+                out.append(m)
+        return out
+
     def _current_state_snapshot(self):
-        connected = [mac for mac in self.devices if self.monitor.is_connected(mac)]
-        return {"adapter_powered": self._get_adapter_powered(),
-                "connected": connected}
+        adapters = {}
+        for ap in self._list_adapter_paths():
+            adapters[ap] = {
+                "powered": self._get_adapter_powered_at(ap),
+                "connected": self._connected_devices_on_adapter(ap),
+            }
+        # keep legacy top-level fields for backward compatibility
+        primary = self._adapter_path()
+        legacy = adapters.get(primary, {"powered": None, "connected": []})
+        return {
+            "adapters": adapters,
+            "adapter_powered": legacy.get("powered"),
+            "connected": legacy.get("connected", []),
+        }
+
+    def _normalized_saved_adapters(self):
+        state = self._bt_state or {}
+        adapters = state.get("adapters")
+        if isinstance(adapters, dict) and adapters:
+            out = {}
+            for ap, rec in adapters.items():
+                if not isinstance(rec, dict):
+                    continue
+                connected = rec.get("connected") or []
+                if not isinstance(connected, list):
+                    connected = []
+                out[str(ap)] = {
+                    "powered": rec.get("powered"),
+                    "connected": [str(m).upper() for m in connected if str(m)],
+                }
+            if out:
+                return out
+        # legacy format
+        connected = state.get("connected") or []
+        if not isinstance(connected, list):
+            connected = []
+        ap = self._adapter_path()
+        return {
+            ap: {
+                "powered": state.get("adapter_powered"),
+                "connected": [str(m).upper() for m in connected if str(m)],
+            }
+        }
 
     def _save_state_now(self):
         self._save_state_idle = None
@@ -214,51 +309,74 @@ class Daemon:
         return False
 
     def _do_restore_step(self):
-        # Wait for adapter/BlueZ to be ready, then restore state.
-        powered = self._get_adapter_powered()
-        if powered is None:
+        # Wait for adapter(s)/BlueZ to be ready, then restore state.
+        adapter_paths = self._list_adapter_paths()
+        ready = [ap for ap in adapter_paths if self._get_adapter_powered_at(ap) is not None]
+        if not ready:
             self._restore_attempt += 1
             if self._restore_attempt <= 15:
                 GLib.timeout_add_seconds(2, self._do_restore_step)
                 return False
-            # Give up waiting; still try reconnect logic for currently known state.
-            notify.audit("BlueV: adapter not ready, giving up wait")
+            notify.audit("BlueV: adapter(s) not ready, giving up wait")
             self._restoring = False
             if self._restore_pending:
                 self._restore_pending = False
                 self._schedule_restore(2)
             return False
 
-        state = self._bt_state or {}
-        saved_powered = state.get("adapter_powered")
-        saved_connected = state.get("connected") or []
-        if not isinstance(saved_connected, list):
-            saved_connected = []
+        saved = self._normalized_saved_adapters()
+        # Restore adapter power states (best effort) per known adapter.
+        needs_power_on_delay = False
+        for ap in adapter_paths:
+            rec = saved.get(ap)
+            if not rec:
+                continue
+            saved_powered = rec.get("powered")
+            cur = self._get_adapter_powered_at(ap)
+            if saved_powered is True and cur is False:
+                notify.audit(f"BlueV: powering adapter on ({ap})")
+                self._set_adapter_powered_at(ap, True)
+                needs_power_on_delay = True
+            elif saved_powered is False and cur is True:
+                # Respect prior intent: leave intentionally-off adapters off.
+                notify.audit(f"BlueV: adapter was off before sleep, leaving off ({ap})")
+                self._set_adapter_powered_at(ap, False)
+            elif saved_powered is False and cur is False:
+                notify.audit(f"BlueV: adapter remains off ({ap})")
 
-        # Restore adapter power if we know the previous state.
-        if saved_powered is True and powered is False:
-            notify.audit("BlueV: powering adapter on")
-            self._set_adapter_powered(True)
-            GLib.timeout_add_seconds(3, self._restore_connect_saved, saved_connected)
-            return False
-        if saved_powered is False:
-            notify.audit("BlueV: adapter was off before sleep, leaving off")
-            self._restoring = False
-            if self._restore_pending:
-                self._restore_pending = False
-                self._schedule_restore(2)
+        if needs_power_on_delay:
+            GLib.timeout_add_seconds(3, self._restore_connect_saved_all)
             return False
 
-        # powered is True (or unknown intent but adapter on): reconnect saved devices.
-        self._restore_connect_saved(saved_connected)
+        self._restore_connect_saved_all()
+        return False
+
+    def _restore_connect_saved_all(self):
+        saved = self._normalized_saved_adapters()
+        # Merge saved connected devices across adapters that are currently powered on.
+        to_reconnect = []
+        seen = set()
+        for ap, rec in saved.items():
+            if self._get_adapter_powered_at(ap) is False:
+                continue
+            for mac in (rec.get("connected") or []):
+                mac = str(mac).upper()
+                if mac and mac not in seen:
+                    seen.add(mac)
+                    to_reconnect.append(mac)
+        # Fallback: if no per-adapter info matched, try legacy merged list
+        if not to_reconnect:
+            legacy = (self._bt_state or {}).get("connected") or []
+            if isinstance(legacy, list):
+                to_reconnect = [str(m).upper() for m in legacy if str(m)]
+
+        self._restore_connect_saved(to_reconnect)
         return False
 
     def _restore_connect_saved(self, saved_connected):
-        if self._get_adapter_powered() is False:
-            self._restoring = False
-            return False
         stagger = 0
         for mac in saved_connected:
+            mac = str(mac).upper()
             if mac not in self.devices:
                 continue
             dev = self.devices[mac]
@@ -378,12 +496,18 @@ class Daemon:
     def _enforce_a2dp(self, mac, attempt=0):
         # Card appears in PipeWire slightly after the BlueZ connect;
         # retry a few times instead of assuming one shot lands.
+        # Despite the name, this enforces the preferred high-quality profile:
+        # A2DP for classic devices, or BAP/LE Audio when enabled/active.
         if self.flap.hot(mac, time.time()):
             return False     # storm running: a profile change now is noise
         if self.monitor.is_connected(mac):
             if not self._bt_op_allowed(mac, "profile"):
                 GLib.timeout_add_seconds(self.rc.get("op_cooldown_s", 10),
                                          self._enforce_a2dp, mac, attempt)
+                return False
+            cur = audio.active_profile(mac) or ""
+            if cur.startswith("bap") and getattr(audio, "_le_audio_enabled", lambda: False)():
+                self._wedged.pop(mac, None)
                 return False
             if audio.set_profile_a2dp(mac):
                 self._wedged.pop(mac, None)
@@ -396,12 +520,12 @@ class Daemon:
                 if holders:
                     who = ", ".join(a if a != "?" else n
                                     for a, n in holders)
-                    notify.audit(f"a2dp blocked, bt mic held by: {who}")
+                    notify.audit(f"profile blocked, bt mic held by: {who}")
                     notify.send("Can't switch to high quality",
                                 f"Microphone in use by {who} - "
                                 "leave the call (or quit it) and I will retry.")
                 else:
-                    notify.audit("a2dp switch failed with mic free "
+                    notify.audit("profile switch failed with mic free "
                                  "(transport wedged?)")
                     fails = self._wedged.get(mac, 0) + 1
                     self._wedged[mac] = fails
@@ -953,7 +1077,10 @@ def cmd_status(cfg, as_json=False):
         if bluev is not None:
             try:
                 bstate, breason = bluev.resolve(mac, connected, probe)
-                bluev_info = {"state": bstate, "reason": breason}
+                st = bluev.ensure(mac)
+                bluev_info = st.snapshot() if hasattr(st, "snapshot") else {"state": bstate, "reason": breason}
+                bluev_info["state"] = bstate
+                bluev_info["reason"] = breason
             except Exception:
                 bluev_info = None
         rows.append({

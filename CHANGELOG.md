@@ -13,23 +13,30 @@ BlueV is Maid Watcher’s Bluetooth state persistence and ownership-aware recove
   - Respect prior intent: if the adapter was intentionally off before sleep, BlueV leaves it off on restore.
   - New audit log trail for restore/snapshot actions (`BlueV:` entries).
 
-- **BlueV expansion (next-level groundwork):**
+- **BlueV expansion (state, hints, policy, observability):**
   - **State/confidence model (`maid_core.bluev`):** per-device state tracking with `connected_to_pc`, `connected_to_phone`, `out_available`, `docked`, and `unknown`, driven by PC connection state, local probe evidence, and phone hints.
-  - **Phone-reported hints (PC/intent side):** `bt-intent-server.py` accepts `GET /phone_device?token=...&mac=...&state=connected|disconnected` and stores hints in `/run/user/<uid>/maid-bluev-phone.json` for Maid Watcher consumption (generic, brand-agnostic channel; Android-side reporter/integration can feed this).
-  - **Probe smoothing / dock confidence:** silent “in case” detection now requires confirmation over multiple probe observations within a time window before declaring `docked`, reducing false docked states; out/advertising evidence clears docked state quickly.
+  - **Phone-reported hints (intent path):** `bt-intent-server.py` accepts `/phone_device` hints via `GET` and `POST` (JSON), with backward-compatible `mac`/`state` and richer optional fields (reported timestamp, source/confidence, transport/profile, adapter, active/call context, etc.) stored in `/run/user/<uid>/maid-bluev-phone.json` for Maid Watcher consumption.
   - **Policy integration:** reconnect, fallback-grab, dock handling, and case rewatch consult BlueV state — e.g. defer/retry differently when the phone hint indicates `connected_to_phone`, avoid claiming docked without sufficient evidence, and keep unconfirmed-silent devices eligible for rechecks.
+  - **Probe smoothing / dock confidence:** silent “in case” detection requires confirmation over multiple probe observations within a time window before declaring `docked`; out/advertising evidence clears docked state quickly.
+  - **Multi-adapter-aware persistence/restore:** snapshot and restore BlueZ adapter power/connected-device state per adapter (with migration/backward compatibility for legacy single-adapter state).
+  - **Observability:** richer BlueV state in `maid-watcher status`/report/porcelain (state, reason, phone hint freshness/source/confidence, dock probe context) and improved audit behavior.
+  - **Docs:** phone intent guide documents `/phone_device` BlueV hint reporting (MacroDroid/Tasker BT connect/disconnect triggers over intent path, plus KDE Connect-assisted/manual local hints).
 
 - **Fixes/refinements in this cycle:**
   - Fixed reconnect defer handling when a phone hint is active to keep retry-source tracking consistent and rate-limit repeated “deferring reconnect” audit noise.
   - Improved restore reconnect staggering for saved devices.
   - Clarified dock verdict handling for “out/available but not connected” probe results to avoid misleading logs/state transitions.
 
-- **Docs:**
-  - README features now list **BlueV Protocol (WIP)**.
+### LE Audio (BAP/LC3) support
+
+- **Opt-in LE Audio enablement:** added `wireplumber/54-bt-le-audio.conf` (enables LE Audio roles/codecs) and installer support to choose LE Audio vs A2DP-only guard (`53-bt-a2dp-only.conf`), with `LE_AUDIO=1` config support.
+- **Runtime/profile handling:** `bluetooth-toggle.sh`, `buds-fallback.sh`, and `watcher/maid_core/audio.py` now recognize BAP/LE Audio profiles, avoid forcing A2DP codec pinning/battery-based A2DP codec switches on BAP, and can prefer/recover BAP profiles when LE Audio is enabled.
+- **Watcher behavior:** profile enforcement is LE Audio-aware (treats active BAP as valid/high-quality) to avoid breaking LE Audio connections during reconnect/profile checks.
+- **Config/docs:** `bluetooth-buds.conf.example` documents `LE_AUDIO`; docs updated to reflect optional LE Audio support alongside the existing A2DP-only safety guard for problematic setups.
 
 ### Notes / known scope
-- BlueV is **WIP** and currently focuses on PC-side persistence/restore, hint ingestion, and policy/state groundwork. A phone-side reporter (to emit per-device connection state over the existing intent/KDE Connect path) is still needed to fully benefit from `connected_to_phone` hints on “any Android”.
-- Default adapter assumptions and per-device behavior may need further tuning (multi-adapter support, richer hint payloads, UI/observability, and vendor-specific enhancements can be layered later).
+- BlueV remains **WIP**: automatic “any Android” per-device reporting still depends on an Android-side reporter/automation emitting `/phone_device` hints; further per-device/multipoint tuning, deeper UI surfaces, and vendor-specific enhancements can be layered on.
+- LE Audio support depends on BlueZ/PipeWire/WirePlumber, adapter/controller capabilities, and earbuds firmware; keep the A2DP-only guard available for setups where LE Audio transports are unstable.
 
 ## Maid BT v1.2.7
 

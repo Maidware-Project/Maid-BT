@@ -30,14 +30,17 @@ BUDS_MAC="AA:BB:CC:DD:EE:FF"
 FALLBACK_SINK=""
 APP_CYCLE=1
 AUDIO_PRIORITY=1
+LE_AUDIO=0
 # Fill these via ~/.config/bluetooth-buds.conf (install.sh prompts for them):
 #   BUDS_MAC="..." and FALLBACK_SINK="..."
 # Opt out of the app pause/resume cycle with: APP_CYCLE=0
 # Opt out of auto-connecting other paired headsets with: AUDIO_PRIORITY=0
+# Allow/prefer LE Audio (BAP) profiles when available with: LE_AUDIO=1
 # Pin LDAC after every switch (needs LDAC headset) with: QUALITY_LOCK=1
 # Match codec to battery to save power with: BATTERY_BOOST=1
 # Dual-connection buds (phone+PC at once) with: MULTIPOINT=1
 [ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
+LE_AUDIO="${LE_AUDIO:-0}"
 command -v validate_conf >/dev/null 2>&1 && validate_conf
 # Refuse to run unconfigured (placeholder MAC) instead of retry-spamming.
 if [ "${BUDS_MAC:-}" = "AA:BB:CC:DD:EE:FF" ] || [ -z "${BUDS_MAC:-}" ]; then
@@ -345,13 +348,21 @@ park_on_fallback() {
 }
 
 ensure_a2dp() {
-  # if a previous off-cycle left the card on profile off, re-acquire A2DP;
-  # never touches HSP/HFP (call in progress) or already-active A2DP
+  # if a previous off-cycle left the card on profile off, re-acquire audio;
+  # never touches HSP/HFP (call in progress) or already-active A2DP/BAP
   local c active
   for c in $(pactl list short cards 2>/dev/null | grep -i "bluez" | awk '{print $2}'); do
     active=$(pactl list cards 2>/dev/null | awk -v card="$c" 'index($0, card) {f=1} f && /Active Profile:/ {print; exit}')
     case "$active" in
-      *": off"*) pactl set-card-profile "$c" a2dp-sink 2>/dev/null || true ;;
+      *": off"*)
+        if [ "${LE_AUDIO:-0}" = "1" ]; then
+          pactl set-card-profile "$c" bap-sink 2>/dev/null \
+            || pactl set-card-profile "$c" bap-duplex 2>/dev/null \
+            || pactl set-card-profile "$c" a2dp-sink 2>/dev/null || true
+        else
+          pactl set-card-profile "$c" a2dp-sink 2>/dev/null || true
+        fi
+        ;;
     esac
   done
 }
@@ -441,14 +452,17 @@ enforce_quality() {
   # quality lock (opt-in): pin A2DP to LDAC after every switch.
   # HSP/HFP with a live BT mic means a call: hands off. HSP with a
   # free mic means stuck (e.g. after a restart): rescue to LDAC.
-  # writes throttled by BATT_COOLDOWN like the battery-boost switches.
+  # LE Audio (BAP) profiles are handled by the stack; A2DP codec pinning
+  # and battery-based A2DP codec switching do not apply to BAP.
   [ "${QUALITY_LOCK:-0}" = "1" ] || return 0
   local cur card
   cur=$(current_profile)
   case "$cur" in
+    bap*) return 0 ;;
     "a2dp-sink"|"") return 0 ;;
     headset*|handsfree*)
       bt_mic_in_use && return 0
+      if [ "${LE_AUDIO:-0}" = "1" ]; then return 0; fi
       card="bluez_card.${BUDS_MAC//:/_}"
       if [ $((now - last_codec_switch)) -ge "$BATT_COOLDOWN" ]; then
         if pactl set-card-profile "$card" a2dp-sink 2>/dev/null; then
@@ -691,7 +705,8 @@ while true; do
       did_fallback=0
     fi
     enforce_quality
-    # battery boost (opt-in): match codec to buds battery, never during calls
+    # battery boost (opt-in): match A2DP codec to buds battery, never during calls
+    # (LE Audio/BAP uses different codec/transport handling; skip A2DP codec switching)
     if [ "$BATTERY_BOOST" = "1" ] && [ $((now - last_batt_check)) -ge "$BATTERY_POLL" ]; then
       last_batt_check=$now
       batt=$(buds_battery)
@@ -699,6 +714,7 @@ while true; do
         want=$(codec_for "$batt")
         cur=$(current_profile)
         case "$cur" in
+          bap*) : ;;
           headset*|handsfree*) : ;;  # call in progress: hands off
           "$want") : ;;
           *)

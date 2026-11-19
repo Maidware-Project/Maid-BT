@@ -6,7 +6,7 @@ import json
 
 
 def text(ct, laptop, rows):
-    "The terminal layout (backward-compatible) with optional BlueV observability."
+    "The terminal layout (backward-compatible) with BlueV observability."
     lines = [f"chassis:   {ct} (laptop mode {'on' if laptop else 'off'})"]
     for r in rows:
         lines.append(f"{r['name']} [{r['mac']}]")
@@ -23,6 +23,26 @@ def text(ct, laptop, rows):
             if state:
                 suffix = f" ({reason})" if reason else ""
                 lines.append(f"  bluev:     {state}{suffix}")
+            hint = bluev.get("phone_hint") or {}
+            if hint:
+                hstate = hint.get("_resolved_state") or hint.get("state")
+                age = hint.get("_age_s")
+                src = hint.get("source")
+                extra = []
+                if src:
+                    extra.append(f"src={src}")
+                if age is not None:
+                    try:
+                        extra.append(f"age={int(age)}s")
+                    except Exception:
+                        pass
+                if hint.get("confidence") is not None:
+                    extra.append(f"conf={hint.get('confidence')}")
+                tail = f" [{', '.join(extra)}]" if extra else ""
+                lines.append(f"  phone hint:{(' ' + hstate) if hstate else ''}{tail}")
+            dsc = bluev.get("docked_silent_count")
+            if dsc:
+                lines.append(f"  dock probes: {dsc} silent")
     if not rows:
         lines.append("no devices configured - copy config.example.json to "
                      "~/.config/maid-watcher/config.json")

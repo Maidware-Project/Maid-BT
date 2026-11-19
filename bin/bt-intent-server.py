@@ -73,8 +73,12 @@ def _norm_mac(mac):
     return None
 
 
-def update_bluev_phone_hint(mac, state):
-    """Persist phone-reported device connection hint for Maid Watcher BlueV."""
+def update_bluev_phone_hint(mac, state, extra=None):
+    """Persist phone-reported device connection hint for Maid Watcher BlueV.
+
+    Accepts richer payload fields (backward-compatible): reported ts, source,
+    confidence, transport/profile, adapter, active/call hints, device name, etc.
+    """
     mac = _norm_mac(mac)
     if mac is None:
         return False, "bad mac"
@@ -98,7 +102,34 @@ def update_bluev_phone_hint(mac, state):
     devices = data.get("devices")
     if not isinstance(devices, dict):
         devices = {}
-    devices[mac] = {"state": state, "ts": time.time(), "source": "phone"}
+    rec = {"state": state, "ts": time.time(), "source": "phone"}
+    if isinstance(extra, dict):
+        # preserve a few safe/optional fields for observability and future policy
+        for k in ("reported_ts", "confidence", "transport", "profile", "adapter",
+                  "device_name", "active", "call", "source", "note", "seq"):
+            if k in extra:
+                v = extra.get(k)
+                if isinstance(v, (str, int, float, bool)) or v is None:
+                    rec[k] = v
+        # normalize reported_ts if provided
+        try:
+            if "reported_ts" in rec:
+                rec["reported_ts"] = float(rec["reported_ts"])
+        except Exception:
+            rec.pop("reported_ts", None)
+        try:
+            if "confidence" in rec:
+                c = float(rec["confidence"])
+                if c < 0: c = 0.0
+                if c > 1: c = 1.0
+                rec["confidence"] = c
+        except Exception:
+            rec.pop("confidence", None)
+        if "source" in rec and isinstance(rec["source"], str):
+            rec["source"] = rec["source"][:64]
+        else:
+            rec["source"] = "phone"
+    devices[mac] = rec
     data["devices"] = devices
     try:
         tmp = BLUEV_PHONE_HINTS + ".tmp"
@@ -152,6 +183,51 @@ class Handler(BaseHTTPRequestHandler):
         tok = qs.get("token", [""])[0]
         return bool(TOKEN) and hmac.compare_digest(tok, TOKEN)
 
+    def _read_json_body(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0") or "0")
+        except Exception:
+            length = 0
+        if length <= 0 or length > 65536:
+            return None
+        try:
+            raw = self.rfile.read(length)
+            data = json.loads(raw.decode("utf-8", errors="replace"))
+            return data if isinstance(data, dict) else None
+        except Exception:
+            return None
+
+    def _handle_intent(self, path, qs, payload=None):
+        if path == "/phone_playing":
+            code, out = run_toggle("release")
+            set_handsoff(14400)  # 4h: phone owns the buds until it pauses
+            return 200, f"release rc={code}\n{out}"
+        if path == "/phone_paused":
+            clear_handsoff()
+            return 200, "hands-off cleared"
+        if path == "/call_start":
+            code, out = run_toggle("release")
+            set_handsoff(7200)  # 2h: calls own the buds until call ends
+            return 200, f"release rc={code}\n{out}"
+        if path == "/call_end":
+            clear_handsoff()
+            return 200, "hands-off cleared"
+        if path == "/health":
+            return 200, "ok"
+        if path == "/phone_device":
+            payload = payload or {}
+            mac = (qs.get("mac") or [payload.get("mac", "")])[0]
+            state = (qs.get("state") or [payload.get("state", "")])[0]
+            extra = dict(payload)
+            extra.pop("mac", None)
+            extra.pop("state", None)
+            ok, msg = update_bluev_phone_hint(mac, state, extra=extra)
+            if not ok:
+                return 400, msg
+            norm = _norm_mac(mac) or mac
+            return 200, f"bluev {norm} {state}"
+        return 404, "unknown endpoint"
+
     def do_GET(self):  # noqa: N802 - http.server naming
         parts = urllib.parse.urlparse(self.path)
         if self._rate_limited():
@@ -166,41 +242,37 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         path = parts.path.rstrip("/") or "/"
-        if path == "/phone_playing":
-            code, out = run_toggle("release")
-            set_handsoff(14400)  # 4h: phone owns the buds until it pauses
-            body = f"release rc={code}\n{out}"
-        elif path == "/phone_paused":
-            clear_handsoff()
-            body = "hands-off cleared"
-        elif path == "/call_start":
-            code, out = run_toggle("release")
-            set_handsoff(7200)  # 2h: calls own the buds until call ends
-            body = f"release rc={code}\n{out}"
-        elif path == "/call_end":
-            clear_handsoff()
-            body = "hands-off cleared"
-        elif path == "/health":
-            body = "ok"
-        elif path == "/phone_device":
-            qs = urllib.parse.parse_qs(parts.query)
-            mac = (qs.get("mac") or [""])[0]
-            state = (qs.get("state") or [""])[0]
-            ok, msg = update_bluev_phone_hint(mac, state)
-            if not ok:
-                self.send_response(400)
-                self.end_headers()
-                self.wfile.write(msg.encode())
-                return
-            body = f"bluev {mac} {state}"
-        else:
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b"unknown endpoint")
-            return
+        qs = urllib.parse.parse_qs(parts.query)
+        status, body = self._handle_intent(path, qs, None)
 
         raw = body.encode()
-        self.send_response(200)
+        self.send_response(status)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def do_POST(self):  # noqa: N802 - http.server naming
+        parts = urllib.parse.urlparse(self.path)
+        if self._rate_limited():
+            self.send_response(429)
+            self.end_headers()
+            self.wfile.write(b"rate limited")
+            return
+        if not self._token_ok():
+            self.send_response(403)
+            self.end_headers()
+            self.wfile.write(b"forbidden")
+            return
+        path = parts.path.rstrip("/") or "/"
+        qs = urllib.parse.parse_qs(parts.query)
+        payload = self._read_json_body()
+        # Backward-compatible: POST accepted for intents, primarily /phone_device
+        if path != "/phone_device" and payload is None:
+            payload = None
+        status, body = self._handle_intent(path, qs, payload)
+        raw = body.encode()
+        self.send_response(status)
         self.send_header("Content-Type", "text/plain")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
