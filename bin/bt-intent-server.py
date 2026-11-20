@@ -18,7 +18,8 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(os.environ.get("MAID_INTENT_PORT", "8899"))
-BIND_ADDR = os.environ.get("MAID_INTENT_BIND", "0.0.0.0")
+# Safer default: local-only. Set MAID_INTENT_BIND=0.0.0.0 explicitly for LAN access.
+BIND_ADDR = os.environ.get("MAID_INTENT_BIND", "127.0.0.1")
 HOME = os.path.expanduser("~")
 RATE_LIMIT_WINDOW_S = int(os.environ.get("MAID_INTENT_RATE_WINDOW_S", "10"))
 RATE_LIMIT_MAX = int(os.environ.get("MAID_INTENT_RATE_MAX", "30"))
