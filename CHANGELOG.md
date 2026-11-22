@@ -1,5 +1,9 @@
 # changelog
 
+## Maid BT v1.3.1
+
+- **Gentoo support:** add Gentoo (`emerge`) package-manager detection and dependency installation in `install.sh`, document Gentoo in README, and add a Gentoo ebuild template under `packaging/gentoo/`.
+
 ## Maid BT v1.3.0
 
 ### BlueV Protocol (Maid Watcher)

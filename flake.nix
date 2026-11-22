@@ -30,7 +30,7 @@
           ];
           maid-bt = pkgs.stdenv.mkDerivation {
             pname = "maid-bt";
-            version = "1.3.0";
+            version = "1.3.1";
             src = self;
             nativeBuildInputs = [ pkgs.makeWrapper ];
             dontBuild = true;
