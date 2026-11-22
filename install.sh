@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # this is truly my power
 # Universal installer: Arch (pacman), Debian/Ubuntu (apt), Fedora (dnf),
-# openSUSE (zypper). Copies files (no symlinks - survives folder moves).
+# openSUSE (zypper), Gentoo (emerge). Copies files (no symlinks - survives folder moves).
 # Usage: ./install.sh [--check] [--no-packages] [--uninstall [--purge]]
 #          [--prefix=DIR] [--no-config] [--packages] [--verbose]
 # --prefix installs program files elsewhere (packaging); user config and
@@ -198,6 +198,7 @@ detect_pm() {
   elif command -v apt-get >/dev/null 2>&1; then echo apt
   elif command -v dnf >/dev/null 2>&1; then echo dnf
   elif command -v zypper >/dev/null 2>&1; then echo zypper
+  elif command -v emerge >/dev/null 2>&1; then echo emerge
   else echo none; fi
 }
 
@@ -211,6 +212,7 @@ install_pkgs() {
     apt) sudo apt-get update && sudo apt-get install -y "$@" ;;
     dnf) sudo dnf install -y "$@" ;;
     zypper) sudo zypper --non-interactive install "$@" ;;
+    emerge) sudo emerge -avuDN --noreplace "$@" ;;
   esac
 }
 
@@ -226,6 +228,7 @@ do_packages() {
     apt) REQ=(bluez bluetooth rfkill libnotify-bin pulseaudio-utils python3) ;;
     dnf) REQ=(bluez rfkill libnotify pulseaudio-utils python3) ;;
     zypper) REQ=(bluez rfkill libnotify-tools pulseaudio-utils python3) ;;
+    emerge) REQ=(net-wireless/bluez sys-apps/util-linux x11-libs/libnotify media-sound/pulseaudio-utils dev-lang/python) ;;
     *) warn "no supported package manager - install manually: bluez, bluetoothctl, rfkill, notify-send, pactl, python3 (kdeconnect optional)"; REQ=() ;;
   esac
   if [ "${#REQ[@]}" -gt 0 ]; then
@@ -239,6 +242,7 @@ do_packages() {
     apt) WATCHREQ=(python3-dbus python3-gi) ;;
     dnf) WATCHREQ=(python3-dbus python3-gobject) ;;
     zypper) WATCHREQ=(python3-dbus python3-gobject) ;;
+    emerge) WATCHREQ=(dev-python/dbus-python dev-python/pygobject) ;;
     *) WATCHREQ=() ;;
   esac
   if [ "${#WATCHREQ[@]}" -gt 0 ]; then
@@ -249,6 +253,7 @@ do_packages() {
   case "$pm" in
     pacman|apt|dnf|xbps) OPT=(kdeconnect) ;;
     zypper) OPT=(kdeconnect-kde) ;;
+    emerge) OPT=(kde-misc/kdeconnect) ;;
     *) OPT=() ;;
   esac
   if [ "${#OPT[@]}" -gt 0 ]; then

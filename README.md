@@ -76,7 +76,7 @@ maid-watcher status
 - Use **`--doctor`** to inspect session/compositor and audio/Bluetooth stack behavior when troubleshooting
 
 ## Supported environments (best effort)
-- **Distros/package managers:** Arch (pacman), Debian/Ubuntu/Mint (apt), Fedora (dnf), openSUSE (zypper), Void Linux (xbps)
+- **Distros/package managers:** Arch (pacman), Debian/Ubuntu/Mint (apt), Fedora (dnf), openSUSE (zypper), Void Linux (xbps), Gentoo (emerge)
 - **Desktops:** KDE Plasma (including Plasma applet), GNOME, XFCE, MATE, Cinnamon, LXQt
 - **WM/compositors:** Hyprland, Sway, i3
 - **Shells/environments:** Event Horizon and KineticWE detected/reported where applicable
