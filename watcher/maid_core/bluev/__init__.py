@@ -231,3 +231,17 @@ class BlueV:
     def should_treat_docked(self, mac, now=None):
         state, _ = self.resolve(mac, pc_connected=False, probe_verdict=None, now=now)
         return state == "docked"
+
+    def capabilities(self):
+        """Feature detection for BlueV/maid-watcher integration."""
+        hints_path = PHONE_HINTS_PATH
+        return {
+            "bluev": True,
+            "phone_hints": True,
+            "phone_hints_path": hints_path,
+            "phone_hints_present": os.path.exists(hints_path),
+            "dock_probe": True,
+            "adapter_path": self.adapter_path,
+            "docked_confirmations": self._docked_confirmations,
+            "docked_confirm_window_s": self._docked_confirm_window_s,
+        }

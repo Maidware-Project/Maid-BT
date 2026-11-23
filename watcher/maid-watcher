@@ -1094,10 +1094,11 @@ def cmd_status(cfg, as_json=False):
             "case": case,
             "bluev": bluev_info,
         })
+    bluev_caps = bluev.capabilities() if bluev is not None and hasattr(bluev, "capabilities") else None
     if as_json:
-        print(report.shape(ct, laptop, rows))
+        print(report.shape(ct, laptop, rows, bluev_caps))
         return
-    print(report.text(ct, laptop, rows))
+    print(report.text(ct, laptop, rows, bluev_caps))
 
 
 def _bluez_alias(mac):

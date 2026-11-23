@@ -5,9 +5,13 @@ here claims quality, lossless or anything else that Bluetooth output cannot hone
 import json
 
 
-def text(ct, laptop, rows):
+def text(ct, laptop, rows, bluev_caps=None):
     "The terminal layout (backward-compatible) with BlueV observability."
     lines = [f"chassis:   {ct} (laptop mode {'on' if laptop else 'off'})"]
+    if bluev_caps:
+        feats = [k for k, v in bluev_caps.items() if v is True]
+        if feats:
+            lines.append(f"  bluev features: {', '.join(feats)}")
     for r in rows:
         lines.append(f"{r['name']} [{r['mac']}]")
         lines.append(f"  connected: {r['connected']}")
@@ -49,9 +53,9 @@ def text(ct, laptop, rows):
     return "\n".join(lines)
 
 
-def shape(ct, laptop, rows):
+def shape(ct, laptop, rows, bluev_caps=None):
     "One json line. Belt: valid even with zero devices (an empty list, not a missing key)."
-    return json.dumps({
+    payload = {
         "chassis": ct,
         "laptop_mode": bool(laptop),
         "devices": [{
@@ -64,4 +68,7 @@ def shape(ct, laptop, rows):
             "case": r["case"],
             **({"bluev": r.get("bluev")} if r.get("bluev") is not None else {}),
         } for r in rows],
-    })
+    }
+    if bluev_caps is not None:
+        payload["bluev_capabilities"] = bluev_caps
+    return json.dumps(payload)
