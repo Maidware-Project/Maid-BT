@@ -32,8 +32,8 @@ These must exist on your system; your distribution ships them, Maid BT only runs
 
 ## Optional integrations
 
-- MacroDroid and Tasker (Android, commercial, their own licenses):
-  `phone/README-macrodroid-tasker.md` shows how to start Maid BT from them. Nothing from either
+- MacroDroid and Tasker (Android, commercial, their own licenses), and OpenTasker (Android, MIT, FOSS):
+  `phone/README-macrodroid-tasker.md` shows how to trigger Maid BT from them over the local intent server. Nothing from any of them
   ships in Maid BT, nothing of Maid BT ships to the phone.
 
 ## Recognized desktop environments/shells (not bundled)

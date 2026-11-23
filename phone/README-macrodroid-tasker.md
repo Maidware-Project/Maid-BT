@@ -45,7 +45,7 @@ improve dock/availability confidence.
   - `mac`: the earbuds' Bluetooth MAC address (same one managed by Maid BT)
   - `state`: `connected` when the phone is connected to that device, `disconnected` when it is not
 - Hints are stored in `/run/user/<uid>/maid-bluev-phone.json` and consumed by Maid Watcher (TTL/configurable via `bluev.phone_hint_ttl_s`).
-- **Automatic reporting (recommended):** in MacroDroid/Tasker, add triggers for Bluetooth connected/disconnected to the specific earbuds MAC/name and call `/phone_device` with the matching `mac` and `state`. This works over the existing intent server path and does not require a custom Android app.
+- **Automatic reporting (recommended):** in MacroDroid/Tasker/OpenTasker, add triggers for Bluetooth connected/disconnected to the specific earbuds MAC/name and call `/phone_device` with the matching `mac` and `state`. This works over the existing intent server path and does not require a custom Android app.
 - **KDE Connect-assisted/manual:** you can also expose PC-side "Run Command" actions in KDE Connect that hit the local intent server for a known MAC (e.g. via `curl -H "X-Token: $(cat ~/.config/bt-intent.token)" "http://127.0.0.1:8899/phone_device?mac=AA:BB:CC:DD:EE:FF&state=connected"`), useful for quick manual hints; automatic per-device state detection still needs an Android-side trigger/app.
 
 MacroDroid (free fits, 4 macros): trigger `Music/Sound Playing`
@@ -64,6 +64,20 @@ Tasker (paid, no ads): same thing with State `BT Connected` + Event
 for calls. needs notification access + unrestricted battery (same
 killers list as above: samsung, xiaomi, huawei, oneplus, oppo, vivo -
 exempt the app or it dies in background).
+
+OpenTasker (FOSS, on-device, no account): use an **HTTP Request** action
+(GET) to the same endpoints. send the token as an `X-Token` header
+(preferred); `?token=` still works but avoid it in URLs. example profiles:
+- **phone playing:** media/audio playing context (or app/media trigger you
+  trust) + BT connected to your buds → `GET /phone_playing`
+- **phone paused:** inverse/exit of that context → `GET /phone_paused`
+- **call start/end:** phone call state active / idle → `GET /call_start`,
+  `GET /call_end`
+- **BlueV hint:** BT connected/disconnected to the buds MAC → `GET
+  /phone_device?mac=AA:BB:CC:DD:EE:FF&state=connected|disconnected`
+
+OpenTasker runs locally with no cloud runtime; keep it battery-unrestricted
+like the others so background triggers fire reliably.
 
 ## notes
 

@@ -1,5 +1,9 @@
 # changelog
 
+## Unreleased
+
+- **Phone remote:** document OpenTasker (FOSS Android automation) support alongside MacroDroid/Tasker in `phone/README-macrodroid-tasker.md`, including HTTP Request setup for playback/call/BlueV hint endpoints.
+
 ## Maid BT v1.3.1
 
 - **Gentoo support:** add Gentoo (`emerge`) package-manager detection and dependency installation in `install.sh`, document Gentoo in README, and add a Gentoo ebuild template under `packaging/gentoo/`.
