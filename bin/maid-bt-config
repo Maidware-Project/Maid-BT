@@ -13,6 +13,7 @@ D-Bus service just to change a checkbox.
 Usage:
   maid-bt-config get
   maid-bt-config apply <url-encoded-json-object>
+  maid-bt-config bluev [--json]
 
 `get` prints one flat JSON object; `apply` takes the same flat keys and
 writes both files atomically. Unknown keys are refused rather than
@@ -42,6 +43,8 @@ DEFAULTS = {
     "bt_fallback": {"enabled": False},
     "route_comms": {"enabled": True},
     "laptop": {"mode": "auto"},
+    "bluev": {"phone_hint_ttl_s": 300, "docked_confirmations": 2,
+              "docked_confirm_window_s": 600, "adapter_path": "/org/bluez/hci0"},
 }
 
 MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
@@ -127,6 +130,10 @@ def current():
         "fallback_grab": cfg["fallback_grab"]["enabled"],
         "route_comms": cfg["route_comms"]["enabled"],
         "bt_fallback": cfg["bt_fallback"]["enabled"],
+        "bluev_phone_hint_ttl_s": cfg.get("bluev", {}).get("phone_hint_ttl_s", 300),
+        "bluev_docked_confirmations": cfg.get("bluev", {}).get("docked_confirmations", 2),
+        "bluev_docked_confirm_window_s": cfg.get("bluev", {}).get("docked_confirm_window_s", 600),
+        "bluev_adapter_path": cfg.get("bluev", {}).get("adapter_path", "/org/bluez/hci0"),
     }
 
 
@@ -315,6 +322,20 @@ def apply(payload):
     if "bt_fallback" in payload:
         put("bt_fallback", "enabled",
             as_bool(payload["bt_fallback"], "bt_fallback"))
+    if "bluev_phone_hint_ttl_s" in payload:
+        put("bluev", "phone_hint_ttl_s",
+            as_int(payload["bluev_phone_hint_ttl_s"], "bluev_phone_hint_ttl_s", 1, 86400))
+    if "bluev_docked_confirmations" in payload:
+        put("bluev", "docked_confirmations",
+            as_int(payload["bluev_docked_confirmations"], "bluev_docked_confirmations", 1, 20))
+    if "bluev_docked_confirm_window_s" in payload:
+        put("bluev", "docked_confirm_window_s",
+            as_int(payload["bluev_docked_confirm_window_s"], "bluev_docked_confirm_window_s", 1, 86400))
+    if "bluev_adapter_path" in payload:
+        ap = str(payload["bluev_adapter_path"]).strip() or "/org/bluez/hci0"
+        if not re.match(r"^/[A-Za-z0-9_/\-]+$", ap):
+            fail("invalid bluev_adapter_path: %s" % ap)
+        put("bluev", "adapter_path", ap)
 
     if cfg["battery"]["critical_percent"] > cfg["battery"]["warn_percent"]:
         fail("critical battery percent cannot be higher than the warning percent")
@@ -344,9 +365,40 @@ def apply(payload):
     print("ok")
 
 
+def cmd_bluev(as_json=False):
+    """Show BlueV/maid-watcher feature detection capabilities."""
+    # Prefer the watcher CLI (runtime-aware); fall back to static report.
+    watcher = os.path.join(HOME, ".local", "bin", "maid-watcher")
+    candidates = [watcher, "maid-watcher"]
+    for cmd in candidates:
+        try:
+            import subprocess
+            args = [cmd, "bluev"]
+            if as_json:
+                args.append("--json")
+            p = subprocess.run(args, capture_output=True, text=True, timeout=15)
+            if p.returncode == 0 and p.stdout.strip():
+                print(p.stdout.rstrip())
+                return
+        except Exception:
+            pass
+    caps = {
+        "bluev": True,
+        "phone_hints": True,
+        "dock_probe": True,
+        "runtime_detection": "unavailable",
+    }
+    if as_json:
+        print(json.dumps(caps, sort_keys=True))
+    else:
+        print("BlueV capabilities:")
+        for k in sorted(caps):
+            print("  %s: %s" % (k, caps[k]))
+
+
 def main():
     if len(sys.argv) < 2:
-        fail("usage: maid-bt-config get | apply <url-encoded-json>", 2)
+        fail("usage: maid-bt-config get | apply <url-encoded-json> | bluev [--json]", 2)
     cmd = sys.argv[1]
     if cmd == "get":
         print(json.dumps(current(), sort_keys=True))
@@ -361,6 +413,9 @@ def main():
         if not isinstance(payload, dict):
             fail("settings payload must be a JSON object", 2)
         apply(payload)
+        return
+    if cmd == "bluev":
+        cmd_bluev(as_json="--json" in sys.argv[2:])
         return
     fail("unknown command: %s" % cmd, 2)
 

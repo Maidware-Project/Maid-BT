@@ -10,11 +10,14 @@ Kirigami.ScrollablePage {
 
 
     property string configTool: "@HOME@/.local/bin/maid-bt-config"
+    property string watcherTool: "@HOME@/.local/bin/maid-watcher"
     property var values: ({})
+    property var bluevCaps: ({})
     property bool ready: false
     property bool applying: false
     property bool pending: false
     property string statusText: ""
+    property string bluevStatusText: "Loading…"
 
     signal configurationChanged
 
@@ -23,6 +26,12 @@ Kirigami.ScrollablePage {
             return;
         statusText = "Loading…";
         execSource.connectSource(configTool + " get");
+        loadBluev();
+    }
+
+    function loadBluev() {
+        bluevStatusText = "Loading…";
+        execSource.connectSource(watcherTool + " bluev --json");
     }
 
     function populate() {
@@ -136,6 +145,18 @@ Kirigami.ScrollablePage {
                 }
                 if (page.pending)
                     page.apply();
+            } else if (sourceName.indexOf(" bluev") !== -1) {
+                if (out.charAt(0) === "{") {
+                    try {
+                        page.bluevCaps = JSON.parse(out);
+                        page.bluevStatusText = "";
+                    } catch (e) {
+                        page.bluevStatusText = "Could not read BlueV capabilities.";
+                    }
+                } else {
+                    page.bluevCaps = ({});
+                    page.bluevStatusText = err || out || "BlueV capabilities unavailable.";
+                }
             }
             execSource.disconnectSource(sourceName);
         }
@@ -304,6 +325,64 @@ Kirigami.ScrollablePage {
             id: btFallback
             text: "Use the Bluetooth fallback when the dongle disappears"
             onToggled: page.changed()
+        }
+
+        QQC2.Label {
+            text: "BlueV / Diagnostics"
+            font.bold: true
+            Kirigami.FormData.isSection: true
+        }
+
+        QQC2.Label {
+            Kirigami.FormData.label: "Feature detection:"
+            text: {
+                if (page.bluevStatusText !== "")
+                    return page.bluevStatusText;
+                const c = page.bluevCaps || {};
+                const feats = [];
+                if (c.bluev) feats.push("BlueV");
+                if (c.phone_hints) feats.push("phone hints");
+                if (c.dock_probe) feats.push("dock probe");
+                return feats.length > 0 ? feats.join(", ") : "No BlueV features detected";
+            }
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+        }
+
+        QQC2.Label {
+            Kirigami.FormData.label: "Adapter:"
+            visible: !!(page.bluevCaps && page.bluevCaps.adapter_path)
+            text: (page.bluevCaps && page.bluevCaps.adapter_path) ? String(page.bluevCaps.adapter_path) : ""
+            Layout.fillWidth: true
+            elide: Text.ElideRight
+        }
+
+        QQC2.Label {
+            Kirigami.FormData.label: "Phone hints file:"
+            visible: !!(page.bluevCaps && page.bluevCaps.phone_hints_path)
+            text: {
+                const c = page.bluevCaps || {};
+                if (!c.phone_hints_path)
+                    return "";
+                return String(c.phone_hints_path) + (c.phone_hints_present ? " (present)" : " (not seen)");
+            }
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            QQC2.Button {
+                text: "Refresh BlueV"
+                onClicked: page.loadBluev()
+            }
+            QQC2.Label {
+                text: page.bluevStatusText
+                visible: page.bluevStatusText !== ""
+                opacity: 0.7
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+            }
         }
 
         RowLayout {

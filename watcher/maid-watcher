@@ -11,6 +11,8 @@ Usage:
   maid-watcher status [--json]
                         show managed devices, connection, battery (json for
                         scripts: one line, plain values)
+  maid-watcher bluev [--json]
+                        show BlueV/maid-watcher feature-detection capabilities
   maid-watcher scan     list nearby BT audio devices for config
   maid-watcher model [NAME]  check a name against the model database
                         (no NAME: all configured devices)
@@ -1101,6 +1103,27 @@ def cmd_status(cfg, as_json=False):
     print(report.text(ct, laptop, rows, bluev_caps))
 
 
+def cmd_bluev(cfg, as_json=False):
+    """Report BlueV/maid-watcher feature detection and runtime capabilities."""
+    caps = {}
+    try:
+        bv = BlueV(cfg)
+        bv.refresh_hints()
+        caps = bv.capabilities() if hasattr(bv, "capabilities") else {}
+    except Exception as exc:
+        caps = {"bluev": False, "error": str(exc)}
+    if as_json:
+        print(json.dumps(caps, sort_keys=True))
+        return
+    if not caps:
+        print("bluev: unavailable")
+        return
+    print("BlueV capabilities:")
+    for k in sorted(caps):
+        v = caps[k]
+        print(f"  {k}: {v}")
+
+
 def _bluez_alias(mac):
     """Live device name from BlueZ for a configured MAC, or "".
     bluetoothctl only; silent when BlueZ is down or the buds are away."""
@@ -1257,6 +1280,8 @@ def main():
         Daemon(cfg).run()
     elif sys.argv[1] == "status":
         cmd_status(cfg, as_json="--json" in sys.argv[2:])
+    elif sys.argv[1] == "bluev":
+        cmd_bluev(cfg, as_json="--json" in sys.argv[2:])
     elif sys.argv[1] == "scan":
         cmd_scan()
     elif sys.argv[1] == "model":
