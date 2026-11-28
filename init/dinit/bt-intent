@@ -1,0 +1,4 @@
+type = process
+command = /bin/sh -lc 'exec /usr/bin/python3 "$HOME/.local/bin/bt-intent-server.py"'
+restart = true
+depends-on = dbus

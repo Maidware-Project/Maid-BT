@@ -1,0 +1,4 @@
+type = process
+command = /bin/sh -lc 'exec "$HOME/.local/bin/buds-fallback.sh"'
+restart = true
+depends-on = dbus

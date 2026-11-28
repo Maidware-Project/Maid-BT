@@ -173,7 +173,7 @@ Window {
                             }
 
                             PlasmaComponents.Label {
-                                text: "Version 1.3.1"
+                                text: "Version 1.2.8"
                                 opacity: 0.6
                                 wrapMode: Text.WordWrap
                             }

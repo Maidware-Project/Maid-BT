@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Maid BT Buds Fallback
+Comment=Bluetooth earbuds watcher (auto-connect + fallback sink park)
+Exec=@HOME@/.local/bin/buds-fallback.sh
+Icon=audio-headphones
+Terminal=false
+Type=Application
+Categories=Utility;Audio;
+X-GNOME-Autostart-enabled=true

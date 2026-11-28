@@ -354,6 +354,18 @@ for f in "$PKGDIR"/systemd/*.service; do
   [ -f "$f" ] || continue
   copy_one "$f" "$SYSDDIR/$(basename "$f")"
 done
+# init/autostart templates for non-systemd setups
+if [ -d "$PKGDIR/autostart" ]; then
+  mkdir -p "$SHAREDIR/maid-bt/autostart"
+  for f in "$PKGDIR"/autostart/*.desktop; do
+    [ -f "$f" ] || continue
+    copy_one "$f" "$SHAREDIR/maid-bt/autostart/$(basename "$f")"
+  done
+fi
+if [ -d "$PKGDIR/init" ]; then
+  mkdir -p "$SHAREDIR/maid-bt/init"
+  cp -a "$PKGDIR/init/." "$SHAREDIR/maid-bt/init/" 2>/dev/null || true
+fi
 # sources maid-setup.sh needs later (repo layout absent once installed)
 copy_one "$PKGDIR/watcher/maid-watcher.desktop" "$SHAREDIR/maid-bt/maid-watcher.desktop" $REWRITE
 copy_one "$PKGDIR/wireplumber/51-bt-no-suspend.conf" "$SHAREDIR/maid-bt/51-bt-no-suspend.conf"
@@ -459,30 +471,110 @@ if [ "$NOCONFIG" = "1" ] || [ "$USERMODE" = "0" ]; then
   exit 0
 fi
 
-systemctl --user daemon-reload 2>/dev/null || true
-# OpenRC/runit/etc are not supported: services need systemd user units.
-# Scripts still work if started manually, but nothing is auto-enabled.
-SKIP_SERVICES=0
-if [ "$(ps -p 1 -o comm= 2>/dev/null || echo unknown)" != "systemd" ]; then
-  warn "no systemd here - skipping services (fork it for your init if you want)"
-  SKIP_SERVICES=1
+init_name() {
+  local c
+  c="$(ps -p 1 -o comm= 2>/dev/null || echo unknown)"
+  case "$c" in
+    systemd) echo systemd ;;
+    openrc-init|openrc) echo openrc ;;
+    runit) echo runit ;;
+    dinit) echo dinit ;;
+    s6-svscan|s6) echo s6 ;;
+    init)
+      if command -v rc-update >/dev/null 2>&1; then echo openrc
+      elif command -v sv >/dev/null 2>&1; then echo runit
+      elif command -v dinitctl >/dev/null 2>&1; then echo dinit
+      else echo sysvinit
+      fi ;;
+    *) echo "$c" ;;
+  esac
+}
+
+install_autostart() { # src dstname
+  [ -f "$1" ] || return 1
+  mkdir -p "$HOME/.config/autostart"
+  copy_one "$1" "$HOME/.config/autostart/$2" 1
+}
+
+enable_user_service() { # name
+  local svc="$1" init
+  init="$(init_name)"
+  case "$init" in
+    systemd)
+      systemctl --user daemon-reload 2>/dev/null || true
+      systemctl --user enable --now "$svc.service" 2>/dev/null ;;
+    openrc)
+      if command -v rc-update >/dev/null 2>&1 && rc-update --user show >/dev/null 2>&1; then
+        mkdir -p "$HOME/.config/rc/init.d"
+        copy_one "$PKGDIR/init/openrc-user/$svc" "$HOME/.config/rc/init.d/$svc"
+        chmod +x "$HOME/.config/rc/init.d/$svc" 2>/dev/null || true
+        rc-update --user add "$svc" default >/dev/null 2>&1 || true
+        rc-service --user "$svc" start >/dev/null 2>&1 || true
+      else
+        install_autostart "$PKGDIR/autostart/$svc.desktop" "$svc.desktop" || \
+        install_autostart "$PKGDIR/watcher/$svc.desktop" "$svc.desktop" || true
+      fi ;;
+    dinit)
+      if command -v dinitctl >/dev/null 2>&1; then
+        mkdir -p "$HOME/.config/dinit.d"
+        copy_one "$PKGDIR/init/dinit/$svc" "$HOME/.config/dinit.d/$svc"
+        dinitctl --user enable "$svc" >/dev/null 2>&1 || true
+        dinitctl --user start "$svc" >/dev/null 2>&1 || true
+      else
+        install_autostart "$PKGDIR/autostart/$svc.desktop" "$svc.desktop" || \
+        install_autostart "$PKGDIR/watcher/$svc.desktop" "$svc.desktop" || true
+      fi ;;
+    *)
+      install_autostart "$PKGDIR/autostart/$svc.desktop" "$svc.desktop" || \
+      install_autostart "$PKGDIR/watcher/$svc.desktop" "$svc.desktop" || true ;;
+  esac
+}
+
+disable_user_service() { # name
+  local svc="$1" init
+  init="$(init_name)"
+  case "$init" in
+    systemd) systemctl --user disable --now "$svc.service" 2>/dev/null || true ;;
+    openrc)
+      rc-service --user "$svc" stop >/dev/null 2>&1 || true
+      rc-update --user del "$svc" default >/dev/null 2>&1 || true ;;
+    dinit)
+      dinitctl --user stop "$svc" >/dev/null 2>&1 || true
+      dinitctl --user disable "$svc" >/dev/null 2>&1 || true ;;
+  esac
+  rm -f "$HOME/.config/autostart/$svc.desktop"
+}
+
+INIT_SYS="$(init_name)"
+say "init system: $INIT_SYS"
+if [ "$INIT_SYS" = "systemd" ]; then
+  systemctl --user daemon-reload 2>/dev/null || true
+else
+  say "non-systemd init detected ($INIT_SYS): using user init/autostart integration"
 fi
-[ "$SKIP_SERVICES" = "1" ] || systemctl --user enable --now buds-fallback.service 2>/dev/null \
-  || warn "could not enable buds-fallback.service"
+
+# buds-fallback is the core daemon; enable by default.
+if enable_user_service buds-fallback; then
+  say "buds-fallback enabled ($INIT_SYS)"
+else
+  warn "could not enable buds-fallback ($INIT_SYS)"
+fi
+
 # phone integration stays OFF unless asked: it opens a LAN port, so it is
 # opt-in, never default.
 PHONE_ON=0
-if [ "$SKIP_SERVICES" != "1" ] && [ "$PIPED" = "0" ] && [ -t 0 ]; then
-  printf 'Enable phone integration (bt-intent.service, LAN port 8899)? [y/N]: '
+if [ "$PIPED" = "0" ] && [ -t 0 ]; then
+  printf 'Enable phone integration (bt-intent, LAN port 8899)? [y/N]: '
   read -r _ans
   case "$_ans" in [Yy]*) PHONE_ON=1 ;; esac
 fi
 if [ "$PHONE_ON" = "1" ]; then
-  systemctl --user enable --now bt-intent.service 2>/dev/null \
-    || warn "could not enable bt-intent.service"
+  enable_user_service bt-intent || warn "could not enable bt-intent ($INIT_SYS)"
 else
-  say "phone integration off (enable anytime: systemctl --user enable --now bt-intent.service)"
+  disable_user_service bt-intent
+  say "phone integration off (enable anytime by re-running installer or enabling bt-intent service)"
 fi
+
 # Maid Watcher autostart is opt-in: it overlaps buds-fallback (reconnects +
 # A2DP enforcement). Safe to combine, but ask first.
 WATCH_ON=0
@@ -492,20 +584,11 @@ if [ "$PIPED" = "0" ] && [ -t 0 ]; then
   case "$_wans" in [Yy]*) WATCH_ON=1 ;; esac
 fi
 if [ "$WATCH_ON" = "1" ]; then
-  if [ "$SKIP_SERVICES" != "1" ]; then
-    # systemd-native: supervised unit, journal logging, restart on failure.
-    # The unit owns autostart: remove the desktop file so two daemons
-    # can never run (double RAM, duplicate reconnects/mutes).
-    rm -f "$HOME/.config/autostart/maid-watcher.desktop"
-    copy_one "$PKGDIR/watcher/maid-watcher.service" "$HOME/.config/systemd/user/maid-watcher.service"
-    systemctl --user daemon-reload 2>/dev/null || true
-    systemctl --user enable --now maid-watcher.service 2>/dev/null \
-      || warn "could not enable maid-watcher.service"
-  else
-    # any other init: XDG autostart desktop instead.
-    copy_one "$PKGDIR/watcher/maid-watcher.desktop" "$HOME/.config/autostart/maid-watcher.desktop" 1
-  fi
+  # The watcher unit/autostart owns the daemon: avoid two daemons.
+  rm -f "$HOME/.config/autostart/maid-watcher.desktop"
+  enable_user_service maid-watcher || warn "could not enable maid-watcher ($INIT_SYS)"
 else
+  disable_user_service maid-watcher
   say "Maid Watcher autostart off (daemon still installed as maid-watcher; run it manually or enable later)"
 fi
 # Warm-link audio: disable PipeWire auto-suspend on BT nodes so playback

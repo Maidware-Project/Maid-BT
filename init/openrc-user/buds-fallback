@@ -1,0 +1,13 @@
+#!/sbin/openrc-run
+description="Maid BT earbuds watcher (auto-connect + fallback sink park)"
+supervisor=supervise-daemon
+command="$HOME/.local/bin/buds-fallback.sh"
+command_background=true
+pidfile="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/buds-fallback.pid"
+output_log="${XDG_STATE_HOME:-$HOME/.local/state}/maid-bt/buds-fallback.log"
+error_log="${XDG_STATE_HOME:-$HOME/.local/state}/maid-bt/buds-fallback.err"
+
+depend() {
+	need dbus
+	after pipewire wireplumber bluetooth
+}

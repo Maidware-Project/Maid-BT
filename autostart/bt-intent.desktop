@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Maid BT Intent Listener
+Comment=Bluetooth intent HTTP listener (phone -> PC)
+Exec=/usr/bin/python3 @HOME@/.local/bin/bt-intent-server.py
+Icon=audio-headphones
+Terminal=false
+Type=Application
+Categories=Utility;Audio;
+X-GNOME-Autostart-enabled=true

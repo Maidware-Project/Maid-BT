@@ -1,0 +1,14 @@
+#!/sbin/openrc-run
+description="Maid BT intent HTTP listener (phone -> PC)"
+supervisor=supervise-daemon
+command="/usr/bin/python3"
+command_args="$HOME/.local/bin/bt-intent-server.py"
+command_background=true
+pidfile="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bt-intent.pid"
+output_log="${XDG_STATE_HOME:-$HOME/.local/state}/maid-bt/bt-intent.log"
+error_log="${XDG_STATE_HOME:-$HOME/.local/state}/maid-bt/bt-intent.err"
+
+depend() {
+	need dbus
+	after net
+}

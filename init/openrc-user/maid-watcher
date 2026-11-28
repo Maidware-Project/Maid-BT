@@ -1,0 +1,14 @@
+#!/sbin/openrc-run
+description="Maid Watcher (Bluetooth earbuds manager daemon)"
+supervisor=supervise-daemon
+command="$HOME/.local/bin/maid-watcher"
+command_args="run"
+command_background=true
+pidfile="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/maid-watcher.pid"
+output_log="${XDG_STATE_HOME:-$HOME/.local/state}/maid-bt/maid-watcher.log"
+error_log="${XDG_STATE_HOME:-$HOME/.local/state}/maid-bt/maid-watcher.err"
+
+depend() {
+	need dbus
+	after pipewire wireplumber bluetooth
+}

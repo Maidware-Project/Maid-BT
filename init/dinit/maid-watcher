@@ -1,0 +1,4 @@
+type = process
+command = /bin/sh -lc 'exec "$HOME/.local/bin/maid-watcher" run'
+restart = true
+depends-on = dbus

@@ -1,14 +1,10 @@
 # changelog
 
-## Unreleased
+## Maid BT v1.2.8
 
-- **Phone remote:** document OpenTasker (FOSS Android automation) support alongside MacroDroid/Tasker in `phone/README-macrodroid-tasker.md`, including HTTP Request setup for playback/call/BlueV hint endpoints.
-
-## Maid BT v1.3.1
-
-- **Gentoo support:** add Gentoo (`emerge`) package-manager detection and dependency installation in `install.sh`, document Gentoo in README, and add a Gentoo ebuild template under `packaging/gentoo/`.
-
-## Maid BT v1.3.0
+- **Plasma applet:** clear busy state on action completion so mode switches (PC/phone/radio/off) don't get stuck.
+- **Desktop:** recognize SonicDE (`XDG_CURRENT_DESKTOP=SonicDE:KDE`) in applet/session diagnostics and installer checks.
+- **Init systems:** add OpenRC and other non-systemd init support with automatic setup during install.
 
 ### BlueV Protocol (Maid Watcher)
 
@@ -28,7 +24,7 @@ BlueV is Maid Watcher’s Bluetooth state persistence and ownership-aware recove
   - **Probe smoothing / dock confidence:** silent “in case” detection requires confirmation over multiple probe observations within a time window before declaring `docked`; out/advertising evidence clears docked state quickly.
   - **Multi-adapter-aware persistence/restore:** snapshot and restore BlueZ adapter power/connected-device state per adapter (with migration/backward compatibility for legacy single-adapter state).
   - **Observability:** richer BlueV state in `maid-watcher status`/report/porcelain (state, reason, phone hint freshness/source/confidence, dock probe context) and improved audit behavior.
-  - **Docs:** phone intent guide documents `/phone_device` BlueV hint reporting (MacroDroid/Tasker BT connect/disconnect triggers over intent path, plus KDE Connect-assisted/manual local hints).
+  - **Docs:** phone intent guide documents `/phone_device` BlueV hint reporting (MacroDroid/Tasker/BT connect/disconnect triggers over intent path, plus KDE Connect-assisted/manual local hints).
 
 - **Fixes/refinements in this cycle:**
   - Fixed reconnect defer handling when a phone hint is active to keep retry-source tracking consistent and rate-limit repeated “deferring reconnect” audit noise.
@@ -46,10 +42,10 @@ BlueV is Maid Watcher’s Bluetooth state persistence and ownership-aware recove
 - BlueV remains **WIP**: automatic “any Android” per-device reporting still depends on an Android-side reporter/automation emitting `/phone_device` hints; further per-device/multipoint tuning, deeper UI surfaces, and vendor-specific enhancements can be layered on.
 - LE Audio support depends on BlueZ/PipeWire/WirePlumber, adapter/controller capabilities, and earbuds firmware; keep the A2DP-only guard available for setups where LE Audio transports are unstable.
 
-## Maid BT v1.2.7
-
+- **Gentoo support:** add Gentoo (`emerge`) package-manager detection and dependency installation in `install.sh`, document Gentoo in README, and add a Gentoo ebuild template under `packaging/gentoo/`.
 - **Watcher efficiency:** cache KDE Connect reachability and Bluetooth PAN (bnep) probes in the daemon to avoid repeated subprocess calls during periodic fallback checks.
 - **Nix:** add `shell.nix`, `devShells`, and `formatter` outputs; update `flake.lock` and package metadata for better native Nix/NixOS development and usage.
+- **`bluetooth-toggle.sh --doctor`:** expanded diagnostics for session/compositor detection (KineticWE, GPUiShell, Horizon, instantWM, Niri, Hyprland/Sway/i3 variants) and runtime health (XDG session type/runtime dir, PipeWire/Pulse audio server, default sink and sink count, Bluetooth adapter powered/name, configured buds/fallback sink, and state file path) with clearer troubleshooting hints.
 
 ## Maid BT v1.2.6
 
