@@ -105,7 +105,7 @@ PlasmoidItem {
                 if (t === "off" || t === "on" || t === "buds" || t === "phone")
                     root.btState = t;
 
-            } else if (sourceName === root.busySource) {
+            } else if (root.busy && sourceName.indexOf("porcelain") === -1) {
                 // the action process finished: the switch is done
                 root.busy = false;
                 root.busyFrom = "";
