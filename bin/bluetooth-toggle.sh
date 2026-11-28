@@ -49,7 +49,7 @@ session_doctor() {
     pgrep -x niri >/dev/null 2>&1 && echo "  shell: Niri compositor detected."
   fi
   case "$de" in
-    *[Pp]lasma*|*[Kk][Dd][Ee]*) echo "  support: KDE Plasma supported (applet + integrations available)." ;;
+    *[Pp]lasma*|*[Kk][Dd][Ee]*|*[Ss]onic[Dd][Ee]*) echo "  support: KDE Plasma/SonicDE supported (applet + integrations available)." ;;
     *[Gg][Nn][Oo][Mm][Ee]*) echo "  support: GNOME session detected. Core CLI works; bind commands via GNOME keyboard shortcuts." ;;
     *[Xx][Ff][Cc][Ee]*) echo "  support: XFCE session detected. Core CLI works; bind commands via XFCE keyboard shortcuts." ;;
     *[Nn]iri*) echo "  support: Niri session detected. Core CLI works; bind commands via compositor config." ;;
