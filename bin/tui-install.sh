@@ -342,7 +342,7 @@ do_doctor() {
   fi
   printf '\n'
   case "${_desk,,}" in
-    *plasma*|*kde*) ok "KDE Plasma: supported (applet, integrations)" ;;
+    *plasma*|*kde*|*sonicde*) ok "KDE Plasma/SonicDE: supported (applet, integrations)" ;;
     *hyprland*|*sway*|*i3*) warn "compositor ${_desk}: CLI/TUI + bluetooth-toggle/maid-switch work; Plasma applet is KDE-only (partial/experimental; adapters iterative)" ;;
     *) say "compositor ${_desk}: core CLI/TUI expected to work; desktop integrations vary" ;;
   esac
@@ -357,8 +357,8 @@ do_doctor() {
     ok "applet installed (KDE Plasma widget)"
   else
     case "${XDG_CURRENT_DESKTOP:-}" in
-      *[Pp]lasma*|*[Kk][Dd][Ee]*) warn "applet not installed (~/.local/share/plasma/plasmoids)" ;;
-      *) say "applet: KDE Plasma-only (not required on ${XDG_CURRENT_DESKTOP:-this session}; core CLI/TUI works)" ;;
+      *[Pp]lasma*|*[Kk][Dd][Ee]*|*[Ss]onic[Dd][Ee]*) warn "applet not installed (~/.local/share/plasma/plasmoids)" ;;
+      *) say "applet: KDE Plasma/SonicDE-only (not required on ${XDG_CURRENT_DESKTOP:-this session}; core CLI/TUI works)" ;;
     esac
   fi
   PORCELAIN="$(~/.local/bin/bluetooth-toggle.sh porcelain 2>/dev/null || echo unknown)"
