@@ -27,7 +27,34 @@ for _alib in "$_here/audit-lib.sh" "$HOME/.local/bin/audit-lib.sh" \
 done
 unset _alib
 # Fill via ~/.config/bluetooth-buds.conf (install.sh prompts for it)
-[ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
+load_conf_safe() {
+  local conf="$1" line key val
+  [ -f "$conf" ] || return 0
+  [ -L "$conf" ] && return 0
+  local perm
+  perm=$(stat -Lc '%a' "$conf" 2>/dev/null || echo 644)
+  case "$perm" in *[2367][0-7]) return 0 ;; esac
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|\#*) continue ;; esac
+    line="${line#export }"
+    case "$line" in
+      [A-Z_]*=*)
+        key="${line%%=*}"; val="${line#*=}"
+        case "$key" in
+          BUDS_MAC|FALLBACK_SINK|APP_CYCLE|QUALITY_LOCK|MULTIPOINT|LE_AUDIO|HANDS_SECS|MULTIPOINT_SECS|CONNECT_TIMEOUT|SINK_WAIT|BLOCK_ON_EXTERNAL_OFF|ADAPTER_RECOVER|RECONNECT_BACKOFF|AUDIO_PRIORITY|BATTERY_BOOST|POLL|GRACE|CONNECT_RETRY_EVERY|RETRY_BACKOFF_AFTER|MAID_INTENT_BIND|MAID_INTENT_PORT) ;;
+          *) continue ;;
+        esac
+        case "$val" in
+          \"*\") val="${val#\"}"; val="${val%\"}" ;;
+          \'*\') val="${val#\'}"; val="${val%\'}" ;;
+        esac
+        case "$val" in *'$('*|*'`'*|*';'*|*'&'*|*'|'*|*'<'*|*'>'*|*$'\n'*|*$'\r'*) continue ;; esac
+        printf -v "$key" '%s' "$val"
+        ;;
+    esac
+  done < "$conf"
+}
+load_conf_safe "$HOME/.config/bluetooth-buds.conf"
 command -v validate_conf >/dev/null 2>&1 && validate_conf
 NOTIF_ID=0
 [ -f "$IDFILE" ] && NOTIF_ID="$(cat "$IDFILE" 2>/dev/null || echo 0)"

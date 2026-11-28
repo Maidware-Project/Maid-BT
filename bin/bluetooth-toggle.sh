@@ -106,7 +106,37 @@ LE_AUDIO=0
 # Pin LDAC after every switch (needs LDAC headset) with: QUALITY_LOCK=1
 # Dual-connection buds (phone+PC at once) with: MULTIPOINT=1
 # Allow/prefer LE Audio (BAP) profiles when available with: LE_AUDIO=1
-[ -f "$HOME/.config/bluetooth-buds.conf" ] && . "$HOME/.config/bluetooth-buds.conf"
+load_conf_safe() {
+  local conf="$1" line key val
+  [ -f "$conf" ] || return 0
+  # refuse symlinks and group/world-writable config
+  [ -L "$conf" ] && return 0
+  local perm
+  perm=$(stat -Lc '%a' "$conf" 2>/dev/null || echo 644)
+  case "$perm" in *[2367][0-7]) return 0 ;; esac
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|\#*) continue ;; esac
+    line="${line#export }"
+    case "$line" in
+      [A-Z_]*=*)
+        key="${line%%=*}"; val="${line#*=}"
+        case "$key" in
+          BUDS_MAC|FALLBACK_SINK|APP_CYCLE|QUALITY_LOCK|MULTIPOINT|LE_AUDIO|HANDS_SECS|MULTIPOINT_SECS|CONNECT_TIMEOUT|SINK_WAIT|BLOCK_ON_EXTERNAL_OFF|ADAPTER_RECOVER|RECONNECT_BACKOFF) ;;
+          *) continue ;;
+        esac
+        # strip surrounding quotes
+        case "$val" in
+          \"*\") val="${val#\"}"; val="${val%\"}" ;;
+          \'*\') val="${val#\'}"; val="${val%\'}" ;;
+        esac
+        # reject shell metacharacters/control chars
+        case "$val" in *'$('*|*'`'*|*';'*|*'&'*|*'|'*|*'<'*|*'>'*|*$'\n'*|*$'\r'*) continue ;; esac
+        printf -v "$key" '%s' "$val"
+        ;;
+    esac
+  done < "$conf"
+}
+load_conf_safe "$HOME/.config/bluetooth-buds.conf"
 LE_AUDIO="${LE_AUDIO:-0}"
 command -v validate_conf >/dev/null 2>&1 && validate_conf
 CONNECT_TIMEOUT=20   # seconds to retry bluetoothctl connect
@@ -207,10 +237,17 @@ rfkill_action() {
   # when some other app (or the KDE tray) left the radio blocked, a
   # plain retry can never recover it, so escalate through pkexec and
   # let the desktop ask once - a tap actually turns Bluetooth back on.
-  local op="$1"
-  $RFKILL "$op" bluetooth >/dev/null 2>&1 && return 0
-  command -v pkexec >/dev/null 2>&1 || return 1
-  pkexec $RFKILL "$op" bluetooth >/dev/null 2>&1
+  local op="$1" rfk=""
+  case "$op" in block|unblock) ;; *) return 1 ;; esac
+  for rfk in "$RFKILL" /usr/sbin/rfkill /usr/bin/rfkill /run/current-system/sw/bin/rfkill; do
+    [ -n "$rfk" ] && [ -x "$rfk" ] || continue
+    "$rfk" "$op" bluetooth >/dev/null 2>&1 && return 0
+    if command -v pkexec >/dev/null 2>&1; then
+      pkexec "$rfk" "$op" bluetooth >/dev/null 2>&1 && return 0
+    fi
+    break
+  done
+  return 1
 }
 
 bluez_sink() {

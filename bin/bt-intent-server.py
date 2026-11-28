@@ -20,6 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 PORT = int(os.environ.get("MAID_INTENT_PORT", "8899"))
 # Safer default: local-only. Set MAID_INTENT_BIND=0.0.0.0 explicitly for LAN access.
 BIND_ADDR = os.environ.get("MAID_INTENT_BIND", "127.0.0.1")
+ALLOW_QUERY_TOKEN = os.environ.get("MAID_INTENT_ALLOW_QUERY_TOKEN", "0") == "1"
 HOME = os.path.expanduser("~")
 RATE_LIMIT_WINDOW_S = int(os.environ.get("MAID_INTENT_RATE_WINDOW_S", "10"))
 RATE_LIMIT_MAX = int(os.environ.get("MAID_INTENT_RATE_MAX", "30"))
@@ -176,10 +177,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def _token_ok(self):
         # preferred: X-Token header (never appears in logs).
-        # legacy: ?token= query (still accepted, never logged).
+        # legacy query token is disabled by default; enable only if explicitly opted in.
         hdr = self.headers.get("X-Token", "")
         if hdr and TOKEN and hmac.compare_digest(hdr, TOKEN):
             return True
+        if not ALLOW_QUERY_TOKEN:
+            return False
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         tok = qs.get("token", [""])[0]
         return bool(TOKEN) and hmac.compare_digest(tok, TOKEN)
