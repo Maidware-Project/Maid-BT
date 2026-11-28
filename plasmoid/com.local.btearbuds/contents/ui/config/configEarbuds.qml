@@ -28,6 +28,8 @@ Kirigami.ScrollablePage {
 
     signal configurationChanged
 
+    function shQuote(s) { return "'" + String(s).replace(/'/g, "'\''") + "'"; }
+
     function load() {
         if (applying)
             return;
@@ -132,7 +134,7 @@ Kirigami.ScrollablePage {
         pending = false;
         statusText = "Saving…";
         const encoded = encodeURIComponent(JSON.stringify(payload())).replace(/'/g, "%27");
-        execSource.connectSource(configTool + " apply " + encoded);
+        execSource.connectSource(configTool + " apply " + shQuote(encoded));
     }
 
     // KCM's Apply/OK should persist too; every control already saves as

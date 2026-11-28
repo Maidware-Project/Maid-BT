@@ -41,6 +41,10 @@ Kirigami.ScrollablePage {
         { key: "noise", label: "Noise cancel" }
     ]
 
+    function shQuote(s) {
+        return "'" + String(s).replace(/'/g, "'\''") + "'";
+    }
+
     function load() {
         statusText = "Reading…";
         detailText = "";
@@ -84,7 +88,7 @@ Kirigami.ScrollablePage {
         const n = modelCandidates[modelCandidateIndex];
         modelCandidateIndex += 1;
         // argv style: maid-watcher model <name> (main() joins words)
-        execSource.connectSource(modelTool + " model " + n);
+        execSource.connectSource(modelTool + " model " + shQuote(n));
     }
 
     function refreshDevice() {
@@ -97,13 +101,13 @@ Kirigami.ScrollablePage {
     function applyAnc(mode) {
         busy = true;
         statusText = "Applying " + mode + "…";
-        execSource.connectSource(soundTool + " anc " + mode);
+        execSource.connectSource(soundTool + " anc " + shQuote(mode));
     }
 
     function applyEqPreset(p) {
         busy = true;
         statusText = "Applying " + p + " EQ…";
-        execSource.connectSource(soundTool + " eq " + p);
+        execSource.connectSource(soundTool + " eq " + shQuote(p));
     }
 
     function applyEqCustom() {
@@ -112,7 +116,7 @@ Kirigami.ScrollablePage {
         const dB = [];
         for (let i = 0; i < 10; ++i)
             dB.push(String(Math.round(eqBands[i])));
-        execSource.connectSource(soundTool + " eq custom " + dB.join(" "));
+        execSource.connectSource(soundTool + " eq custom " + dB.map(shQuote).join(" "));
     }
 
     function parseState(out, err) {
