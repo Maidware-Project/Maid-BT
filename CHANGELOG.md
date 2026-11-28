@@ -1,5 +1,9 @@
 # changelog
 
+## Maid BT v1.2.9
+
+- **Security hardening:** quote plasmoid config command arguments; safe allowlisted config parsing (no shell sourcing); rfkill allowlisted/quoted escalation; intent-server query token disabled by default.
+
 ## Maid BT v1.2.8
 
 - **Plasma applet:** clear busy state on action completion so mode switches (PC/phone/radio/off) don't get stuck.
